@@ -52,11 +52,11 @@ Step 3:
 
 User action: 阅读回答，发现“关联知识提示”中有感兴趣的旧问题，点击关联卡片中的“[艾宾浩斯曲线]”。
 
-System response: 跳转至“知识图谱可视化”页面，自动聚焦并高亮“费曼技巧”节点和“艾宾浩斯曲线”节点，展示它们之间的连线（例如关系类型：similar 或 extends）。
+System response: 跳转至“问题详情页”，展示旧问题的详细内容及关联上下文。
 
-Screen or state name: 知识图谱页 (Graph View - Focused)
+Screen or state name: 问题详情页 (Question Detail View)
 
-Information shown to user: 动态力导向图，当前两个节点高亮，其他相关节点半透明显示。侧边或底部显示关系说明。
+Information shown to user: 旧问题的详细问答内容及所有关联点列表。
 
 Feedback or confirmation: 视觉上确认了新旧知识的连接。
 
@@ -69,20 +69,20 @@ System behavior: 将上下文带入下一轮 LLM 调用 / 重新调用 API。
 
 Next step: 回到 Step 2。
 
-Decision point 2: 用户想查看某个节点的详细信息
+Decision point 2: 用户想查看某条关联知识的详细信息
 
-User choice(s): 在图谱页点击某个节点。
+User choice(s): 在问题详情页中点击关联项。
 
 System behavior: 弹出底部抽屉 (Bottom Sheet)，显示该问题的完整问答记录。
 
-Next step: 停留在图谱页，覆盖层显示详情。
+Next step: 切换至该关联项的问题详情页。
 
 SYSTEM STATES
 
 
 Loading / processing: 问答页显示“正在构建知识连接...”Toast，表示后台正在更新图谱边。
 
-Empty state: 首次使用时，问答页显示“问我任何问题，开始构建你的知识宇宙”。图谱页显示“暂无知识节点”。
+Empty state: 首次使用时，问答页显示“问我任何问题，开始构建你的知识宇宙”。
 
 Error state: API Key 无效或网络断开 -> 显示红色 Toast “连接失败，请检查设置或网络”，保留用户输入内容不丢失。
 

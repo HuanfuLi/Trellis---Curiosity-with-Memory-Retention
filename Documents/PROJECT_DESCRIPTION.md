@@ -39,22 +39,38 @@ EchoLearn 是一款无后端架构（Serverless）的移动端知识管理与自
 ### 2.1 AI 即时问答模块
 
 #### 功能描述
-用户可随时向 AI 提出任何问题，系统记录对话并自动关联已有知识。
+用户可随时向 AI 提出任何问题，系统记录对话并自动关联已有知识。每次对话均以持久化的 `ChatSession` 存储，标题取自首条用户消息（截取前 60 字符）。
 
 #### 业务逻辑
 ```
 用户提问
-    → 检索知识图谱中的相关节点（基于语义相似度）
     → 构建增强提示词（包含相关历史问答的摘要）
-    → 调用 LLM API 获取回答
-    → 解析回答，提取关键概念
-    → 更新知识图谱（新增节点、建立边）
-    → 存储问答记录
+    → 调用 LLM API 流式回答
+    → 将消息追加到当前 ChatSession 并自动保存
     → 返回回答（附带关联知识提示）
+    → 用户点击 "New Chat" 时，后台异步触发本次会话的 Flashcard 提取
 ```
 
 #### 数据模型
 ```typescript
+interface SessionMessage {
+  id: string;
+  type: 'user' | 'ai';
+  content: string;
+  relatedKnowledge?: string[];
+  questionId?: string;
+  // isStreaming 仅为 UI 瞬态，不持久化
+}
+
+interface ChatSession {
+  id: string;
+  title: string;       // 首条用户消息，最长 60 字符
+  createdAt: number;
+  updatedAt: number;
+  messages: SessionMessage[];
+  processed: boolean;  // Flashcard 提取完成后置 true
+}
+
 interface Question {
   id: string;                    // UUID
   timestamp: number;             // Unix 时间戳
@@ -76,63 +92,39 @@ interface ReviewSchedule {
 }
 ```
 
-### 2.2 知识图谱模块
+### 2.3 FlashCard 生成模块
 
 #### 功能描述
-维护用户所有问题的语义关联图，实现费曼学习法中的"知识连接"。
+当用户开始新对话时，系统在后台对刚关闭的会话调用 LLM，从对话记录中提取可记忆的知识点，生成简洁的 FlashCard 卡片对（正面为问题/提示，背面为答案）。
+
+#### 触发时机
+- 用户点击 "New Chat" 按钮
+- 当前会话至少包含一条用户消息，且 `session.processed === false`
+
+#### 提取流程
+```
+会话结束（用户开始新对话）
+    → 后台发起 LLM 调用（非流式，一次性）
+    → 系统提示要求输出 JSON 数组 [{front, back}, ...]
+    → 解析结果，为每条条目生成 FlashCard 对象
+    → 存入 localStorage (echolearn_flashcards)
+    → 将 session.processed 置 true
+    → 发出 FLASHCARDS_CREATED 事件
+```
 
 #### 数据模型
 ```typescript
-interface KnowledgeGraph {
-  nodes: KnowledgeNode[];
-  edges: KnowledgeEdge[];
-  categories: Category[];
-}
-
-interface KnowledgeNode {
-  id: string;                    // 与 Question.id 对应
-  label: string;                 // 节点显示名称（问题摘要）
-  categoryIds: string[];         // 所属分类
-  weight: number;                // 节点权重（基于访问/复习频率）
+interface FlashCard {
+  id: string;
+  sessionId: string;        // 来源 ChatSession 的 ID
+  front: string;            // 简洁问题或提示（≤120 字符）
+  back: string;             // 简洁答案（≤200 字符）
   createdAt: number;
-  lastAccessedAt: number;
-}
-
-interface KnowledgeEdge {
-  id: string;
-  sourceId: string;              // 源节点 ID
-  targetId: string;              // 目标节点 ID
-  relationshipType: RelationType; // 关系类型
-  strength: number;              // 关联强度 0-1
-}
-
-type RelationType =
-  | 'prerequisite'    // 前置知识
-  | 'extends'         // 扩展延伸
-  | 'contradicts'     // 矛盾对立
-  | 'similar'         // 相似相关
-  | 'part_of'         // 组成部分
-  | 'example_of';     // 实例举例
-
-interface Category {
-  id: string;
-  name: string;                  // 如 "哲学"、"编程"、"历史"
-  parentId?: string;             // 支持层级分类
-  color: string;                 // 显示颜色
+  reviewSchedule: ReviewSchedule;
 }
 ```
 
-#### 图更新算法
-```
-新问答存储后触发：
-1. 提取问答中的关键概念（调用 LLM）
-2. 计算与现有节点的语义相似度
-3. 相似度 > 阈值的节点，建立边连接
-4. 由 LLM 判断关系类型和关联强度
-5. 自动归类到现有分类或创建新分类
-```
-
-### 2.3 每日播客生成模块
+### 2.4 每日播客生成模块
 
 #### 功能描述
 每日自动总结用户的问答，生成故事化/播客化的音频内容。
@@ -172,7 +164,7 @@ interface AudioSegment {
 }
 ```
 
-### 2.4 艾宾浩斯复习模块
+### 2.5 艾宾浩斯复习模块
 
 #### 功能描述
 基于遗忘曲线自动安排复习，确保知识长期留存。
@@ -220,7 +212,7 @@ interface ReviewSession {
 }
 ```
 
-### 2.5 日历与待办清单模块
+### 2.6 日历与待办清单模块
 
 #### 功能描述
 将一天划分为多个时间区块，每个区块管理独立的待办清单。
@@ -273,26 +265,25 @@ type TodoStatus = 'pending' | 'completed' | 'postponed';
 ├─────────────────────────────────────────────────────────────────┤
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
 │  │   UI Layer  │  │   UI Layer  │  │   UI Layer  │    ...      │
-│  │  (问答页面)  │  │  (日历页面)  │  │  (图谱页面)  │             │
+│  │  (问答页面)  │  │  (日历页面)  │               │             │
 │  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘             │
 │         │                │                │                     │
 │         ▼                ▼                ▼                     │
 │  ┌─────────────────────────────────────────────────────────────┤
 │  │                    Service Layer                            │
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐       │
-│  │  │ Question │ │ Knowledge│ │ Podcast  │ │ Calendar │       │
-│  │  │ Service  │ │  Graph   │ │ Service  │ │ Service  │       │
-│  │  │          │ │ Service  │ │          │ │          │       │
-│  │  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘       │
-│  └───────┼────────────┼────────────┼────────────┼──────────────┤
-│          │            │            │            │               │
-│          ▼            ▼            ▼            ▼               │
+│  │  ┌──────────┐        ┌──────────┐ ┌──────────┐             │
+│  │  │ Question │        │ Podcast  │ │ Calendar │             │
+│  │  │ Service  │        │ Service  │ │ Service  │             │
+│  │  │          │        │          │ │          │             │
+│  │  └────┬─────┘        └────┬─────┘ └────┬─────┘             │
+│  └───────┼─────────────────────────────────┼────────────────────┤
+│          │                                 │                   │
+│          ▼                                 ▼                   │
 │  ┌─────────────────────────────────────────────────────────────┤
 │  │                     Data Layer                              │
 │  │  ┌─────────────────────────────────────────────────────┐   │
 │  │  │              Local Database (SQLite)                 │   │
-│  │  │  - Questions Table    - Categories Table            │   │
-│  │  │  - Graph Edges Table  - Podcasts Table              │   │
+│  │  │  - Questions Table    - Podcasts Table              │   │
 │  │  │  - TodoItems Table    - TimeBlocks Table            │   │
 │  │  │  - Settings Table     - ReviewSchedule Table        │   │
 │  │  └─────────────────────────────────────────────────────┘   │
@@ -430,27 +421,6 @@ CREATE TABLE questions (
     created_at INTEGER NOT NULL
 );
 
--- 知识图谱边表
-CREATE TABLE knowledge_edges (
-    id TEXT PRIMARY KEY,
-    source_id TEXT NOT NULL,
-    target_id TEXT NOT NULL,
-    relationship_type TEXT NOT NULL,
-    strength REAL NOT NULL,
-    created_at INTEGER NOT NULL,
-    FOREIGN KEY (source_id) REFERENCES questions(id),
-    FOREIGN KEY (target_id) REFERENCES questions(id)
-);
-
--- 分类表
-CREATE TABLE categories (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    parent_id TEXT,
-    color TEXT NOT NULL,
-    FOREIGN KEY (parent_id) REFERENCES categories(id)
-);
-
 -- 播客表
 CREATE TABLE podcasts (
     id TEXT PRIMARY KEY,
@@ -509,13 +479,11 @@ CREATE INDEX idx_todo_items_block ON todo_items(block_id);
 | 页面 | 必要性 | 说明 |
 |------|--------|------|
 | 问答主页 | **必须** | 用户输入问题、显示回答的核心交互界面 |
-| 知识图谱可视化 | **必须** | 展示问题之间的关联关系 |
 | 日历视图 | **必须** | 展示时间区块和待办清单 |
 | 复习视图 | **必须** | 展示今日待复习内容，支持复习交互 |
 | 播客播放器 | **必须** | 播放每日生成的播客 |
 | 设置页 | **必须** | 配置 API、ZeroTier、睡眠时间等 |
 | 历史记录 | **建议** | 按日期浏览历史问答 |
-| 分类浏览 | **建议** | 按分类浏览问题 |
 
 ### 4.2 问答页面硬性要求
 
@@ -543,35 +511,7 @@ interface QuestionResult {
 - 关联问题必须绑定 `relatedQuestions` 数组
 - 必须处理 API 错误状态并向用户展示
 
-### 4.3 知识图谱页面硬性要求
-
-#### 必须提供的 UI 元素
-- [ ] **图可视化组件**：展示节点和边的关系图
-- [ ] **节点**：代表每个问题，显示摘要标签
-- [ ] **边**：代表问题之间的关联，不同类型用不同样式区分
-- [ ] **节点点击交互**：点击节点显示问题详情或跳转
-- [ ] **分类筛选**：按分类过滤显示的节点
-- [ ] **缩放和平移**：支持图的缩放和拖动浏览
-
-#### 必须调用的 Service 方法
-```typescript
-// 获取完整图数据
-KnowledgeGraphService.getGraph(): Promise<KnowledgeGraph>
-
-// 获取指定节点的邻居
-KnowledgeGraphService.getNeighbors(nodeId: string): Promise<KnowledgeNode[]>
-
-// 获取所有分类
-KnowledgeGraphService.getCategories(): Promise<Category[]>
-```
-
-#### 图渲染要求
-- 节点大小应反映 `node.weight`（权重越高，节点越大）
-- 边的粗细应反映 `edge.strength`
-- 边的颜色/样式应区分 `edge.relationshipType`
-- 节点颜色应反映其主要分类
-
-### 4.4 日历页面硬性要求
+### 4.3 日历页面硬性要求
 
 #### 必须提供的 UI 元素
 - [ ] **日期选择器**：选择查看哪一天
@@ -607,7 +547,7 @@ ReviewService.getTodayReviewItems(): Promise<Question[]>
 - `completed`：显示为已勾选状态，建议有删除线或变灰效果
 - `postponed`：显示为特殊标记（如箭头图标），表示已移至下一区块
 
-### 4.5 复习页面硬性要求
+### 4.4 复习页面硬性要求
 
 #### 必须提供的 UI 元素
 - [ ] **待复习问题卡片**：逐个展示待复习的问题
@@ -641,7 +581,7 @@ ReviewService.skipReview(questionId: string): Promise<void>
 | 4 | 记得较清楚 |
 | 5 | 轻松记得 |
 
-### 4.6 播客播放器硬性要求
+### 4.5 播客播放器硬性要求
 
 #### 必须提供的 UI 元素
 - [ ] **播放/暂停按钮**
@@ -670,7 +610,7 @@ PodcastService.getAudioPath(podcastId: string): string
 - 必须支持后台播放（如果平台允许）
 - 播放进度应可保存和恢复
 
-### 4.7 设置页硬性要求
+### 4.6 设置页硬性要求
 
 #### 必须提供的配置项
 
@@ -721,7 +661,7 @@ ZeroTierService.leave(): Promise<void>
 ZeroTierService.getStatus(): Promise<ZTStatus>
 ```
 
-### 4.8 通用 UI 要求
+### 4.7 通用 UI 要求
 
 #### 错误处理
 - 所有 API 调用失败必须向用户展示错误信息
@@ -740,7 +680,7 @@ ZeroTierService.getStatus(): Promise<ZTStatus>
 - 复习提醒需要系统通知
 - 播客生成完成需要通知
 
-### 4.9 必须响应的后台事件
+### 4.8 必须响应的后台事件
 
 #### 定时任务触发器
 前端必须实现以下定时检查逻辑：
@@ -774,7 +714,6 @@ async function checkPodcastGeneration() {
 
 ### 5.1 性能要求
 - 问答响应：取决于 LLM API 延迟，前端应支持流式显示
-- 图谱渲染：1000 节点以内应流畅渲染
 - 数据库查询：常用查询应在 100ms 内完成
 
 ### 5.2 安全要求
@@ -797,11 +736,9 @@ async function checkPodcastGeneration() {
 - [ ] API 配置界面
 - [ ] 简单的历史记录
 
-### Phase 2: 知识管理
-- [ ] 知识图谱构建
-- [ ] 图可视化
-- [ ] 分类系统
-- [ ] 关联推荐
+### Phase 2: 知识关联
+- [ ] 关键词提取与关联问题自动链接（内部数据结构）
+- [ ] 问答页面展示关联历史问题提示
 
 ### Phase 3: 复习系统
 - [ ] 艾宾浩斯算法
@@ -867,25 +804,6 @@ async function checkPodcastGeneration() {
 回答：{answer}
 
 以 JSON 数组格式返回：["关键词1", "关键词2", ...]
-```
-
-### 关系判断 Prompt
-```
-请判断以下两个问题之间的关系：
-
-问题A：{question_a_summary}
-问题B：{question_b_summary}
-
-可能的关系类型：
-- prerequisite: A是理解B的前置知识
-- extends: B是A的延伸扩展
-- contradicts: A和B观点矛盾
-- similar: A和B内容相似
-- part_of: A是B的组成部分
-- example_of: A是B的具体实例
-- none: 无明显关联
-
-请返回 JSON：{"type": "关系类型", "strength": 0.0-1.0}
 ```
 
 ### 播客脚本生成 Prompt

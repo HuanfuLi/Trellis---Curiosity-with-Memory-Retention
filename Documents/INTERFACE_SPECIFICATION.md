@@ -347,15 +347,6 @@ interface AskResult {
 
 ```typescript
 interface KnowledgeGraphService {
-  /** Get the full graph for visualization. */
-  getGraph(): Promise<ServiceResult<KnowledgeGraph>>;
-
-  /**
-   * Get a subgraph centered on a specific node.
-   * Use this instead of getGraph for large graphs.
-   */
-  getSubgraph(centerId: string, depth: number): Promise<ServiceResult<KnowledgeGraph>>;
-
   /** Get nodes directly connected to a specific node. */
   getNeighbors(nodeId: string): Promise<ServiceResult<KnowledgeNode[]>>;
 
@@ -734,7 +725,7 @@ UI LAYER  ───────────────────────�
   C13: UI Kit          C14: Navigation + State
   C15: Onboarding      C16: Home           C17: Ask
   C18: Calendar        C19: Review         C20: Podcast
-  C21: Graph           C22: Settings
+                       C22: Settings
 ```
 
 ### 5.2 Foundation Layer
@@ -1089,19 +1080,7 @@ function useReview(): {
 
 ---
 
-#### C21: Graph Screen
-
-**Purpose**: Knowledge graph visualization.
-
-**Key screens**: GraphScreen
-
-**Key components**: GraphCanvas (force-directed), NodePopup (bottom sheet), CategoryFilter
-
-**Dependencies**: C13, C14, C09
-
----
-
-#### C22: Settings Screens
+#### C21: Settings Screens
 
 **Purpose**: App configuration for LLM, TTS, ZeroTier, and preferences.
 
@@ -1145,8 +1124,7 @@ PHASE 4: UI Foundation + Screens (Week 4–6)
   C18 Calendar ────────────────────────────────┼──▶ All screens integrated E2E
   C19 Review ──────────────────────────────────┤
   C20 Podcast ─────────────────────────────────┤
-  C21 Graph ───────────────────────────────────┤
-  C22 Settings ────────────────────────────────┘
+  C21 Settings ────────────────────────────────┘
 ```
 
 ### 6.2 Mock Services for UI Development

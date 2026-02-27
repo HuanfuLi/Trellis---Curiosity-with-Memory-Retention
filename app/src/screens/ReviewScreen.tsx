@@ -112,8 +112,8 @@ export function ReviewScreen() {
 
       {/* Flashcard */}
       <Flashcard
-        front={currentItem.content}
-        back={currentItem.answer}
+        front={currentItem.front}
+        back={currentItem.back}
         onRate={handleRate}
       />
 

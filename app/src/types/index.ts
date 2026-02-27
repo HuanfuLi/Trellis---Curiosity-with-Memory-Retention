@@ -31,40 +31,6 @@ export interface Category {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// KNOWLEDGE GRAPH DOMAIN
-// ═══════════════════════════════════════════════════════════════════════════
-
-export interface KnowledgeGraph {
-  nodes: KnowledgeNode[];
-  edges: KnowledgeEdge[];
-}
-
-export interface KnowledgeNode {
-  id: string;
-  label: string;
-  categoryIds: string[];
-  weight: number;
-  createdAt: number;
-  lastAccessedAt: number;
-}
-
-export interface KnowledgeEdge {
-  id: string;
-  sourceId: string;
-  targetId: string;
-  relationshipType: RelationType;
-  strength: number;
-}
-
-export type RelationType =
-  | 'prerequisite'
-  | 'extends'
-  | 'contradicts'
-  | 'similar'
-  | 'part_of'
-  | 'example_of';
-
-// ═══════════════════════════════════════════════════════════════════════════
 // CALENDAR & TODO DOMAIN
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -170,6 +136,41 @@ export interface AppPreferences {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// CHAT SESSION DOMAIN
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface SessionMessage {
+  id: string;
+  type: 'user' | 'ai';
+  content: string;
+  relatedKnowledge?: string[];
+  questionId?: string;
+  // isStreaming is transient UI state only — never persisted
+}
+
+export interface ChatSession {
+  id: string;
+  title: string;       // first user message, truncated to 60 chars
+  createdAt: number;
+  updatedAt: number;
+  messages: SessionMessage[];
+  processed: boolean;  // true once flashcard post-processing has run
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FLASHCARD DOMAIN
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface FlashCard {
+  id: string;
+  sessionId: string;        // which ChatSession produced this card
+  front: string;            // concise question / concept (≤120 chars)
+  back: string;             // concise answer (≤200 chars)
+  createdAt: number;
+  reviewSchedule: ReviewSchedule;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // SHARED RESPONSE TYPE
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -209,7 +210,6 @@ export interface AskResult {
 export type AppEvent =
   | { type: 'QUESTION_ASKED'; payload: Question }
   | { type: 'QUESTION_DELETED'; payload: { id: string } }
-  | { type: 'GRAPH_UPDATED'; payload: { nodeCount: number; edgeCount: number } }
   | { type: 'CATEGORY_CREATED'; payload: Category }
   | { type: 'REVIEW_SUBMITTED'; payload: { questionId: string; rating: number } }
   | { type: 'REVIEW_DUE_COUNT_CHANGED'; payload: { count: number } }
@@ -224,4 +224,7 @@ export type AppEvent =
   | { type: 'LLM_CONFIG_CHANGED'; payload: LLMConfig }
   | { type: 'TTS_CONFIG_CHANGED'; payload: TTSConfig }
   | { type: 'ZEROTIER_STATUS_CHANGED'; payload: ZeroTierConfig }
-  | { type: 'NETWORK_STATUS_CHANGED'; payload: { isOnline: boolean } };
+  | { type: 'NETWORK_STATUS_CHANGED'; payload: { isOnline: boolean } }
+  | { type: 'SESSION_CREATED'; payload: ChatSession }
+  | { type: 'SESSION_UPDATED'; payload: { id: string } }
+  | { type: 'FLASHCARDS_CREATED'; payload: { sessionId: string; count: number } };

@@ -8,7 +8,6 @@ import { QuestionDetailScreen } from './screens/QuestionDetailScreen';
 import { CalendarScreen } from './screens/CalendarScreen';
 import { ReviewScreen } from './screens/ReviewScreen';
 import { PodcastScreen } from './screens/PodcastScreen';
-import { GraphScreen } from './screens/GraphScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { mockSettingsService } from './services/mock/settings.mock';
 
@@ -45,7 +44,6 @@ const router = createBrowserRouter([
       { path: 'home', element: <HomeScreen /> },
       { path: 'ask', element: <AskScreen /> },
       { path: 'ask/:id', element: <QuestionDetailScreen /> },
-      { path: 'graph', element: <GraphScreen /> },
       { path: 'calendar', element: <CalendarScreen /> },
       { path: 'review', element: <ReviewScreen /> },
       { path: 'podcast', element: <PodcastScreen /> },

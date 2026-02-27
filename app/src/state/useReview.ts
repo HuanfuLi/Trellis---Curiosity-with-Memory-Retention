@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Question, ReviewSchedule, ServiceError } from '../types';
+import type { FlashCard, ReviewSchedule, ServiceError } from '../types';
 import { reviewService } from '../services/review.service';
+import { eventBus } from '../lib/event-bus';
 
 interface UseReviewReturn {
-  items: Question[];
+  items: FlashCard[];
   reviewCount: number;
   isLoading: boolean;
   error: ServiceError | null;
@@ -13,7 +14,7 @@ interface UseReviewReturn {
 }
 
 export function useReview(): UseReviewReturn {
-  const [items, setItems] = useState<Question[]>([]);
+  const [items, setItems] = useState<FlashCard[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ServiceError | null>(null);
 
@@ -32,11 +33,18 @@ export function useReview(): UseReviewReturn {
     reload();
   }, [reload]);
 
+  // Reload whenever new flashcards are created (processSession fires asynchronously)
+  useEffect(() => {
+    return eventBus.subscribe('FLASHCARDS_CREATED', () => {
+      void reload();
+    });
+  }, [reload]);
+
   const submitReview = useCallback(
     async (id: string, rating: 1 | 2 | 3 | 4 | 5): Promise<ReviewSchedule | null> => {
       const result = await reviewService.submitReview(id, rating);
       if (result.success) {
-        setItems((prev) => prev.filter((q) => q.id !== id));
+        setItems((prev) => prev.filter((c) => c.id !== id));
         return result.data ?? null;
       } else {
         setError(result.error ?? null);
@@ -48,7 +56,7 @@ export function useReview(): UseReviewReturn {
 
   const skipReview = useCallback(async (id: string): Promise<void> => {
     await reviewService.skipReview(id);
-    setItems((prev) => prev.filter((q) => q.id !== id));
+    setItems((prev) => prev.filter((c) => c.id !== id));
   }, []);
 
   return { items, reviewCount: items.length, isLoading, error, submitReview, skipReview, reload };

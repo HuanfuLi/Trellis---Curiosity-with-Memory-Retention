@@ -15,7 +15,6 @@ Based on clarification from the product owner:
 | Onboarding | API configuration required first, with "Skip" option |
 | Home Screen | Dashboard with quick summary blocks + microphone quick-ask |
 | Podcast Player | Full-screen dedicated experience |
-| Knowledge Graph | Occasional use; secondary navigation (not in main tabs) |
 | Primary Platform | Mobile (iOS/Android) |
 
 ---
@@ -55,11 +54,6 @@ Based on clarification from the product owner:
         ┌───────────────────┐     ┌───────────────────┐
         │  Question Detail  │     │  Review Session   │
         └───────────────────┘     └───────────────────┘
-                  │
-                  ▼
-        ┌───────────────────┐
-        │  Knowledge Graph  │ (accessed from Question Detail or Profile)
-        └───────────────────┘
 
         ┌───────────────────┐
         │  Podcast Player   │ (full-screen overlay, accessible from Home/notifications)
@@ -81,9 +75,7 @@ Based on clarification from the product owner:
 | 9 | Question Detail | Stacked | P0 |
 | 10 | Review Session | Stacked/Modal | P0 |
 | 11 | Podcast Player | Full-screen Overlay | P1 |
-| 12 | Knowledge Graph | Stacked | P2 |
-| 13 | History Browser | Stacked | P2 |
-| 14 | Category Browser | Stacked | P2 |
+| 12 | History Browser | Stacked | P2 |
 
 ---
 
@@ -396,8 +388,8 @@ Based on clarification from the product owner:
 │  │                             ││
 │  │    ◠ ◡ ◠  Thinking...       ││
 │  │                             ││
-│  │    Searching your knowledge ││
-│  │    graph for connections... ││
+│  │    Finding related past     ││
+│  │    questions...             ││
 │  │                             ││
 │  └─────────────────────────────┘│
 │                                 │
@@ -455,13 +447,12 @@ Based on clarification from the product owner:
 - Accept natural language input
 - Show meaningful loading state with progress indication
 - Retrieve answer from LLM
-- Display related knowledge from graph
-- Store Q&A and update knowledge graph
+- Store Q&A and link to related past questions
 - Support follow-up questions in context
 
 **Usability Risks:**
 1. Long LLM response times may frustrate users - show streaming response if API supports it
-2. Related knowledge may seem random if graph is sparse - only show if relevance score is high
+2. Related knowledge may seem random - only show if relevance score is high
 3. User may not notice the related knowledge section - use visual hierarchy
 
 **States:**
@@ -508,17 +499,12 @@ Based on clarification from the product owner:
 │                                 │
 │  🔗 Connected Knowledge (3)     │
 │  ┌─────────────────────────────┐│
-│  │ ↔ Hegelian dialectics    →  ││
-│  │   similar                    ││
+│  │ Hegelian dialectics      →  ││
 │  ├─────────────────────────────┤│
-│  │ ← Historical materialism →  ││
-│  │   extends                    ││
+│  │ Historical materialism   →  ││
 │  ├─────────────────────────────┤│
-│  │ → Communist Manifesto    →  ││
-│  │   example_of                 ││
+│  │ Communist Manifesto      →  ││
 │  └─────────────────────────────┘│
-│                                 │
-│  [View in Knowledge Graph]      │
 │                                 │
 │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
 │                                 │
@@ -535,13 +521,11 @@ Based on clarification from the product owner:
 **System Responsibility:**
 - Display full Q&A content with formatting
 - Show metadata (date, categories, keywords)
-- Display knowledge graph connections with relationship types
+- Show related past questions
 - Show review schedule status
-- Provide navigation to graph view centered on this node
 
 **Usability Risks:**
 1. Information density may overwhelm - use collapsible sections
-2. Relationship type labels (extends, similar) may be unclear - add tooltips or legend
 
 **States:**
 
@@ -549,7 +533,7 @@ Based on clarification from the product owner:
 |-------|---------|
 | Loading | Skeleton placeholders |
 | Loaded | Full content |
-| No Connections | "No related knowledge yet. Keep learning!" |
+| No Related | "No related questions yet." |
 | Due for Review | Highlighted review badge |
 
 ---
@@ -901,87 +885,7 @@ Based on clarification from the product owner:
 
 ---
 
-### 2.8 Knowledge Graph Screen
-
-```
-┌─────────────────────────────────┐
-│  ←  Knowledge Graph    [Filter] │
-├─────────────────────────────────┤
-│                                 │
-│  ┌─────────────────────────────┐│
-│  │                             ││
-│  │      ○ Hegel                ││
-│  │       \                     ││
-│  │        \                    ││
-│  │    ○────●────○              ││
-│  │  Marx  (You)  Engels        ││
-│  │         |                   ││
-│  │         |                   ││
-│  │    ○────○                   ││
-│  │  Capital  Manifesto         ││
-│  │                             ││
-│  │                             ││
-│  │  [Interactive graph with    ││
-│  │   pan, zoom, tap nodes]     ││
-│  │                             ││
-│  │                             ││
-│  └─────────────────────────────┘│
-│                                 │
-│  Legend:                        │
-│  ── similar  ─→ extends         │
-│  ⋯⋯ contradicts                 │
-│                                 │
-│  Categories:                    │
-│  [All] [Philosophy] [Economics] │
-│                                 │
-└─────────────────────────────────┘
-```
-
-**Node Detail Popup:**
-```
-┌─────────────────────────────────┐
-│        Dialectical              │
-│        Materialism              │
-│  ─────────────────────────────  │
-│  Asked: Feb 8, 2025             │
-│  Category: Philosophy           │
-│  Connections: 4                 │
-│  ─────────────────────────────  │
-│  [View Full Question]           │
-│  [Focus on This Node]           │
-└─────────────────────────────────┘
-```
-
-**User Goal:** Explore and understand relationships between learned knowledge
-
-**System Responsibility:**
-- Render graph with force-directed layout
-- Support pan and pinch-zoom gestures
-- Show node details on tap
-- Filter by category
-- Navigate to question detail from nodes
-- Performance: handle up to 1000 nodes smoothly
-
-**Usability Risks:**
-1. Graph may be overwhelming with many nodes - start zoomed to recent/relevant cluster
-2. Small nodes hard to tap - minimum tap target size (44pt), or expand on approach
-3. Edge labels may overlap - show on hover/tap only
-4. May feel aimless - provide suggested "starting point" nodes
-
-**States:**
-
-| State | Display |
-|-------|---------|
-| Loading | Skeleton/placeholder animation |
-| Empty | "Ask questions to build your knowledge graph!" |
-| Few Nodes (<10) | Simple layout, all labels visible |
-| Many Nodes (>100) | Clustered layout, labels on zoom |
-| Filtered | Non-matching nodes dimmed/hidden |
-| Node Selected | Popup with details, connected nodes highlighted |
-
----
-
-### 2.9 Settings Screen
+### 2.8 Settings Screen
 
 ```
 ┌─────────────────────────────────┐
@@ -1147,13 +1051,7 @@ Based on clarification from the product owner:
 ┌────────────────┐            │                                                         ┌────────────────┐
 │  Question      │◄───────────┘                                                         │ API Config     │
 │  Detail        │                                                                      │ Screens        │
-└───────┬────────┘                                                                      └────────────────┘
-        │
-        ▼
-┌────────────────┐
-│  Knowledge     │
-│  Graph         │
-└────────────────┘
+└────────────────┘                                                                      └────────────────┘
 ```
 
 ### 3.3 Deep Linking Support
@@ -1168,7 +1066,6 @@ Based on clarification from the product owner:
 | `/review` | Review Session | - |
 | `/podcast` | Podcast Player | `?date=2025-02-08` |
 | `/podcast/list` | Podcast List | - |
-| `/graph` | Knowledge Graph | `?focus=questionId` |
 | `/settings` | Settings | - |
 | `/settings/llm` | LLM Config | - |
 | `/settings/tts` | TTS Config | - |
@@ -1198,7 +1095,6 @@ Based on clarification from the product owner:
 | Calendar | Skeleton | No blocks message | Load failed | Blocks + todos | - |
 | Review Session | Loading cards | "All caught up" | Card load failed | Cards ready | - |
 | Podcast Player | Audio buffering | No podcast | Playback error | Playing | Partially loaded |
-| Knowledge Graph | Layout calculating | "Start asking" | Render error | Graph visible | Large graph loading |
 | Settings | - | - | Save failed | Saved confirmation | Validation errors |
 
 ---
@@ -1218,8 +1114,8 @@ Based on clarification from the product owner:
 
 | Scenario | Risk | Mitigation |
 |----------|------|------------|
-| Zero questions asked | Empty graph, empty podcast | Encourage with prompts, disable podcast for that day |
-| 1000+ questions | Performance degradation | Pagination, graph clustering, lazy loading |
+| Zero questions asked | No data, empty podcast | Encourage with prompts, disable podcast for that day |
+| 1000+ questions | Performance degradation | Pagination, lazy loading |
 | Very long answer from LLM | UI overflow | Scrollable container, "Show more" collapse |
 | LLM returns malformed response | Parse failure | Fallback display, error logging |
 | Duplicate question asked | Redundant data | Detect similarity, suggest existing answer |
@@ -1262,7 +1158,7 @@ Based on clarification from the product owner:
 
 | Action | Dialog Type | Content |
 |--------|-------------|---------|
-| Delete question | Confirm | "Delete this question? This will also remove it from your knowledge graph." |
+| Delete question | Confirm | "Delete this question?" |
 | Clear all data | Destructive confirm | "Type DELETE to confirm. This cannot be undone." |
 | Cancel review session | Confirm | "Exit review? Your progress (3/8) will be saved." |
 | Skip onboarding | Warn | "Some features won't work without AI configuration. You can set this up later in Settings." |
@@ -1317,7 +1213,6 @@ What you can do:
 | TTS generation failed | "Podcast generation failed" | "There was an error creating today's audio. You can try again or read the script." | [Retry] [View Script] |
 | No questions today for podcast | "Nothing to summarize" | "Ask some questions today to generate your evening podcast!" | [Ask Now] |
 | Review load failed | "Couldn't load reviews" | "There was an error loading your review cards." | [Retry] |
-| Graph render failed | "Graph display error" | "Too many connections to display. Try filtering by category." | [Filter] [Retry] |
 
 ---
 
@@ -1338,7 +1233,6 @@ What you can do:
 
 | Screen | Considerations |
 |--------|----------------|
-| Knowledge Graph | Provide list view alternative for screen readers |
 | Review Cards | Announce "Tap to reveal answer" state |
 | Podcast Player | Audio controls accessible, sleep timer announced |
 | Calendar | Time blocks navigable as list |
@@ -1360,18 +1254,17 @@ What you can do:
 8. History Browser
 
 ### Phase 3 (Knowledge Features)
-9. Knowledge Graph
-10. Related Questions in Ask
+9. Related Questions in Ask
 
 ### Phase 4 (Audio Features)
-11. TTS Configuration
-12. Podcast Generation
-13. Podcast Player
+10. TTS Configuration
+11. Podcast Generation
+12. Podcast Player
 
 ### Phase 5 (Advanced)
-14. ZeroTier Integration
-15. Local LLM/TTS Support
-16. Data Export/Import
+13. ZeroTier Integration
+14. Local LLM/TTS Support
+15. Data Export/Import
 
 ---
 
@@ -1385,12 +1278,12 @@ What you can do:
 │ [1] │ │ [5] │ │ [6] │ │ [7] │ │ [9] │
 └─────┘ └─────┘ └─────┘ └─────┘ └─────┘
 
-┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐
-│ Q   │ │ Rev │ │ Pod │ │Graph│
-│ Det │ │ Ses │ │ Ply │ │     │
-│     │ │     │ │     │ │     │
-│ [8] │ │ [10]│ │ [11]│ │ [12]│
-└─────┘ └─────┘ └─────┘ └─────┘
+┌─────┐ ┌─────┐ ┌─────┐
+│ Q   │ │ Rev │ │ Pod │
+│ Det │ │ Ses │ │ Ply │
+│     │ │     │ │     │
+│ [8] │ │ [10]│ │ [11]│
+└─────┘ └─────┘ └─────┘
 ```
 
 ---

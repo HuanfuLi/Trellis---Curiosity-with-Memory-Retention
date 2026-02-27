@@ -1,6 +1,6 @@
-import type { Question, ReviewSchedule, ServiceResult } from '../types';
+import type { FlashCard, ReviewSchedule, ServiceResult } from '../types';
 import { today, addDays } from '../lib/date';
-import { questionService } from './question.service';
+import { flashcardService } from './flashcard.service';
 import { eventBus } from '../lib/event-bus';
 
 const SM2_INTERVALS = [1, 2, 4, 7, 15, 30];
@@ -22,10 +22,8 @@ function calcNextInterval(
 }
 
 export const reviewService = {
-  async getTodayReviewItems(): Promise<ServiceResult<Question[]>> {
-    const t = today();
-    const all = questionService.getAll();
-    const due = all.filter((q) => q.reviewSchedule.nextReviewDate <= t);
+  async getTodayReviewItems(): Promise<ServiceResult<FlashCard[]>> {
+    const due = flashcardService.getDue();
     return { success: true, data: due.slice(0, 10) };
   },
 
@@ -35,46 +33,46 @@ export const reviewService = {
   },
 
   async submitReview(
-    questionId: string,
+    cardId: string,
     rating: 1 | 2 | 3 | 4 | 5,
   ): Promise<ServiceResult<ReviewSchedule>> {
-    const all = questionService.getAll();
-    const q = all.find((q) => q.id === questionId);
-    if (!q) {
+    const all = flashcardService.getAll();
+    const card = all.find((c) => c.id === cardId);
+    if (!card) {
       return {
         success: false,
-        error: { code: 'NOT_FOUND', message: 'Question not found', retryable: false },
+        error: { code: 'NOT_FOUND', message: 'FlashCard not found', retryable: false },
       };
     }
 
     const { days, newEaseFactor } = calcNextInterval(
-      q.reviewSchedule.reviewCount,
+      card.reviewSchedule.reviewCount,
       rating,
-      q.reviewSchedule.easeFactor,
+      card.reviewSchedule.easeFactor,
     );
     const newSchedule: ReviewSchedule = {
       nextReviewDate: addDays(today(), days),
-      reviewCount: q.reviewSchedule.reviewCount + 1,
+      reviewCount: card.reviewSchedule.reviewCount + 1,
       easeFactor: newEaseFactor,
     };
 
-    questionService.updateReviewSchedule(questionId, newSchedule);
-    eventBus.emit({ type: 'REVIEW_SUBMITTED', payload: { questionId, rating } });
+    flashcardService.updateReviewSchedule(cardId, newSchedule);
+    eventBus.emit({ type: 'REVIEW_SUBMITTED', payload: { questionId: cardId, rating } });
     return { success: true, data: newSchedule };
   },
 
-  async skipReview(questionId: string): Promise<ServiceResult<void>> {
-    const all = questionService.getAll();
-    const q = all.find((q) => q.id === questionId);
-    if (!q) {
+  async skipReview(cardId: string): Promise<ServiceResult<void>> {
+    const all = flashcardService.getAll();
+    const card = all.find((c) => c.id === cardId);
+    if (!card) {
       return {
         success: false,
-        error: { code: 'NOT_FOUND', message: 'Question not found', retryable: false },
+        error: { code: 'NOT_FOUND', message: 'FlashCard not found', retryable: false },
       };
     }
 
-    questionService.updateReviewSchedule(questionId, {
-      ...q.reviewSchedule,
+    flashcardService.updateReviewSchedule(cardId, {
+      ...card.reviewSchedule,
       nextReviewDate: addDays(today(), 1),
     });
     return { success: true };
