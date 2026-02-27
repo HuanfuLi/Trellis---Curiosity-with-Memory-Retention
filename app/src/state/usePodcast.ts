@@ -1,0 +1,91 @@
+import { useState, useEffect, useCallback } from 'react';
+import type { DailyPodcast, ServiceError } from '../types';
+import { mockPodcastService } from '../services/mock/podcast.mock';
+import { eventBus } from '../lib/event-bus';
+
+interface UsePodcastReturn {
+  podcasts: DailyPodcast[];
+  isLoading: boolean;
+  isGenerating: boolean;
+  generationProgress: number;
+  error: ServiceError | null;
+  getPodcastForDate: (date: string) => DailyPodcast | undefined;
+  generatePodcast: (date: string) => Promise<void>;
+  reload: () => Promise<void>;
+}
+
+export function usePodcast(): UsePodcastReturn {
+  const [podcasts, setPodcasts] = useState<DailyPodcast[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [error, setError] = useState<ServiceError | null>(null);
+
+  const reload = useCallback(async () => {
+    setIsLoading(true);
+    const result = await mockPodcastService.getPodcasts(20);
+    if (result.success && result.data) {
+      setPodcasts(result.data);
+    }
+    setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    reload();
+
+    const unsubProgress = eventBus.subscribe('PODCAST_GENERATION_PROGRESS', (e) => {
+      setGenerationProgress(e.payload.progress);
+      setPodcasts((prev) =>
+        prev.map((p) => p.id === e.payload.podcastId ? { ...p, progress: e.payload.progress } : p)
+      );
+    });
+
+    const unsubCompleted = eventBus.subscribe('PODCAST_GENERATION_COMPLETED', (e) => {
+      setIsGenerating(false);
+      setGenerationProgress(0);
+      setPodcasts((prev) => {
+        const exists = prev.find((p) => p.id === e.payload.id);
+        if (exists) {
+          return prev.map((p) => p.id === e.payload.id ? e.payload : p);
+        }
+        return [e.payload, ...prev];
+      });
+    });
+
+    const unsubFailed = eventBus.subscribe('PODCAST_GENERATION_FAILED', (e) => {
+      setIsGenerating(false);
+      setPodcasts((prev) =>
+        prev.map((p) => p.id === e.payload.podcastId ? { ...p, status: 'failed', error: e.payload.error } : p)
+      );
+    });
+
+    return () => {
+      unsubProgress();
+      unsubCompleted();
+      unsubFailed();
+    };
+  }, [reload]);
+
+  const getPodcastForDate = useCallback((date: string): DailyPodcast | undefined => {
+    return podcasts.find((p) => p.date === date);
+  }, [podcasts]);
+
+  const generatePodcast = useCallback(async (date: string) => {
+    setIsGenerating(true);
+    setGenerationProgress(0);
+    setError(null);
+    const result = await mockPodcastService.generatePodcast(date);
+    if (result.success && result.data) {
+      setPodcasts((prev) => {
+        const exists = prev.find((p) => p.id === result.data!.id);
+        if (exists) return prev.map((p) => p.id === result.data!.id ? result.data! : p);
+        return [result.data!, ...prev];
+      });
+    } else {
+      setError(result.error ?? null);
+      setIsGenerating(false);
+    }
+  }, []);
+
+  return { podcasts, isLoading, isGenerating, generationProgress, error, getPodcastForDate, generatePodcast, reload };
+}

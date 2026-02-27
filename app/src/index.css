@@ -1,0 +1,137 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-size: 16px;
+
+  /* Material You - Nature & Growth Theme */
+  --primary-90: #D7E8C0;
+  --primary-80: #BDDA9F;
+  --primary-40: #558B2F;
+  --primary-30: #3E6B21;
+  --primary-10: #1A2E0C;
+
+  --secondary-90: #FFF8E1;
+  --secondary-80: #FFECB3;
+  --secondary-40: #FFD54F;
+  --secondary-container: #FFF3E0;
+
+  --surface: #FFFBF5;
+  --surface-variant: #F5F0E8;
+  --surface-container: #FFF8F0;
+  --surface-container-high: #F0EBE3;
+
+  --accent-coral: #FF8A80;
+  --accent-lavender: #CE93D8;
+
+  --node-mint: #B2DFDB;
+  --node-salmon: #FFAB91;
+  --node-lilac: #CE93D8;
+  --node-peach: #FFCCBC;
+  --node-sky: #B3E5FC;
+
+  --background: #FFFBF5;
+  --foreground: #2D2D2D;
+  --card: #FFFFFF;
+  --card-foreground: #2D2D2D;
+  --muted: #F5F0E8;
+  --muted-foreground: #6B6B6B;
+  --border: rgba(0, 0, 0, 0.08);
+  --switch-background: #D0C9BF;
+  --font-weight-normal: 400;
+
+  --radius: 1.25rem;
+  --radius-xl: 1.75rem;
+  --radius-pill: 9999px;
+
+  --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-2: 0 3px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
+  --shadow-3: 0 10px 20px rgba(0, 0, 0, 0.12), 0 3px 6px rgba(0, 0, 0, 0.08);
+
+  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif;
+}
+
+.dark {
+  --background: #1C1B1F;
+  --foreground: #E6E1E5;
+  --card: #1C1B1F;
+  --muted: #4A4458;
+  --muted-foreground: #CAC4D0;
+  --border: rgba(255, 255, 255, 0.12);
+  --surface: #1C1B1F;
+  --surface-variant: #49454F;
+  --surface-container: #2B2930;
+  --secondary-container: #4A4458;
+  --primary-40: #BDDA9F;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border-color: var(--border);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-family: var(--font-family);
+    font-size: var(--font-size);
+    min-height: 100vh;
+  }
+
+  h1 {
+    font-size: 2rem;
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+  }
+
+  h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    line-height: 1.4;
+    letter-spacing: -0.01em;
+  }
+
+  h3 {
+    font-size: 1.25rem;
+    font-weight: 500;
+    line-height: 1.4;
+  }
+
+  h4 {
+    font-size: 1rem;
+    font-weight: 500;
+    line-height: 1.5;
+  }
+
+  label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.5;
+  }
+
+  button {
+    font-size: 1rem;
+    font-weight: 500;
+    line-height: 1.5;
+    cursor: pointer;
+    border: none;
+    background: none;
+    font-family: inherit;
+  }
+
+  input {
+    font-size: 1rem;
+    font-weight: var(--font-weight-normal);
+    line-height: 1.5;
+    border: none;
+    outline: none;
+    font-family: inherit;
+  }
+}
