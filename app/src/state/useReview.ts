@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Question, ReviewSchedule, ServiceError } from '../types';
-import { mockReviewService } from '../services/mock/review.mock';
+import { reviewService } from '../services/review.service';
 
 interface UseReviewReturn {
   items: Question[];
@@ -19,7 +19,7 @@ export function useReview(): UseReviewReturn {
 
   const reload = useCallback(async () => {
     setIsLoading(true);
-    const result = await mockReviewService.getTodayReviewItems();
+    const result = await reviewService.getTodayReviewItems();
     if (result.success && result.data) {
       setItems(result.data);
     } else {
@@ -32,19 +32,22 @@ export function useReview(): UseReviewReturn {
     reload();
   }, [reload]);
 
-  const submitReview = useCallback(async (id: string, rating: 1 | 2 | 3 | 4 | 5): Promise<ReviewSchedule | null> => {
-    const result = await mockReviewService.submitReview(id, rating);
-    if (result.success) {
-      setItems((prev) => prev.filter((q) => q.id !== id));
-      return result.data ?? null;
-    } else {
-      setError(result.error ?? null);
-      return null;
-    }
-  }, []);
+  const submitReview = useCallback(
+    async (id: string, rating: 1 | 2 | 3 | 4 | 5): Promise<ReviewSchedule | null> => {
+      const result = await reviewService.submitReview(id, rating);
+      if (result.success) {
+        setItems((prev) => prev.filter((q) => q.id !== id));
+        return result.data ?? null;
+      } else {
+        setError(result.error ?? null);
+        return null;
+      }
+    },
+    [],
+  );
 
   const skipReview = useCallback(async (id: string): Promise<void> => {
-    await mockReviewService.skipReview(id);
+    await reviewService.skipReview(id);
     setItems((prev) => prev.filter((q) => q.id !== id));
   }, []);
 

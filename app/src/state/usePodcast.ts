@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { DailyPodcast, ServiceError } from '../types';
-import { mockPodcastService } from '../services/mock/podcast.mock';
+import { podcastService } from '../services/podcast.service';
 import { eventBus } from '../lib/event-bus';
 
 interface UsePodcastReturn {
@@ -11,6 +11,7 @@ interface UsePodcastReturn {
   error: ServiceError | null;
   getPodcastForDate: (date: string) => DailyPodcast | undefined;
   generatePodcast: (date: string) => Promise<void>;
+  getAudioPath: (podcastId: string) => string | null;
   reload: () => Promise<void>;
 }
 
@@ -23,7 +24,7 @@ export function usePodcast(): UsePodcastReturn {
 
   const reload = useCallback(async () => {
     setIsLoading(true);
-    const result = await mockPodcastService.getPodcasts(20);
+    const result = await podcastService.getPodcasts(20);
     if (result.success && result.data) {
       setPodcasts(result.data);
     }
@@ -36,7 +37,9 @@ export function usePodcast(): UsePodcastReturn {
     const unsubProgress = eventBus.subscribe('PODCAST_GENERATION_PROGRESS', (e) => {
       setGenerationProgress(e.payload.progress);
       setPodcasts((prev) =>
-        prev.map((p) => p.id === e.payload.podcastId ? { ...p, progress: e.payload.progress } : p)
+        prev.map((p) =>
+          p.id === e.payload.podcastId ? { ...p, progress: e.payload.progress } : p,
+        ),
       );
     });
 
@@ -46,7 +49,7 @@ export function usePodcast(): UsePodcastReturn {
       setPodcasts((prev) => {
         const exists = prev.find((p) => p.id === e.payload.id);
         if (exists) {
-          return prev.map((p) => p.id === e.payload.id ? e.payload : p);
+          return prev.map((p) => (p.id === e.payload.id ? e.payload : p));
         }
         return [e.payload, ...prev];
       });
@@ -55,7 +58,9 @@ export function usePodcast(): UsePodcastReturn {
     const unsubFailed = eventBus.subscribe('PODCAST_GENERATION_FAILED', (e) => {
       setIsGenerating(false);
       setPodcasts((prev) =>
-        prev.map((p) => p.id === e.payload.podcastId ? { ...p, status: 'failed', error: e.payload.error } : p)
+        prev.map((p) =>
+          p.id === e.payload.podcastId ? { ...p, status: 'failed', error: e.payload.error } : p,
+        ),
       );
     });
 
@@ -66,19 +71,20 @@ export function usePodcast(): UsePodcastReturn {
     };
   }, [reload]);
 
-  const getPodcastForDate = useCallback((date: string): DailyPodcast | undefined => {
-    return podcasts.find((p) => p.date === date);
-  }, [podcasts]);
+  const getPodcastForDate = useCallback(
+    (date: string): DailyPodcast | undefined => podcasts.find((p) => p.date === date),
+    [podcasts],
+  );
 
   const generatePodcast = useCallback(async (date: string) => {
     setIsGenerating(true);
     setGenerationProgress(0);
     setError(null);
-    const result = await mockPodcastService.generatePodcast(date);
+    const result = await podcastService.generatePodcast(date);
     if (result.success && result.data) {
       setPodcasts((prev) => {
         const exists = prev.find((p) => p.id === result.data!.id);
-        if (exists) return prev.map((p) => p.id === result.data!.id ? result.data! : p);
+        if (exists) return prev.map((p) => (p.id === result.data!.id ? result.data! : p));
         return [result.data!, ...prev];
       });
     } else {
@@ -87,5 +93,20 @@ export function usePodcast(): UsePodcastReturn {
     }
   }, []);
 
-  return { podcasts, isLoading, isGenerating, generationProgress, error, getPodcastForDate, generatePodcast, reload };
+  const getAudioPath = useCallback((podcastId: string): string | null => {
+    const result = podcastService.getAudioPath(podcastId);
+    return result.success ? (result.data ?? null) : null;
+  }, []);
+
+  return {
+    podcasts,
+    isLoading,
+    isGenerating,
+    generationProgress,
+    error,
+    getPodcastForDate,
+    generatePodcast,
+    getAudioPath,
+    reload,
+  };
 }

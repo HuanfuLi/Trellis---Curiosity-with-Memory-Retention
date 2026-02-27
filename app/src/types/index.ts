@@ -129,7 +129,7 @@ export interface AppSettings {
 }
 
 export interface LLMConfig {
-  provider: 'openai' | 'claude' | 'local';
+  provider: 'openai' | 'claude' | 'gemini' | 'local' | 'lmstudio';
   apiKey?: string;
   baseUrl?: string;
   model: string;

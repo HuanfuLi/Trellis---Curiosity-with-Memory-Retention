@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Play, Pause, Radio } from 'lucide-react';
+import { ArrowLeft, Play, Pause, Radio, RefreshCw } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { ProgressBar } from '../components/ui/ProgressBar';
@@ -11,27 +11,92 @@ import type { DailyPodcast } from '../types';
 
 export function PodcastScreen() {
   const navigate = useNavigate();
-  const { podcasts, isLoading, isGenerating, generationProgress, getPodcastForDate, generatePodcast } = usePodcast();
+  const {
+    podcasts,
+    isLoading,
+    isGenerating,
+    generationProgress,
+    getPodcastForDate,
+    generatePodcast,
+    getAudioPath,
+  } = usePodcast();
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackProgress, setPlaybackProgress] = useState(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const todayPodcast = getPodcastForDate(today());
   const selected: DailyPodcast | null = selectedId
     ? (podcasts.find((p) => p.id === selectedId) ?? null)
     : (todayPodcast ?? podcasts[0] ?? null);
 
+  // Wire audio element when selected podcast changes
   useEffect(() => {
-    if (!isPlaying || !selected?.duration) return;
+    if (!selected || selected.status !== 'ready') return;
+
+    const blobUrl = getAudioPath(selected.id);
+    if (!blobUrl) return;
+
+    const audio = new Audio(blobUrl);
+    audioRef.current = audio;
+    setPlaybackProgress(0);
+
+    audio.ontimeupdate = () => {
+      if (audio.duration) {
+        setPlaybackProgress((audio.currentTime / audio.duration) * 100);
+      }
+    };
+    audio.onended = () => {
+      setIsPlaying(false);
+      setPlaybackProgress(0);
+    };
+
+    return () => {
+      audio.pause();
+      audio.ontimeupdate = null;
+      audio.onended = null;
+      audioRef.current = null;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.id, selected?.status, getAudioPath]);
+
+  const handlePlayPause = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) {
+      // No real audio — simulate with timer (fallback when no TTS configured)
+      setIsPlaying((prev) => !prev);
+      return;
+    }
+    if (isPlaying) {
+      audio.pause();
+    } else {
+      if (playbackProgress >= 100) {
+        audio.currentTime = 0;
+        setPlaybackProgress(0);
+      }
+      void audio.play();
+    }
+    setIsPlaying((prev) => !prev);
+  }, [isPlaying, playbackProgress]);
+
+  // Simulated playback timer (when no audio element)
+  useEffect(() => {
+    if (audioRef.current || !isPlaying || !selected?.duration) return;
     const duration = selected.duration;
     const interval = setInterval(() => {
       setPlaybackProgress((prev) => {
-        if (prev >= 100) { setIsPlaying(false); return 0; }
+        if (prev >= 100) {
+          setIsPlaying(false);
+          return 0;
+        }
         return prev + (100 / duration) * 0.5;
       });
     }, 500);
     return () => clearInterval(interval);
-  }, [isPlaying, selected]);
+  }, [isPlaying, selected, selected?.duration]);
+
+  const hasAudio = selected ? !!getAudioPath(selected.id) : false;
 
   const statusColor = (status: DailyPodcast['status']) => {
     if (status === 'ready') return 'green';
@@ -83,7 +148,7 @@ export function PodcastScreen() {
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
             <button
-              onClick={() => { setIsPlaying(!isPlaying); if (playbackProgress === 100) setPlaybackProgress(0); }}
+              onClick={handlePlayPause}
               style={{
                 width: '56px',
                 height: '56px',
@@ -99,6 +164,20 @@ export function PodcastScreen() {
               {isPlaying ? <Pause size={24} /> : <Play size={24} />}
             </button>
           </div>
+
+          {/* Regenerate audio button if audio was lost on reload */}
+          {!hasAudio && (
+            <div style={{ marginTop: '12px', textAlign: 'center' }}>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => generatePodcast(selected.date)}
+                style={{ gap: '6px' } as React.CSSProperties}
+              >
+                <RefreshCw size={14} /> Regenerate audio
+              </Button>
+            </div>
+          )}
 
           {selected.script && (
             <div style={{ marginTop: '16px', padding: '12px', backgroundColor: 'rgba(255,255,255,0.6)', borderRadius: '12px' }}>

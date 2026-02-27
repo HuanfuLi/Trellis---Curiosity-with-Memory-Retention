@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Network } from 'lucide-react';
 import { ChatMessage } from '../components/ChatMessage';
@@ -11,11 +11,12 @@ interface Message {
   content: string;
   relatedKnowledge?: string[];
   questionId?: string;
+  isStreaming?: boolean;
 }
 
 export function AskScreen() {
   const navigate = useNavigate();
-  const { ask, isAsking, questions } = useQuestions();
+  const { askStreaming, isAsking, questions } = useQuestions();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const [messages, setMessages] = useState<Message[]>([
@@ -31,30 +32,50 @@ export function AskScreen() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isAsking]);
 
-  const handleSend = async (content: string) => {
+  const handleSend = useCallback(async (content: string) => {
     const userMsg: Message = { id: Date.now().toString(), type: 'user', content };
-    setMessages((prev) => [...prev, userMsg]);
+    const placeholderId = `ai-${Date.now() + 1}`;
+    const placeholder: Message = {
+      id: placeholderId,
+      type: 'ai',
+      content: '',
+      isStreaming: true,
+    };
 
-    const question = await ask(content);
+    setMessages((prev) => [...prev, userMsg, placeholder]);
+
+    const question = await askStreaming(content, (accumulated) => {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === placeholderId ? { ...m, content: accumulated } : m)),
+      );
+    });
 
     if (question) {
       const related = questions.filter((q) => question.relatedQuestionIds.includes(q.id));
-      const aiMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        type: 'ai',
-        content: question.answer,
-        relatedKnowledge: related.map((q) => q.summary),
-        questionId: question.id,
-      };
-      setMessages((prev) => [...prev, aiMsg]);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === placeholderId
+            ? {
+                ...m,
+                content: question.answer,
+                isStreaming: false,
+                relatedKnowledge: related.map((q) => q.summary),
+                questionId: question.id,
+              }
+            : m,
+        ),
+      );
     } else {
-      setMessages((prev) => [...prev, {
-        id: (Date.now() + 1).toString(),
-        type: 'ai',
-        content: 'Sorry, I had trouble processing that. Please try again.',
-      }]);
+      // onToken was called with the error message — just close the stream
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === placeholderId
+            ? { ...m, isStreaming: false, content: m.content || 'Something went wrong. Please try again.' }
+            : m,
+        ),
+      );
     }
-  };
+  }, [askStreaming, questions]);
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', maxWidth: '448px', margin: '0 auto' }}>
@@ -93,46 +114,46 @@ export function AskScreen() {
       {/* Messages */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px', paddingBottom: '140px' }}>
         {messages.map((message) => (
-          <ChatMessage
-            key={message.id}
-            type={message.type}
-            content={message.content}
-            relatedKnowledge={message.relatedKnowledge}
-            onKnowledgeClick={(k) => {
-              const q = questions.find((q) => q.summary === k);
-              if (q) navigate(`/ask/${q.id}`);
-            }}
-          />
-        ))}
-
-        {isAsking && (
-          <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '16px' }}>
-            <div
-              style={{
-                padding: '16px 20px',
-                backgroundColor: 'var(--surface-variant)',
-                borderRadius: '24px',
-                display: 'flex',
-                gap: '6px',
-                alignItems: 'center',
+          <div key={message.id}>
+            <ChatMessage
+              type={message.type}
+              content={message.content + (message.isStreaming && message.content ? '|' : '')}
+              relatedKnowledge={message.relatedKnowledge}
+              onKnowledgeClick={(k) => {
+                const q = questions.find((q) => q.summary === k);
+                if (q) navigate(`/ask/${q.id}`);
               }}
-            >
-              {[0, 1, 2].map((i) => (
+            />
+            {message.isStreaming && !message.content && (
+              <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '16px' }}>
                 <div
-                  key={i}
                   style={{
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '50%',
-                    backgroundColor: 'var(--primary-40)',
-                    animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite`,
+                    padding: '16px 20px',
+                    backgroundColor: 'var(--surface-variant)',
+                    borderRadius: '24px',
+                    display: 'flex',
+                    gap: '6px',
+                    alignItems: 'center',
                   }}
-                />
-              ))}
-              <style>{`@keyframes bounce { 0%, 80%, 100% { transform: translateY(0); } 40% { transform: translateY(-6px); } }`}</style>
-            </div>
+                >
+                  {[0, 1, 2].map((i) => (
+                    <div
+                      key={i}
+                      style={{
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '50%',
+                        backgroundColor: 'var(--primary-40)',
+                        animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite`,
+                      }}
+                    />
+                  ))}
+                  <style>{`@keyframes bounce { 0%, 80%, 100% { transform: translateY(0); } 40% { transform: translateY(-6px); } }`}</style>
+                </div>
+              </div>
+            )}
           </div>
-        )}
+        ))}
         <div ref={messagesEndRef} />
       </div>
 

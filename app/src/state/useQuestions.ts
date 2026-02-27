@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Question, ServiceError } from '../types';
-import { mockQuestionService } from '../services/mock/question.mock';
+import { questionService } from '../services/question.service';
+import { mockSettingsService } from '../services/mock/settings.mock';
+import { chatStream } from '../providers/llm';
 import { today } from '../lib/date';
 
 interface UseQuestionsReturn {
@@ -9,6 +11,7 @@ interface UseQuestionsReturn {
   isLoading: boolean;
   error: ServiceError | null;
   ask: (content: string) => Promise<Question | null>;
+  askStreaming: (content: string, onToken: (accumulated: string) => void) => Promise<Question | null>;
   getByDate: (date: string) => Question[];
   getRecent: (n: number) => Question[];
   getById: (id: string) => Question | undefined;
@@ -22,7 +25,7 @@ export function useQuestions(): UseQuestionsReturn {
 
   useEffect(() => {
     const load = async () => {
-      const result = await mockQuestionService.getRecent(50);
+      const result = await questionService.getRecent(50);
       if (result.success && result.data) {
         setQuestions(result.data);
       }
@@ -34,7 +37,7 @@ export function useQuestions(): UseQuestionsReturn {
   const ask = useCallback(async (content: string): Promise<Question | null> => {
     setIsAsking(true);
     setError(null);
-    const result = await mockQuestionService.ask(content);
+    const result = await questionService.ask(content);
     if (result.success && result.data) {
       setQuestions((prev) => [result.data!.question, ...prev]);
       setIsAsking(false);
@@ -46,19 +49,79 @@ export function useQuestions(): UseQuestionsReturn {
     }
   }, []);
 
-  const getByDate = useCallback((date: string): Question[] => {
-    return questions.filter((q) => q.date === date);
-  }, [questions]);
+  const askStreaming = useCallback(
+    async (content: string, onToken: (accumulated: string) => void): Promise<Question | null> => {
+      setIsAsking(true);
+      setError(null);
 
-  const getRecent = useCallback((n: number): Question[] => {
-    return questions.slice(0, n);
-  }, [questions]);
+      const settings = mockSettingsService.getSync();
+      const llmConfig = settings.llm;
 
-  const getById = useCallback((id: string): Question | undefined => {
-    return questions.find((q) => q.id === id);
-  }, [questions]);
+      if (!llmConfig.isConfigured) {
+        const msg = 'Add your API key in Settings to get AI responses.';
+        onToken(msg);
+        setError({ code: 'NOT_CONFIGURED', message: msg, retryable: false });
+        setIsAsking(false);
+        return null;
+      }
 
-  return { questions, isAsking, isLoading, error, ask, getByDate, getRecent, getById };
+      try {
+        const store = questionService.getAll();
+        const recentContext = store.slice(0, 3);
+        const contextLines = recentContext
+          .map((q) => `Q: ${q.content}\nA: ${q.summary}`)
+          .join('\n');
+
+        const systemPrompt = [
+          'You are a knowledgeable learning assistant. Answer questions clearly and thoroughly.',
+          recentContext.length > 0 ? `Recent questions for context:\n${contextLines}` : '',
+        ]
+          .filter(Boolean)
+          .join('\n');
+
+        let accumulated = '';
+        const stream = chatStream(
+          [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content },
+          ],
+          llmConfig,
+        );
+
+        for await (const token of stream) {
+          accumulated += token;
+          onToken(accumulated);
+        }
+
+        // Persist and get structured question
+        const question = questionService.buildAndSave(content, accumulated, store);
+        setQuestions((prev) => [question, ...prev]);
+        setIsAsking(false);
+        return question;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        onToken(msg);
+        setError({ code: 'NETWORK_ERROR', message: msg, retryable: true });
+        setIsAsking(false);
+        return null;
+      }
+    },
+    [],
+  );
+
+  const getByDate = useCallback(
+    (date: string): Question[] => questions.filter((q) => q.date === date),
+    [questions],
+  );
+
+  const getRecent = useCallback((n: number): Question[] => questions.slice(0, n), [questions]);
+
+  const getById = useCallback(
+    (id: string): Question | undefined => questions.find((q) => q.id === id),
+    [questions],
+  );
+
+  return { questions, isAsking, isLoading, error, ask, askStreaming, getByDate, getRecent, getById };
 }
 
 export function useTodayQuestions() {
