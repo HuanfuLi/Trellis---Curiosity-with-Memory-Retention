@@ -319,6 +319,7 @@ export function AskScreen() {
         {displayMessages.length === 0 && (
           <>
             <ChatMessage
+              messageId="welcome"
               type="ai"
               content="Hi! I'm your AI learning companion. Ask me anything to build your knowledge base."
               relatedKnowledge={[]}
