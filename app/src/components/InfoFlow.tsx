@@ -1,174 +1,138 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { X } from 'lucide-react';
-import type { FlashCard, Question } from '../types';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+import type { BlindboxItem, DailyPost, Question } from '../types';
 
 export type InfoFlowItem =
-  | { kind: 'concept'; card: FlashCard }
-  | { kind: 'connection'; questionA: Question; questionB: Question };
+  | { kind: 'concept'; post: DailyPost }
+  | { kind: 'connection'; questionA: Question; questionB: Question }
+  | { kind: 'milestone'; item: BlindboxItem };
 
-// ─── Rating labels ────────────────────────────────────────────────────────────
-
-const RATING_META: Record<number, { label: string; color: string }> = {
-  1: { label: 'Blackout', color: '#E53935' },
-  2: { label: 'Wrong',    color: '#FB8C00' },
-  3: { label: 'Hard',     color: '#FDD835' },
-  4: { label: 'Good',     color: '#7CB342' },
-  5: { label: 'Perfect',  color: '#43A047' },
+const CONCEPT_BADGE_META: Record<DailyPost['sourceType'], { label: string; color: string }> = {
+  recent: { label: 'Fresh', color: '#D84315' },
+  related: { label: 'Connected', color: '#0277BD' },
+  resurfaced: { label: 'Rediscovered', color: '#6A1B9A' },
+  starter: { label: 'Starter', color: '#2E7D32' },
+  mixed: { label: 'Mixed', color: '#AD1457' },
 };
 
-// ─── Concept Card (Type A) ────────────────────────────────────────────────────
+const FALLBACK_BADGE = { label: 'Daily', color: '#558B2F' };
 
 interface ConceptCardProps {
-  card: FlashCard;
-  onRate: (id: string, rating: 1 | 2 | 3 | 4 | 5) => void;
-  /** true = this card is snapped to the viewport */
+  post: DailyPost;
   isActive: boolean;
+  onOpen: (postId: string) => void;
 }
 
-function ConceptCard({ card, onRate, isActive }: ConceptCardProps) {
-  const [flipped, setFlipped] = useState(false);
-  const [rated, setRated] = useState(false);
-  const [ratedValue, setRatedValue] = useState<number | null>(null);
-
-  // Reset state if the same component is reused for a different card
-  useEffect(() => {
-    setFlipped(false);
-    setRated(false);
-    setRatedValue(null);
-  }, [card.id]);
-
-  const handleRate = (rating: 1 | 2 | 3 | 4 | 5) => {
-    setRatedValue(rating);
-    setRated(true);
-    onRate(card.id, rating);
-  };
+function ConceptCard({ post, isActive, onOpen }: ConceptCardProps) {
+  const badge = CONCEPT_BADGE_META[post.sourceType] ?? FALLBACK_BADGE;
 
   return (
-    <div className="flow-card-inner" style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: '24px 20px', boxSizing: 'border-box' }}>
-      {/* Badge */}
-      <div style={{ marginBottom: '14px' }}>
-        <span style={{
-          fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.1em',
-          textTransform: 'uppercase', color: 'var(--primary-40)',
-          background: 'color-mix(in srgb, var(--primary-40) 12%, transparent)',
-          padding: '4px 12px', borderRadius: '100px',
-        }}>
-          Active Recall
+    <div
+      className="flow-card-inner"
+      style={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        padding: '24px 20px',
+        boxSizing: 'border-box',
+        background:
+          'radial-gradient(circle at top right, color-mix(in srgb, var(--primary-80) 55%, transparent), transparent 40%), var(--card)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '16px' }}>
+        <span
+          style={{
+            fontSize: '0.68rem',
+            fontWeight: 700,
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            color: badge.color,
+            background: `${badge.color}18`,
+            padding: '5px 12px',
+            borderRadius: '100px',
+          }}
+        >
+          {badge.label}
         </span>
+        <span style={{ fontSize: '0.78rem', color: 'var(--muted-foreground)' }}>{post.contextLabel}</span>
       </div>
 
-      {/* Flip area */}
-      <div
-        onClick={() => !rated && setFlipped((f) => !f)}
+      <button
+        onClick={() => onOpen(post.id)}
         style={{
           flex: 1,
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'center',
-          alignItems: 'center',
-          gap: '14px',
-          padding: '28px 20px',
+          justifyContent: 'space-between',
+          gap: '24px',
+          padding: '28px 20px 24px',
           borderRadius: 'var(--radius-xl)',
-          backgroundColor: flipped
-            ? 'color-mix(in srgb, var(--primary-40) 8%, var(--surface-variant))'
-            : 'var(--surface-variant)',
-          border: '1px solid var(--border)',
-          cursor: rated ? 'default' : 'pointer',
-          transition: 'background-color 0.3s',
-          textAlign: 'center',
+          background: 'linear-gradient(180deg, color-mix(in srgb, var(--primary-80) 20%, var(--surface-container-high)), var(--surface-container-high))',
+          border: '1.5px solid color-mix(in srgb, var(--primary-40) 22%, var(--border))',
+          cursor: 'pointer',
+          transition: 'transform 0.18s ease, background 0.25s ease',
+          textAlign: 'left',
           animation: isActive ? 'card-slide-in 0.35s ease' : 'none',
         }}
       >
-        {!flipped ? (
-          <>
-            <p style={{ fontSize: '1.15rem', fontWeight: 600, lineHeight: 1.5, color: 'var(--foreground)' }}>
-              {card.front}
-            </p>
-            <p style={{ fontSize: '0.78rem', color: 'var(--muted-foreground)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--primary-40)', animation: 'glow-pulse 2s ease-in-out infinite', display: 'inline-block', flexShrink: 0 }} />
-              Tap to reveal answer
-            </p>
-          </>
-        ) : (
-          <>
-            <p style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em', color: 'var(--muted-foreground)', textTransform: 'uppercase' }}>
-              Answer
-            </p>
-            <p style={{ fontSize: '1rem', color: 'var(--foreground)', lineHeight: 1.6 }}>
-              {card.back}
-            </p>
-          </>
-        )}
-      </div>
-
-      {/* Rating row — visible after flip, before rating */}
-      {flipped && !rated && (
-        <div style={{ marginTop: '18px' }}>
-          <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
-            {([1, 2, 3, 4, 5] as const).map((r) => (
-              <button
-                key={r}
-                onClick={() => handleRate(r)}
-                style={{
-                  flex: 1,
-                  padding: '12px 0',
-                  borderRadius: '14px',
-                  border: 'none',
-                  backgroundColor: RATING_META[r].color + '22',
-                  color: RATING_META[r].color,
-                  fontWeight: 800,
-                  fontSize: '1rem',
-                  cursor: 'pointer',
-                  transition: 'transform 0.15s, background-color 0.15s',
-                  animation: 'card-slide-in 0.25s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = RATING_META[r].color + '44';
-                  e.currentTarget.style.transform = 'scale(1.1)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = RATING_META[r].color + '22';
-                  e.currentTarget.style.transform = 'scale(1)';
-                }}
-                title={RATING_META[r].label}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-          <p style={{ textAlign: 'center', fontSize: '0.7rem', color: 'var(--muted-foreground)' }}>
-            1 = Blackout · 3 = Hard · 5 = Perfect
+        <div>
+          <p
+            style={{
+              fontSize: '1.45rem',
+              fontWeight: 800,
+              lineHeight: 1.2,
+              color: 'var(--foreground)',
+              marginBottom: '14px',
+              textWrap: 'balance',
+            }}
+          >
+            {post.teaser.hook}
+          </p>
+          <p style={{ fontSize: '0.98rem', color: 'var(--foreground)', lineHeight: 1.68, opacity: 0.92 }}>
+            {post.teaser.preview}
           </p>
         </div>
-      )}
 
-      {/* Rated confirmation */}
-      {rated && ratedValue !== null && (
         <div
           style={{
-            marginTop: '18px',
-            padding: '12px',
-            borderRadius: '14px',
-            backgroundColor: RATING_META[ratedValue].color + '18',
-            textAlign: 'center',
-            animation: 'card-slide-in 0.2s ease',
+            padding: '14px 16px',
+            borderRadius: '18px',
+            backgroundColor: 'color-mix(in srgb, var(--surface) 65%, white)',
+            border: '1px solid color-mix(in srgb, var(--primary-40) 18%, var(--border))',
           }}
         >
-          <p style={{ color: RATING_META[ratedValue].color, fontWeight: 700, fontSize: '0.9rem' }}>
-            Rated {ratedValue} — {RATING_META[ratedValue].label}
+          <p style={{ fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.08em', color: badge.color, textTransform: 'uppercase', marginBottom: '6px' }}>
+            Why open this
           </p>
-          <p style={{ color: 'var(--muted-foreground)', fontSize: '0.75rem', marginTop: '2px' }}>
-            Swipe up for next
+          <p style={{ fontSize: '0.92rem', color: 'var(--foreground)', lineHeight: 1.65 }}>
+            {post.whyCare}
           </p>
         </div>
-      )}
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {post.keywords.slice(0, 3).map((keyword) => (
+              <span
+                key={keyword}
+                style={{
+                  fontSize: '0.72rem',
+                  color: 'var(--muted-foreground)',
+                  backgroundColor: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  padding: '4px 10px',
+                  borderRadius: '100px',
+                }}
+              >
+                {keyword}
+              </span>
+            ))}
+          </div>
+          <span style={{ fontSize: '0.78rem', color: badge.color, fontWeight: 700 }}>Open article</span>
+        </div>
+      </button>
     </div>
   );
 }
-
-// ─── Connection Card (Type B) ─────────────────────────────────────────────────
 
 interface ConnectionCardProps {
   questionA: Question;
@@ -186,7 +150,7 @@ function ConnectionCard({ questionA, questionB, onAha }: ConnectionCardProps) {
     if (now - lastTapRef.current < 350) {
       if (!ahaBurst) {
         setAhaBurst(true);
-        setAhaCount((c) => c + 1);
+        setAhaCount((count) => count + 1);
         onAha(questionA.id, questionB.id);
         setTimeout(() => setAhaBurst(false), 2000);
       }
@@ -194,7 +158,7 @@ function ConnectionCard({ questionA, questionB, onAha }: ConnectionCardProps) {
     lastTapRef.current = now;
   }, [ahaBurst, onAha, questionA.id, questionB.id]);
 
-  const sharedKeywords = questionA.keywords.filter((k) => questionB.keywords.includes(k));
+  const sharedKeywords = questionA.keywords.filter((keyword) => questionB.keywords.includes(keyword));
 
   return (
     <div
@@ -210,116 +174,130 @@ function ConnectionCard({ questionA, questionB, onAha }: ConnectionCardProps) {
         position: 'relative',
       }}
     >
-      {/* Badge */}
       <div style={{ marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <span style={{
-          fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.1em',
-          textTransform: 'uppercase', color: 'var(--node-sky)',
-          background: 'color-mix(in srgb, var(--node-sky) 20%, transparent)',
-          padding: '4px 12px', borderRadius: '100px',
-        }}>
+        <span
+          style={{
+            fontSize: '0.68rem',
+            fontWeight: 700,
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            color: 'var(--node-sky)',
+            background: 'color-mix(in srgb, var(--node-sky) 20%, transparent)',
+            padding: '4px 12px',
+            borderRadius: '100px',
+          }}
+        >
           Connection
         </span>
-        <span style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)' }}>Double-tap for Aha!</span>
+        <span style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)' }}>Double-tap to keep this spark</span>
         {ahaCount > 0 && (
-          <span style={{
-            fontSize: '0.7rem', fontWeight: 700,
-            color: 'var(--primary-40)',
-            animation: 'fade-in 0.2s ease',
-          }}>
+          <span
+            style={{
+              fontSize: '0.7rem',
+              fontWeight: 700,
+              color: 'var(--primary-40)',
+              animation: 'fade-in 0.2s ease',
+            }}
+          >
             ×{ahaCount}
           </span>
         )}
       </div>
 
-      {/* Aha! burst overlay */}
       {ahaBurst && (
         <div
           style={{
-            position: 'absolute', inset: 0, display: 'flex',
-            alignItems: 'center', justifyContent: 'center',
-            pointerEvents: 'none', zIndex: 20,
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+            zIndex: 20,
             animation: 'aha-pop 2s ease forwards',
           }}
         >
-          <div style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
-            animation: 'glow-ring 2s ease forwards',
-          }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', animation: 'glow-ring 2s ease forwards' }}>
             <span style={{ fontSize: '3.5rem', filter: 'drop-shadow(0 0 16px rgba(76,175,80,0.8))' }}>🧠</span>
-            <span style={{
-              fontSize: '1.1rem', fontWeight: 800, color: 'var(--primary-40)',
-              textShadow: '0 0 12px rgba(76,175,80,0.6)',
-              letterSpacing: '0.05em',
-            }}>
+            <span
+              style={{
+                fontSize: '1.1rem',
+                fontWeight: 800,
+                color: 'var(--primary-40)',
+                textShadow: '0 0 12px rgba(76,175,80,0.6)',
+                letterSpacing: '0.05em',
+              }}
+            >
               AHA!
             </span>
           </div>
         </div>
       )}
 
-      {/* Node A */}
       <div
         style={{
           flex: 1,
           padding: '20px',
           borderRadius: 'var(--radius-xl)',
-          backgroundColor: 'var(--node-peach)',
+          backgroundColor: '#D84315',
           marginBottom: '10px',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
-          boxShadow: ahaBurst ? '0 0 24px 6px rgba(255,120,80,0.45)' : 'none',
+          boxShadow: ahaBurst ? '0 0 24px 6px rgba(216,67,21,0.45)' : 'none',
           transition: 'box-shadow 0.4s',
         }}
       >
-        <p style={{ fontSize: '0.65rem', fontWeight: 700, color: 'white', opacity: 0.75, marginBottom: '6px', letterSpacing: '0.08em' }}>
+        <p style={{ fontSize: '0.65rem', fontWeight: 700, color: 'rgba(255,255,255,0.8)', marginBottom: '6px', letterSpacing: '0.08em' }}>
           CONCEPT A
         </p>
-        <p style={{ fontSize: '1rem', fontWeight: 700, color: 'white', lineHeight: 1.4 }}>
+        <p style={{ fontSize: '1rem', fontWeight: 700, color: '#ffffff', lineHeight: 1.4 }}>
           {questionA.title ?? questionA.content}
         </p>
       </div>
 
-      {/* Connector */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '0 24px 10px', color: 'var(--muted-foreground)', fontSize: '0.8rem' }}>
         <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
-        <span>relates to</span>
+        <span>opens into</span>
         <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
       </div>
 
-      {/* Node B */}
       <div
         style={{
           flex: 1,
           padding: '20px',
           borderRadius: 'var(--radius-xl)',
-          backgroundColor: 'var(--node-sky)',
+          backgroundColor: '#0277BD',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
-          boxShadow: ahaBurst ? '0 0 24px 6px rgba(80,160,255,0.45)' : 'none',
+          boxShadow: ahaBurst ? '0 0 24px 6px rgba(2,119,189,0.45)' : 'none',
           transition: 'box-shadow 0.4s',
         }}
       >
-        <p style={{ fontSize: '0.65rem', fontWeight: 700, color: 'white', opacity: 0.75, marginBottom: '6px', letterSpacing: '0.08em' }}>
+        <p style={{ fontSize: '0.65rem', fontWeight: 700, color: 'rgba(255,255,255,0.8)', marginBottom: '6px', letterSpacing: '0.08em' }}>
           CONCEPT B
         </p>
-        <p style={{ fontSize: '1rem', fontWeight: 700, color: 'white', lineHeight: 1.4 }}>
+        <p style={{ fontSize: '1rem', fontWeight: 700, color: '#ffffff', lineHeight: 1.4 }}>
           {questionB.title ?? questionB.content}
         </p>
       </div>
 
-      {/* Shared keywords */}
       {sharedKeywords.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '12px' }}>
-          {sharedKeywords.map((k) => (
-            <span key={k} style={{
-              fontSize: '0.7rem', padding: '2px 10px', borderRadius: '100px',
-              background: 'var(--surface-variant)', color: 'var(--muted-foreground)',
-              border: '1px solid var(--border)',
-            }}>
-              {k}
+          {sharedKeywords.map((keyword) => (
+            <span
+              key={keyword}
+              style={{
+                fontSize: '0.7rem',
+                padding: '2px 10px',
+                borderRadius: '100px',
+                background: 'var(--surface-variant)',
+                color: 'var(--muted-foreground)',
+                border: '1px solid var(--border)',
+              }}
+            >
+              {keyword}
             </span>
           ))}
         </div>
@@ -328,20 +306,55 @@ function ConnectionCard({ questionA, questionB, onAha }: ConnectionCardProps) {
   );
 }
 
-// ─── Immersive Info Flow (fullscreen scroll-snap overlay) ─────────────────────
+const MILESTONE_BG: Record<BlindboxItem['type'], string> = {
+  milestone: 'linear-gradient(135deg, #FFD54F 0%, #FF8F00 100%)',
+  trivia: 'linear-gradient(135deg, #4FC3F7 0%, #0277BD 100%)',
+};
+
+const MILESTONE_TEXT: Record<BlindboxItem['type'], string> = {
+  milestone: '#1A1A1A',
+  trivia: '#ffffff',
+};
+
+function MilestoneCard({ item, isActive }: { item: BlindboxItem; isActive: boolean }) {
+  return (
+    <div
+      style={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        textAlign: 'center',
+        gap: '16px',
+        padding: '32px 28px',
+        boxSizing: 'border-box',
+        background: MILESTONE_BG[item.type],
+        animation: isActive ? 'milestone-pop 0.4s cubic-bezier(0.34,1.56,0.64,1)' : 'none',
+      }}
+    >
+      <span style={{ fontSize: '4.5rem', lineHeight: 1 }}>{item.emoji}</span>
+      <p style={{ fontSize: '1.5rem', fontWeight: 800, color: MILESTONE_TEXT[item.type], lineHeight: 1.3 }}>
+        {item.headline}
+      </p>
+      <p style={{ fontSize: '0.95rem', color: MILESTONE_TEXT[item.type], opacity: 0.88, lineHeight: 1.7, maxWidth: '280px' }}>
+        {item.body}
+      </p>
+    </div>
+  );
+}
 
 interface ImmersiveInfoFlowProps {
   items: InfoFlowItem[];
-  onRateConcept: (id: string, rating: 1 | 2 | 3 | 4 | 5) => void;
   onAhaConnection: (idA: string, idB: string) => void;
   onClose: () => void;
+  onOpenPost: (postId: string) => void;
 }
 
-export function ImmersiveInfoFlow({ items, onRateConcept, onAhaConnection, onClose }: ImmersiveInfoFlowProps) {
+export function ImmersiveInfoFlow({ items, onAhaConnection, onClose, onOpenPost }: ImmersiveInfoFlowProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
 
-  // Track which card is visible via IntersectionObserver
   useEffect(() => {
     const container = scrollRef.current;
     if (!container) return;
@@ -358,38 +371,35 @@ export function ImmersiveInfoFlow({ items, onRateConcept, onAhaConnection, onClo
       },
       { root: container, threshold: 0.6 },
     );
-    cards.forEach((c) => observer.observe(c));
+
+    cards.forEach((card) => observer.observe(card));
     return () => observer.disconnect();
   }, [items]);
 
   if (items.length === 0) {
     return (
-      <div style={{
-        position: 'fixed', inset: 0, zIndex: 200,
-        backgroundColor: 'var(--surface)',
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        gap: '16px',
-        animation: 'slide-up 0.35s cubic-bezier(0.32,0.72,0,1)',
-      }}>
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 200,
+          backgroundColor: 'var(--surface)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '16px',
+          animation: 'slide-up 0.35s cubic-bezier(0.32,0.72,0,1)',
+        }}
+      >
         <button onClick={onClose} style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--foreground)' }}>
           <X size={24} />
         </button>
-        <span style={{ fontSize: '2.5rem' }}>🎉</span>
-        <p style={{ fontWeight: 700, fontSize: '1.2rem' }}>All caught up!</p>
+        <span style={{ fontSize: '2.5rem' }}>✨</span>
+        <p style={{ fontWeight: 700, fontSize: '1.2rem' }}>Nothing to explore yet</p>
         <p style={{ color: 'var(--muted-foreground)', fontSize: '0.875rem', textAlign: 'center', padding: '0 32px' }}>
-          Ask more questions to populate your review feed.
+          Ask a few questions and Home will turn them into hook-driven concept posts.
         </p>
-        <button
-          onClick={onClose}
-          style={{
-            marginTop: '8px', padding: '12px 32px', borderRadius: '100px',
-            backgroundColor: 'var(--primary-40)', color: 'white',
-            fontWeight: 600, border: 'none', cursor: 'pointer',
-          }}
-        >
-          Back to Home
-        </button>
       </div>
     );
   }
@@ -397,30 +407,39 @@ export function ImmersiveInfoFlow({ items, onRateConcept, onAhaConnection, onClo
   return (
     <div
       style={{
-        position: 'fixed', inset: 0, zIndex: 200,
+        position: 'fixed',
+        inset: 0,
+        zIndex: 200,
         backgroundColor: 'var(--surface)',
         animation: 'slide-up 0.35s cubic-bezier(0.32,0.72,0,1)',
       }}
     >
-      {/* Header bar */}
-      <div style={{
-        position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '12px 16px',
-        background: 'linear-gradient(to bottom, var(--surface) 60%, transparent)',
-        pointerEvents: 'none',
-      }}>
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 10,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: 'calc(12px + env(safe-area-inset-top, 0px)) 16px 12px',
+          background: 'linear-gradient(to bottom, var(--surface) 60%, transparent)',
+          pointerEvents: 'none',
+        }}
+      >
         <div style={{ display: 'flex', gap: '4px', pointerEvents: 'none' }}>
-          {items.map((_, i) => (
+          {items.map((_, index) => (
             <div
-              key={i}
+              key={index}
               style={{
                 height: '3px',
-                width: i < activeIndex ? '16px' : i === activeIndex ? '24px' : '8px',
+                width: index < activeIndex ? '16px' : index === activeIndex ? '24px' : '8px',
                 borderRadius: '100px',
-                backgroundColor: i <= activeIndex ? 'var(--primary-40)' : 'var(--border)',
+                backgroundColor: index <= activeIndex ? 'var(--primary-40)' : 'var(--border)',
                 transition: 'width 0.3s, background-color 0.3s',
-                opacity: Math.max(0.3, 1 - Math.abs(i - activeIndex) * 0.15),
+                opacity: Math.max(0.3, 1 - Math.abs(index - activeIndex) * 0.15),
               }}
             />
           ))}
@@ -429,18 +448,22 @@ export function ImmersiveInfoFlow({ items, onRateConcept, onAhaConnection, onClo
           onClick={onClose}
           style={{
             pointerEvents: 'all',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            width: '36px', height: '36px', borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '36px',
+            height: '36px',
+            borderRadius: '50%',
             backgroundColor: 'var(--surface-variant)',
             border: '1px solid var(--border)',
-            cursor: 'pointer', color: 'var(--foreground)',
+            cursor: 'pointer',
+            color: 'var(--foreground)',
           }}
         >
           <X size={18} />
         </button>
       </div>
 
-      {/* Scroll-snap container */}
       <div
         ref={scrollRef}
         style={{
@@ -450,66 +473,145 @@ export function ImmersiveInfoFlow({ items, onRateConcept, onAhaConnection, onClo
           WebkitOverflowScrolling: 'touch',
         }}
       >
-        {items.map((item, idx) => {
-          const isConcept = item.kind === 'concept';
-          return (
+        {items.map((item, index) => (
+          <div
+            key={index}
+            data-flow-card=""
+            style={{
+              height: '100svh',
+              scrollSnapAlign: 'start',
+              scrollSnapStop: 'always',
+              display: 'flex',
+              flexDirection: 'column',
+              padding: '64px 16px 24px',
+              boxSizing: 'border-box',
+              maxWidth: '480px',
+              margin: '0 auto',
+              width: '100%',
+            }}
+          >
             <div
-              key={idx}
-              data-flow-card=""
               style={{
-                height: '100svh',
-                scrollSnapAlign: 'start',
-                // Prevent skipping un-rated concept cards
-                scrollSnapStop: isConcept ? 'always' : 'normal',
-                display: 'flex',
-                flexDirection: 'column',
-                padding: '64px 16px 24px',
-                boxSizing: 'border-box',
-                maxWidth: '480px',
-                margin: '0 auto',
-                width: '100%',
-              }}
-            >
-              <div style={{
                 flex: 1,
                 borderRadius: 'var(--radius-xl)',
                 backgroundColor: 'var(--surface)',
-                border: '1px solid var(--border)',
-                boxShadow: idx === activeIndex ? 'var(--shadow-3)' : 'var(--shadow-1)',
+                border: item.kind === 'milestone' ? 'none' : '1px solid var(--border)',
+                boxShadow: index === activeIndex ? 'var(--shadow-3)' : 'var(--shadow-1)',
                 overflow: 'hidden',
                 transition: 'box-shadow 0.3s',
                 position: 'relative',
-              }}>
-                {isConcept ? (
-                  <ConceptCard
-                    card={(item as { kind: 'concept'; card: FlashCard }).card}
-                    onRate={onRateConcept}
-                    isActive={idx === activeIndex}
-                  />
-                ) : (
-                  <ConnectionCard
-                    questionA={(item as { kind: 'connection'; questionA: Question; questionB: Question }).questionA}
-                    questionB={(item as { kind: 'connection'; questionA: Question; questionB: Question }).questionB}
-                    onAha={onAhaConnection}
-                  />
-                )}
-              </div>
-
-              {/* Swipe hint on last card */}
-              {idx === items.length - 1 && (
-                <div style={{ textAlign: 'center', padding: '16px 0 0', color: 'var(--muted-foreground)', fontSize: '0.8rem' }}>
-                  You've reached the end of today's flow
-                </div>
+              }}
+            >
+              {item.kind === 'concept' ? (
+                <ConceptCard post={item.post} isActive={index === activeIndex} onOpen={onOpenPost} />
+              ) : item.kind === 'connection' ? (
+                <ConnectionCard questionA={item.questionA} questionB={item.questionB} onAha={onAhaConnection} />
+              ) : (
+                <MilestoneCard item={item.item} isActive={index === activeIndex} />
               )}
             </div>
-          );
-        })}
+
+            {index === items.length - 1 && (
+              <div style={{ textAlign: 'center', padding: '16px 0 0', color: 'var(--muted-foreground)', fontSize: '0.8rem' }}>
+                You've reached the end of today's curiosity flow
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-// ─── Preview widget shown on HomeScreen ──────────────────────────────────────
+interface InlineInfoFlowProps {
+  items: InfoFlowItem[];
+  onAhaConnection: (idA: string, idB: string) => void;
+  onOpenPost: (postId: string) => void;
+}
+
+export function InlineInfoFlow({ items, onAhaConnection, onOpenPost }: InlineInfoFlowProps) {
+  const conceptCount = items.filter((item) => item.kind === 'concept').length;
+  const connectionCount = items.filter((item) => item.kind === 'connection').length;
+
+  return (
+    <div>
+      <div
+        style={{
+          padding: '16px 20px',
+          background: 'linear-gradient(145deg, #FFB36B 0%, #F26D52 55%, #D94B6A 100%)',
+          borderRadius: 'var(--radius-xl)',
+          marginBottom: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: 'var(--shadow-2)',
+        }}
+      >
+        <div>
+          <p style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.1em', color: 'white', opacity: 0.8, textTransform: 'uppercase', marginBottom: '2px' }}>
+            Curiosity Feed
+          </p>
+          <p style={{ fontSize: '1rem', fontWeight: 700, color: 'white' }}>
+            {items.length > 0 ? `${items.length} posts waiting` : 'Ask to start your feed'}
+          </p>
+        </div>
+        {items.length > 0 && (
+          <div style={{ display: 'flex', gap: '12px', fontSize: '0.78rem', color: 'white', opacity: 0.92 }}>
+            {conceptCount > 0 && <span>{conceptCount} concepts</span>}
+            {connectionCount > 0 && <span>{connectionCount} links</span>}
+          </div>
+        )}
+      </div>
+
+      {items.length === 0 ? (
+        <div
+          style={{
+            padding: '32px 20px',
+            textAlign: 'center',
+            borderRadius: 'var(--radius-xl)',
+            border: '1px solid var(--border)',
+            backgroundColor: 'var(--surface-variant)',
+          }}
+        >
+          <p style={{ fontSize: '1.5rem', marginBottom: '8px' }}>✨</p>
+          <p style={{ fontWeight: 700, marginBottom: '4px' }}>Nothing to explore yet</p>
+          <p style={{ fontSize: '0.875rem', color: 'var(--muted-foreground)' }}>
+            Ask a few questions and this space will turn them into hook-first concept posts.
+          </p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {items.map((item, index) => (
+            <div
+              key={index}
+              style={{
+                borderRadius: 'var(--radius-xl)',
+                backgroundColor: item.kind === 'milestone' ? 'transparent' : 'var(--card)',
+                border:
+                  item.kind === 'concept'
+                    ? '1.5px solid color-mix(in srgb, var(--primary-40) 30%, var(--border))'
+                    : item.kind === 'milestone'
+                      ? 'none'
+                      : '1.5px solid rgba(2, 119, 189, 0.35)',
+                boxShadow: item.kind === 'milestone' ? 'var(--shadow-3)' : 'var(--shadow-2)',
+                overflow: 'hidden',
+                minHeight: item.kind === 'concept' ? '320px' : item.kind === 'milestone' ? '200px' : '280px',
+              }}
+            >
+              {item.kind === 'concept' ? (
+                <ConceptCard post={item.post} isActive={true} onOpen={onOpenPost} />
+              ) : item.kind === 'connection' ? (
+                <ConnectionCard questionA={item.questionA} questionB={item.questionB} onAha={onAhaConnection} />
+              ) : (
+                <MilestoneCard item={item.item} isActive={true} />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface InfoFlowPreviewProps {
   items: InfoFlowItem[];
@@ -517,69 +619,84 @@ interface InfoFlowPreviewProps {
 }
 
 export function InfoFlowPreview({ items, onOpen }: InfoFlowPreviewProps) {
-  const conceptCount = items.filter((i) => i.kind === 'concept').length;
-  const connectionCount = items.filter((i) => i.kind === 'connection').length;
+  const conceptCount = items.filter((item) => item.kind === 'concept').length;
+  const connectionCount = items.filter((item) => item.kind === 'connection').length;
 
   return (
     <button
       onClick={onOpen}
       style={{
-        width: '100%', textAlign: 'left', background: 'none', padding: 0,
-        border: 'none', cursor: 'pointer',
+        width: '100%',
+        textAlign: 'left',
+        background: 'none',
+        padding: 0,
+        border: 'none',
+        cursor: 'pointer',
       }}
     >
-      <div style={{
-        borderRadius: 'var(--radius-xl)',
-        border: '1.5px solid var(--border)',
-        overflow: 'hidden',
-        boxShadow: 'var(--shadow-1)',
-        transition: 'transform 0.2s, box-shadow 0.2s',
-      }}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLDivElement).style.transform = 'scale(1.01)';
-          (e.currentTarget as HTMLDivElement).style.boxShadow = 'var(--shadow-2)';
+      <div
+        style={{
+          borderRadius: 'var(--radius-xl)',
+          border: '1.5px solid var(--border)',
+          overflow: 'hidden',
+          boxShadow: 'var(--shadow-1)',
+          transition: 'transform 0.2s, box-shadow 0.2s',
         }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLDivElement).style.transform = 'scale(1)';
-          (e.currentTarget as HTMLDivElement).style.boxShadow = 'var(--shadow-1)';
+        onPointerEnter={(event) => {
+          event.currentTarget.style.transform = 'scale(1.01)';
+          event.currentTarget.style.boxShadow = 'var(--shadow-2)';
+        }}
+        onPointerLeave={(event) => {
+          event.currentTarget.style.transform = 'scale(1)';
+          event.currentTarget.style.boxShadow = 'var(--shadow-1)';
         }}
       >
-        {/* Header */}
-        <div style={{
-          padding: '16px 20px',
-          background: 'linear-gradient(135deg, var(--primary-80), var(--primary-40))',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        }}>
+        <div
+          style={{
+            padding: '16px 20px',
+            background: 'linear-gradient(145deg, #FFB36B 0%, #F26D52 55%, #D94B6A 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
           <div>
             <p style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.1em', color: 'white', opacity: 0.8, textTransform: 'uppercase', marginBottom: '2px' }}>
-              Today's Flow
+              Curiosity Feed
             </p>
             <p style={{ fontSize: '1.1rem', fontWeight: 700, color: 'white' }}>
-              {items.length > 0 ? `${items.length} cards ready` : 'All caught up!'}
+              {items.length > 0 ? `${items.length} posts ready` : 'Start with one question'}
             </p>
           </div>
           {items.length > 0 && (
-            <div style={{
-              padding: '8px 20px', borderRadius: '100px',
-              backgroundColor: 'white', color: 'var(--primary-40)',
-              fontWeight: 700, fontSize: '0.875rem',
-            }}>
-              Start
+            <div
+              style={{
+                padding: '8px 20px',
+                borderRadius: '100px',
+                backgroundColor: 'white',
+                color: '#D94B6A',
+                fontWeight: 700,
+                fontSize: '0.875rem',
+              }}
+            >
+              Open
             </div>
           )}
         </div>
 
-        {/* Stats row */}
         {items.length > 0 && (
-          <div style={{
-            padding: '12px 20px',
-            backgroundColor: 'var(--surface-variant)',
-            display: 'flex', gap: '20px',
-          }}>
+          <div
+            style={{
+              padding: '12px 20px',
+              backgroundColor: 'var(--surface-variant)',
+              display: 'flex',
+              gap: '20px',
+            }}
+          >
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--primary-40)', animation: 'glow-pulse 2s ease-in-out infinite', display: 'inline-block' }} />
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#F26D52', animation: 'glow-pulse 2s ease-in-out infinite', display: 'inline-block' }} />
               <span style={{ fontSize: '0.8rem', color: 'var(--foreground)', fontWeight: 600 }}>{conceptCount}</span>
-              <span style={{ fontSize: '0.8rem', color: 'var(--muted-foreground)' }}>to review</span>
+              <span style={{ fontSize: '0.8rem', color: 'var(--muted-foreground)' }}>concepts</span>
             </div>
             {connectionCount > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

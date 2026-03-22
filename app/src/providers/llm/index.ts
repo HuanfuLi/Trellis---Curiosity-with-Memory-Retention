@@ -6,6 +6,21 @@ interface ChatMessage {
   content: string;
 }
 
+// ─── Timeout helper ────────────────────────────────────────────────────────────
+//
+// Returns an AbortSignal that fires after `ms` milliseconds.
+// Used to prevent fetch() calls from hanging indefinitely on slow mobile networks.
+
+function timeoutSignal(ms: number): AbortSignal {
+  const ac = new AbortController();
+  const id = setTimeout(() => ac.abort(new DOMException(`Request timed out after ${ms / 1000}s`, 'TimeoutError')), ms);
+  ac.signal.addEventListener('abort', () => clearTimeout(id), { once: true });
+  return ac.signal;
+}
+
+const COMPLETION_TIMEOUT_MS = 60_000; // 60 s for non-streaming completions
+const STREAM_TIMEOUT_MS = 120_000;    // 120 s for full streaming response
+
 // ─── Routing ──────────────────────────────────────────────────────────────────
 
 export async function chatCompletion(messages: ChatMessage[], config: LLMConfig): Promise<string> {
@@ -28,30 +43,18 @@ export async function* chatStream(messages: ChatMessage[], config: LLMConfig): A
 
 function openAIBaseUrl(config: LLMConfig): string {
   if (config.baseUrl) {
-    // Strip trailing slash and any trailing /v1 so we never produce /v1/v1/...
     return config.baseUrl.replace(/\/+$/, '').replace(/\/v1$/, '');
   }
   if (config.provider === 'lmstudio') return 'http://localhost:1234';
   return 'https://api.openai.com';
 }
 
-/** Headers for cloud OpenAI-compatible providers (apiKey required). */
 function openAIHeaders(config: LLMConfig): Record<string, string> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (config.apiKey) headers['Authorization'] = `Bearer ${config.apiKey}`;
   return headers;
 }
 
-/**
- * POST helper for local providers (LM Studio / Ollama).
- *
- * On native (Android / iOS) uses CapacitorHttp which makes a true native HTTP
- * request — no CORS preflight, no browser security restrictions.
- * On web falls back to fetch (requires LM Studio CORS to be enabled).
- *
- * Matches the exact format from the LM Studio curl example:
- *   { model, messages, max_tokens, stream }
- */
 async function localPost(
   url: string,
   body: object,
@@ -69,8 +72,7 @@ async function localPost(
     };
   }
 
-  // Web fallback — fetch (CORS must be enabled on the local server)
-  return fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+  return fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: timeoutSignal(COMPLETION_TIMEOUT_MS) });
 }
 
 async function openAICompletion(messages: ChatMessage[], config: LLMConfig): Promise<string> {
@@ -80,7 +82,7 @@ async function openAICompletion(messages: ChatMessage[], config: LLMConfig): Pro
 
   const response = isLocal
     ? await localPost(url, body)
-    : await fetch(url, { method: 'POST', headers: openAIHeaders(config), body: JSON.stringify(body) });
+    : await fetch(url, { method: 'POST', headers: openAIHeaders(config), body: JSON.stringify(body), signal: timeoutSignal(COMPLETION_TIMEOUT_MS) });
 
   if (!response.ok) {
     const err = await response.text();
@@ -94,9 +96,9 @@ async function* openAIStream(messages: ChatMessage[], config: LLMConfig): AsyncG
   const isLocal = config.provider === 'local' || config.provider === 'lmstudio';
   const url = `${openAIBaseUrl(config)}/v1/chat/completions`;
 
-  // CapacitorHttp does not support SSE streaming — for local providers on native,
-  // fall back to a non-streaming request and yield the full reply in one chunk.
-  if (isLocal && Capacitor.isNativePlatform()) {
+  // CapacitorHttp (used for local/lmstudio) does not support SSE — fall back on native.
+  // Cloud OpenAI uses window.fetch which supports streaming in the Android WebView.
+  if (Capacitor.isNativePlatform() && isLocal) {
     const text = await openAICompletion(messages, config);
     yield text;
     return;
@@ -106,6 +108,7 @@ async function* openAIStream(messages: ChatMessage[], config: LLMConfig): AsyncG
     method: 'POST',
     headers: isLocal ? { 'Content-Type': 'application/json' } : openAIHeaders(config),
     body: JSON.stringify({ model: config.model, messages, max_tokens: 4096, stream: true }),
+    signal: timeoutSignal(STREAM_TIMEOUT_MS),
   });
   if (!response.ok) {
     const err = await response.text();
@@ -131,6 +134,7 @@ async function claudeCompletion(messages: ChatMessage[], config: LLMConfig): Pro
       'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify({ model: config.model, max_tokens: 4096, system, messages: userMessages }),
+    signal: timeoutSignal(COMPLETION_TIMEOUT_MS),
   });
   if (!response.ok) {
     const err = await response.text();
@@ -141,6 +145,7 @@ async function claudeCompletion(messages: ChatMessage[], config: LLMConfig): Pro
 }
 
 async function* claudeStream(messages: ChatMessage[], config: LLMConfig): AsyncGenerator<string> {
+  // Claude uses window.fetch (not CapacitorHttp), so SSE streaming works on Android WebView.
   const system = messages.find((m) => m.role === 'system')?.content;
   const userMessages = messages
     .filter((m) => m.role !== 'system')
@@ -154,13 +159,8 @@ async function* claudeStream(messages: ChatMessage[], config: LLMConfig): AsyncG
       'anthropic-version': '2023-06-01',
       'anthropic-dangerous-direct-browser-access': 'true',
     },
-    body: JSON.stringify({
-      model: config.model,
-      max_tokens: 4096,
-      stream: true,
-      system,
-      messages: userMessages,
-    }),
+    body: JSON.stringify({ model: config.model, max_tokens: 4096, stream: true, system, messages: userMessages }),
+    signal: timeoutSignal(STREAM_TIMEOUT_MS),
   });
   if (!response.ok) {
     const err = await response.text();
@@ -168,8 +168,7 @@ async function* claudeStream(messages: ChatMessage[], config: LLMConfig): AsyncG
   }
   yield* parseSseStream(
     response,
-    (p) =>
-      p.type === 'content_block_delta' && p.delta?.type === 'text_delta' ? p.delta.text : '',
+    (p) => p.type === 'content_block_delta' && p.delta?.type === 'text_delta' ? p.delta.text : '',
   );
 }
 
@@ -177,7 +176,6 @@ async function* claudeStream(messages: ChatMessage[], config: LLMConfig): AsyncG
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
-/** Convert OpenAI-style messages to Gemini contents + systemInstruction. */
 function toGeminiPayload(messages: ChatMessage[]) {
   const system = messages.find((m) => m.role === 'system')?.content;
   const contents = messages
@@ -199,6 +197,7 @@ async function geminiCompletion(messages: ChatMessage[], config: LLMConfig): Pro
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(toGeminiPayload(messages)),
+    signal: timeoutSignal(COMPLETION_TIMEOUT_MS),
   });
   if (!response.ok) {
     const err = await response.text();
@@ -209,20 +208,19 @@ async function geminiCompletion(messages: ChatMessage[], config: LLMConfig): Pro
 }
 
 async function* geminiStream(messages: ChatMessage[], config: LLMConfig): AsyncGenerator<string> {
+  // Gemini uses window.fetch (not CapacitorHttp), so SSE streaming works on Android WebView.
   const url = `${GEMINI_BASE}/models/${config.model}:streamGenerateContent?alt=sse&key=${config.apiKey ?? ''}`;
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(toGeminiPayload(messages)),
+    signal: timeoutSignal(STREAM_TIMEOUT_MS),
   });
   if (!response.ok) {
     const err = await response.text();
     throw new Error(`Gemini API error ${response.status}: ${err}`);
   }
-  yield* parseSseStream(
-    response,
-    (p) => p.candidates?.[0]?.content?.parts?.[0]?.text ?? '',
-  );
+  yield* parseSseStream(response, (p) => p.candidates?.[0]?.content?.parts?.[0]?.text ?? '');
 }
 
 // ─── Shared SSE parser ────────────────────────────────────────────────────────

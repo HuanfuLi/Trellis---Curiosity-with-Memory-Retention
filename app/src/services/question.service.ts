@@ -1,6 +1,7 @@
 import type { Question, ServiceResult, AskResult } from '../types';
 import { today, addDays } from '../lib/date';
 import { eventBus } from '../lib/event-bus';
+import { toast } from '../lib/toast';
 import { mockSettingsService } from './mock/settings.mock';
 import { chatCompletion } from '../providers/llm';
 import { dbExecute, dbQuery } from './db.service';
@@ -39,11 +40,15 @@ function deleteFromSQLite(id: string) {
   );
 }
 
+let hydrated = false;
+
 /**
  * On startup, if SQLite has questions not yet in localStorage, import them.
  * This enables cross-session persistence on native when localStorage is cleared.
  */
 export async function hydrateFromSQLite(): Promise<void> {
+  if (hydrated) return;
+  hydrated = true;
   try {
     await ensureQuestionsTable();
     const rows = await dbQuery<{ id: string; data: string }>('SELECT * FROM questions');
@@ -90,8 +95,10 @@ function loadStore(): Question[] {
 function saveStore(questions: Question[]): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(questions));
-  } catch {
-    // ignore storage errors
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+      toast('Storage full — your question may not be saved. Clear old data in Settings.', 'error');
+    }
   }
 }
 
@@ -168,7 +175,7 @@ export const questionService = {
       'You are a knowledgeable learning assistant. Answer questions clearly and thoroughly.',
       'Do not generate harmful, illegal, sexually explicit, or deceptive content.',
       recentContext.length > 0 ? `Recent questions for context:\n${contextLines}` : '',
-      'Respond ONLY with JSON: {"answer":"...","summary":"one sentence","keywords":["kw1","kw2","kw3"]}',
+      'Respond ONLY with JSON: {"answer":"...","summary":"one sentence","keywords":["kw1","kw2","kw3"],"storyHook":"An intriguing hook (≤15 words) to spark curiosity about this topic."}',
     ]
       .filter(Boolean)
       .join('\n');
@@ -185,6 +192,7 @@ export const questionService = {
       let answer: string;
       let summary: string;
       let keywords: string[];
+      let storyHook: string | undefined;
 
       try {
         const jsonMatch = raw.match(/\{[\s\S]*\}/);
@@ -192,17 +200,19 @@ export const questionService = {
           answer?: string;
           summary?: string;
           keywords?: string[];
+          storyHook?: string;
         };
         answer = parsed.answer ?? raw;
         summary = parsed.summary ?? extractSummary(answer);
         keywords = Array.isArray(parsed.keywords) ? parsed.keywords : extractKeywords(answer);
+        storyHook = typeof parsed.storyHook === 'string' && parsed.storyHook ? parsed.storyHook : undefined;
       } catch {
         answer = raw;
         summary = extractSummary(raw);
         keywords = extractKeywords(raw);
       }
 
-      const question = this.buildAndSave(content, answer, store, { summary, keywords });
+      const question = this.buildAndSave(content, answer, store, { summary, keywords, storyHook });
       const relatedQuestions = store.filter((q) =>
         question.relatedQuestionIds.includes(q.id),
       );
@@ -231,7 +241,7 @@ export const questionService = {
     content: string,
     answer: string,
     existingQuestions?: Question[],
-    meta?: { summary?: string; keywords?: string[] },
+    meta?: { summary?: string; keywords?: string[]; storyHook?: string },
   ): Question {
     const store = existingQuestions ?? loadStore();
     const summary = meta?.summary ?? extractSummary(answer);
@@ -246,6 +256,7 @@ export const questionService = {
       answer,
       summary,
       title: deriveTitleFromQuestion(content),
+      ...(meta?.storyHook ? { storyHook: meta.storyHook } : {}),
       keywords,
       relatedQuestionIds,
       categoryIds: ['cat-general'],
@@ -320,6 +331,16 @@ export const questionService = {
       store[idx] = { ...store[idx], relatedQuestionIds };
       saveStore(store);
       persistToSQLite(store[idx]);
+    }
+  },
+
+  /** Merge arbitrary fields onto an existing question (used by graph service for parentId, etc.). */
+  patchQuestion(questionId: string, patch: Partial<Question>): void {
+    const store = loadStore();
+    const idx = store.findIndex((q) => q.id === questionId);
+    if (idx !== -1) {
+      store[idx] = { ...store[idx], ...patch };
+      saveStore(store);
     }
   },
 };

@@ -230,8 +230,8 @@ export function ChatMessage({
                       cursor: 'pointer',
                       transition: 'background-color 0.2s',
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--surface-container-high)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--card)')}
+                    onPointerEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--surface-container-high)')}
+                    onPointerLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--card)')}
                   >
                     <span style={{ fontWeight: 500 }}>⤴ {knowledge}</span>
                   </button>

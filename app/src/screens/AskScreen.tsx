@@ -9,6 +9,7 @@ import { flashcardService } from '../services/flashcard.service';
 import type { ChatSession, SessionMessage } from '../types';
 import { formatDate } from '../lib/date';
 import { questionService, deriveTitleFromQuestion } from '../services/question.service';
+import { postContextQaService } from '../services/post-context-qa.service';
 import { toast } from '../lib/toast';
 
 const SUGGESTED_PROMPTS = [
@@ -39,11 +40,12 @@ function startNewSession(current: ChatSession): ChatSession {
   if (!current.processed && current.messages.some((m) => m.type === 'user') && !processingSessionIds.has(current.id)) {
     processingSessionIds.add(current.id);
     void flashcardService.processSession(current).then(() => {
-      processingSessionIds.delete(current.id);
       const refreshed = sessionService.getById(current.id);
       if (refreshed) {
         sessionService.save({ ...refreshed, processed: true });
       }
+    }).finally(() => {
+      processingSessionIds.delete(current.id);
     });
   }
   return sessionService.createNew();
@@ -69,6 +71,9 @@ export function AskScreen() {
     sessionRef.current = session;
   }, [session]);
 
+  // Guard against concurrent generateAiReply calls (race condition)
+  const generatingRef = useRef(false);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [session.messages, streaming]);
@@ -89,36 +94,64 @@ export function AskScreen() {
     : session.messages.map((m) => ({ ...m, isStreaming: false }));
 
   // Core AI reply generator — used by handleSend, handleEditSubmit, handleRegenerateResponse
+  // Persists directly to sessionService (not inside setSession updater) so the AI
+  // response is saved even if the component unmounts during streaming.
   const generateAiReply = useCallback(
     async (userContent: string, placeholderId: string) => {
-      setStreaming({ placeholderId, content: '' });
+      // Prevent concurrent AI calls — drop if one is already in flight
+      if (generatingRef.current) return;
+      generatingRef.current = true;
 
-      const question = await askStreaming(userContent, (accumulated) => {
-        setStreaming({ placeholderId, content: accumulated });
-      });
+      try {
+        setStreaming({ placeholderId, content: '' });
 
-      const aiContent = question
-        ? question.answer
-        : 'Something went wrong. Please try again.';
+        const current = sessionRef.current;
+        const isPostSession = current.origin?.type === 'post';
+        const postOrigin = isPostSession ? current.origin : null;
+        let lastContent = '';
+        let question = null;
 
-      const related = question
-        ? questions.filter((q) => question.relatedQuestionIds.includes(q.id)).map((q) => q.summary)
-        : [];
+        if (postOrigin) {
+          for await (const token of postContextQaService.askStreaming(postOrigin.context, userContent)) {
+            lastContent += token;
+            setStreaming({ placeholderId, content: lastContent });
+          }
+        } else {
+          question = await askStreaming(userContent, (accumulated) => {
+            lastContent = accumulated;
+            setStreaming({ placeholderId, content: accumulated });
+          });
+        }
 
-      const aiMsg: SessionMessage = {
-        id: placeholderId,
-        type: 'ai',
-        content: aiContent,
-        relatedKnowledge: related,
-        questionId: question?.id,
-      };
+        const aiContent = question
+          ? question.answer
+          : lastContent || 'Something went wrong. Please try again.';
 
-      setSession((prev) => {
-        const updated: ChatSession = { ...prev, messages: [...prev.messages, aiMsg] };
+        const related = question
+          ? questions.filter((q) => question.relatedQuestionIds.includes(q.id)).map((q) => q.summary)
+          : [];
+
+        const aiMsg: SessionMessage = {
+          id: placeholderId,
+          type: 'ai',
+          content: aiContent,
+          relatedKnowledge: isPostSession ? undefined : related,
+          questionId: question?.id,
+        };
+
+        // Persist to localStorage first — survives component unmount
+        const updated: ChatSession = { ...current, messages: [...current.messages, aiMsg] };
         sessionService.save(updated);
-        return updated;
-      });
-      setStreaming(null);
+
+        // Update React state (no-op if unmounted, but data is already safe)
+        setSession(updated);
+        setStreaming(null);
+      } catch (error) {
+        setStreaming(null);
+        toast(error instanceof Error ? error.message : 'Failed to continue this conversation.', 'error');
+      } finally {
+        generatingRef.current = false;
+      }
     },
     [askStreaming, questions],
   );
@@ -128,18 +161,15 @@ export function AskScreen() {
       const userMsg: SessionMessage = { id: newMsgId('u'), type: 'user', content };
       const placeholderId = newMsgId('ai');
 
-      // Set the derived title immediately — don't wait for the AI round-trip.
-      // This ensures the title is always the cleaned-up question text, even if
-      // the AI call fails or question?.title is null for any reason.
-      setSession((prev) => {
-        const updated: ChatSession = {
-          ...prev,
-          title: prev.title || deriveTitleFromQuestion(content),
-          messages: [...prev.messages, userMsg],
-        };
-        sessionService.save(updated);
-        return updated;
-      });
+      // Persist user message immediately so it survives navigation away
+      const current = sessionRef.current;
+      const updated: ChatSession = {
+        ...current,
+        title: current.title || deriveTitleFromQuestion(content),
+        messages: [...current.messages, userMsg],
+      };
+      sessionService.save(updated);
+      setSession(updated);
 
       await generateAiReply(content, placeholderId);
     },
@@ -170,15 +200,14 @@ export function AskScreen() {
     const placeholderId = newMsgId('ai');
 
     // Truncate messages at the edited user message (inclusive) and replace it
-    setSession((prev) => {
-      const idx = prev.messages.findIndex((m) => m.id === editingMessageId);
-      if (idx === -1) return prev;
-      const truncated = prev.messages.slice(0, idx);
-      const editedMsg: SessionMessage = { id: newMsgId('u'), type: 'user', content: newContent };
-      const updated: ChatSession = { ...prev, messages: [...truncated, editedMsg] };
-      sessionService.save(updated);
-      return updated;
-    });
+    const current = sessionRef.current;
+    const idx = current.messages.findIndex((m) => m.id === editingMessageId);
+    if (idx === -1) return;
+    const truncated = current.messages.slice(0, idx);
+    const editedMsg: SessionMessage = { id: newMsgId('u'), type: 'user', content: newContent };
+    const updated: ChatSession = { ...current, messages: [...truncated, editedMsg] };
+    sessionService.save(updated);
+    setSession(updated);
 
     setEditingMessageId(null);
     setEditingContent('');
@@ -188,36 +217,33 @@ export function AskScreen() {
 
   const handleRegenerateResponse = useCallback(async (aiMessageId: string) => {
     // Find the preceding user message content, remove the AI message, regenerate
-    const msgs = sessionRef.current.messages;
-    const aiIdx = msgs.findIndex((m) => m.id === aiMessageId);
+    const current = sessionRef.current;
+    const aiIdx = current.messages.findIndex((m) => m.id === aiMessageId);
     if (aiIdx === -1) return;
-    const userMsg = aiIdx > 0 ? msgs[aiIdx - 1] : null;
+    const userMsg = aiIdx > 0 ? current.messages[aiIdx - 1] : null;
     if (!userMsg || userMsg.type !== 'user') return;
 
     const userContent = userMsg.content;
     const placeholderId = newMsgId('ai');
 
-    setSession((prev) => {
-      const updated: ChatSession = {
-        ...prev,
-        messages: prev.messages.filter((m) => m.id !== aiMessageId),
-      };
-      sessionService.save(updated);
-      return updated;
-    });
+    const updated: ChatSession = {
+      ...current,
+      messages: current.messages.filter((m) => m.id !== aiMessageId),
+    };
+    sessionService.save(updated);
+    setSession(updated);
 
     await generateAiReply(userContent, placeholderId);
   }, [generateAiReply]);
 
   const handleDeleteResponse = useCallback((aiMessageId: string) => {
-    setSession((prev) => {
-      const updated: ChatSession = {
-        ...prev,
-        messages: prev.messages.filter((m) => m.id !== aiMessageId),
-      };
-      sessionService.save(updated);
-      return updated;
-    });
+    const current = sessionRef.current;
+    const updated: ChatSession = {
+      ...current,
+      messages: current.messages.filter((m) => m.id !== aiMessageId),
+    };
+    sessionService.save(updated);
+    setSession(updated);
     toast('Response deleted.', 'success');
   }, []);
 
@@ -239,26 +265,23 @@ export function AskScreen() {
   }, []);
 
   const handleFlagConfirm = useCallback((messageId: string) => {
-    // Bug #1: read questionId from the ref BEFORE setSession — updaters must be pure
-    const aiMsg = sessionRef.current.messages.find((m) => m.id === messageId);
+    const current = sessionRef.current;
+    const aiMsg = current.messages.find((m) => m.id === messageId);
     const questionId = aiMsg?.questionId;
 
-    setSession((prev) => {
-      const msgs = prev.messages;
-      const idx = msgs.findIndex((m) => m.id === messageId);
-      const toRemove = new Set([messageId]);
-      if (idx > 0 && msgs[idx - 1].type === 'user') {
-        toRemove.add(msgs[idx - 1].id);
-      }
-      const updated: ChatSession = {
-        ...prev,
-        messages: msgs.filter((m) => !toRemove.has(m.id)),
-      };
-      sessionService.save(updated);
-      return updated;
-    });
+    const msgs = current.messages;
+    const idx = msgs.findIndex((m) => m.id === messageId);
+    const toRemove = new Set([messageId]);
+    if (idx > 0 && msgs[idx - 1].type === 'user') {
+      toRemove.add(msgs[idx - 1].id);
+    }
+    const updated: ChatSession = {
+      ...current,
+      messages: msgs.filter((m) => !toRemove.has(m.id)),
+    };
+    sessionService.save(updated);
+    setSession(updated);
 
-    // Side effect after setState (safe from double-invocation in Strict Mode)
     if (questionId) {
       void questionService.delete(questionId);
     }
@@ -279,7 +302,7 @@ export function AskScreen() {
   }, []);
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', maxWidth: '448px', margin: '0 auto', position: 'relative' }}>
+    <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', maxWidth: '448px', margin: '0 auto', position: 'relative' }}>
       {/* Header */}
       <div style={{ padding: '24px 16px 16px', backgroundColor: 'var(--surface)' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
@@ -331,7 +354,26 @@ export function AskScreen() {
       </div>
 
       {/* Messages */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', paddingBottom: '140px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', paddingBottom: 'calc(140px + env(safe-area-inset-bottom, 0px))' }}>
+        {session.origin?.type === 'post' && (
+          <div
+            style={{
+              marginBottom: '14px',
+              padding: '12px 14px',
+              borderRadius: '18px',
+              border: '1px solid var(--border)',
+              backgroundColor: 'var(--surface-variant)',
+            }}
+          >
+            <p style={{ fontSize: '0.72rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted-foreground)', marginBottom: '4px' }}>
+              Post thread
+            </p>
+            <p style={{ fontWeight: 700, marginBottom: '4px' }}>{session.origin.postTitle}</p>
+            <p style={{ color: 'var(--muted-foreground)', fontSize: '0.85rem' }}>
+              Continuing from a post-origin Q&A thread.
+            </p>
+          </div>
+        )}
         {/* Welcome message + suggested prompts when session is empty */}
         {displayMessages.length === 0 && (
           <>
@@ -363,11 +405,11 @@ export function AskScreen() {
                       lineHeight: 1.4,
                       transition: 'border-color 0.15s, background-color 0.15s',
                     }}
-                    onMouseEnter={(e) => {
+                    onPointerEnter={(e) => {
                       e.currentTarget.style.borderColor = 'var(--primary-40)';
                       e.currentTarget.style.backgroundColor = 'var(--primary-90)';
                     }}
-                    onMouseLeave={(e) => {
+                    onPointerLeave={(e) => {
                       e.currentTarget.style.borderColor = 'var(--border)';
                       e.currentTarget.style.backgroundColor = 'var(--card)';
                     }}
@@ -402,11 +444,11 @@ export function AskScreen() {
                           justifyContent: 'space-between',
                           alignItems: 'center',
                         }}
-                        onMouseEnter={(e) => {
+                        onPointerEnter={(e) => {
                           e.currentTarget.style.borderColor = 'var(--primary-40)';
                           e.currentTarget.style.backgroundColor = 'var(--surface-container-high)';
                         }}
-                        onMouseLeave={(e) => {
+                        onPointerLeave={(e) => {
                           e.currentTarget.style.borderColor = 'var(--border)';
                           e.currentTarget.style.backgroundColor = 'var(--card)';
                         }}
@@ -613,6 +655,7 @@ export function AskScreen() {
                       </p>
                       <p style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)' }}>
                         {formatDate(s.updatedAt)} · {s.messages.length} message{s.messages.length !== 1 ? 's' : ''}
+                        {s.origin?.type === 'post' ? ' · post thread' : ''}
                       </p>
                     </button>
                     <button

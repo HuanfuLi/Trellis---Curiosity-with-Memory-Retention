@@ -41,11 +41,27 @@ const defaultSettings: AppSettings = {
   },
 };
 
+function deepMerge(defaults: AppSettings, stored: Partial<AppSettings>): AppSettings {
+  const result = { ...defaults };
+  for (const key of Object.keys(defaults) as (keyof AppSettings)[]) {
+    const dv = defaults[key];
+    const sv = stored[key];
+    if (sv !== undefined && sv !== null && typeof dv === 'object' && !Array.isArray(dv)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (result as any)[key] = { ...(dv as object), ...(sv as object) };
+    } else if (sv !== undefined) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (result as any)[key] = sv;
+    }
+  }
+  return result;
+}
+
 function load(): AppSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...defaultSettings };
-    return { ...defaultSettings, ...JSON.parse(raw) };
+    return deepMerge(defaultSettings, JSON.parse(raw) as Partial<AppSettings>);
   } catch {
     return { ...defaultSettings };
   }

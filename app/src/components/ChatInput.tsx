@@ -27,42 +27,62 @@ export function ChatInput({ onSend, placeholder = 'Ask anything...', disabled }:
   };
 
   const startRecording = async () => {
+    let stream: MediaStream | null = null;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder;
-      audioChunksRef.current = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-
-      recorder.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        setIsTranscribing(true);
-        try {
-          const settings = mockSettingsService.getSync();
-          const text = await transcribeAudio(blob, settings.llm);
-          if (text) setMessage((prev) => (prev ? `${prev} ${text}` : text));
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : '';
-          toast(
-            msg.includes('API key') || msg.includes('No API')
-              ? 'STT requires an OpenAI API key — check Settings.'
-              : 'Transcription failed. Check your API settings.',
-            'error',
-          );
-        } finally {
-          setIsTranscribing(false);
-        }
-      };
-
-      recorder.start();
-      setIsRecording(true);
-    } catch {
-      toast('Microphone access denied.', 'error');
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      const name = err instanceof DOMException ? err.name : '';
+      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+        toast('Microphone permission denied. Check app settings.', 'error');
+      } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+        toast('No microphone found on this device.', 'error');
+      } else if (name === 'NotReadableError' || name === 'TrackStartError') {
+        toast('Microphone is in use by another app.', 'error');
+      } else {
+        toast('Could not access microphone. Try again.', 'error');
+      }
+      return;
     }
+
+    let recorder: MediaRecorder;
+    try {
+      recorder = new MediaRecorder(stream);
+    } catch {
+      stream.getTracks().forEach((t) => t.stop());
+      toast('Recording not supported on this device.', 'error');
+      return;
+    }
+
+    mediaRecorderRef.current = recorder;
+    audioChunksRef.current = [];
+
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) audioChunksRef.current.push(e.data);
+    };
+
+    recorder.onstop = async () => {
+      stream!.getTracks().forEach((t) => t.stop());
+      const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+      setIsTranscribing(true);
+      try {
+        const settings = mockSettingsService.getSync();
+        const text = await transcribeAudio(blob, settings.tts);
+        if (text) setMessage((prev) => (prev ? `${prev} ${text}` : text));
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : '';
+        toast(
+          msg.includes('API key') || msg.includes('No API')
+            ? 'Add your API key in Text-to-Speech & Speech Recognition settings.'
+            : 'Transcription failed. Check your TTS API settings.',
+          'error',
+        );
+      } finally {
+        setIsTranscribing(false);
+      }
+    };
+
+    recorder.start();
+    setIsRecording(true);
   };
 
   const stopRecording = () => {
@@ -81,7 +101,7 @@ export function ChatInput({ onSend, placeholder = 'Ask anything...', disabled }:
   return (
     <form
       onSubmit={handleSubmit}
-      style={{ position: 'fixed', bottom: '80px', left: 0, right: 0, padding: '0 16px 16px' }}
+      style={{ position: 'fixed', bottom: 'calc(80px + env(safe-area-inset-bottom, 0px))', left: 0, right: 0, padding: '0 16px 16px' }}
     >
       <div style={{ maxWidth: '448px', margin: '0 auto' }}>
         <div

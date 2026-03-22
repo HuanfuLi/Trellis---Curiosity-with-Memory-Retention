@@ -2,6 +2,31 @@ import type { Question, ServiceResult, AskResult } from '../../types';
 import { today, addDays } from '../../lib/date';
 import { eventBus } from '../../lib/event-bus';
 
+// Common English words that should never become keywords or category names
+const STOP_WORDS = new Set([
+  'a','an','the','and','but','or','nor','for','yet','so','in','on','at',
+  'by','to','of','up','as','is','it','its','be','am','are','was','were',
+  'been','being','do','does','did','have','has','had','will','would','could',
+  'should','may','might','shall','must','can','not','no','from','into',
+  'through','before','after','above','below','between','out','over','under',
+  'again','then','once','here','there','when','where','why','how','what',
+  'which','who','whom','this','that','these','those','both','each','few',
+  'more','most','other','some','such','only','own','same','than','too',
+  'very','just','with','about','if','while','because','although','though',
+  'unless','since','get','use','make','give','work','go','come','take',
+  'see','know','think','say','tell','your','our','their','my','his','her',
+  'we','they','i','you','he','she','us','them','me','all','any','every',
+  'also','without','between','difference','explain','define','describe',
+]);
+
+function extractKeywords(text: string): string[] {
+  return text
+    .toLowerCase()
+    .split(/\W+/)
+    .filter((w) => w.length >= 3 && !STOP_WORDS.has(w))
+    .slice(0, 4);
+}
+
 let idCounter = 100;
 function newId(): string {
   return `q-${++idCounter}`;
@@ -101,7 +126,7 @@ export const mockQuestionService = {
       content,
       answer: mockAnswers[answerIndex],
       summary: content.length > 60 ? content.slice(0, 57) + '...' : content,
-      keywords: content.split(' ').slice(0, 4),
+      keywords: extractKeywords(content),
       relatedQuestionIds: relatedIds,
       categoryIds: ['cat-general'],
       reviewSchedule: {

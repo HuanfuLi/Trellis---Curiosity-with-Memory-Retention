@@ -63,10 +63,17 @@ export function CalendarScreen() {
     setNewTodos((prev) => ({ ...prev, [blockId]: '' }));
   };
 
+  const [isAddingBlock, setIsAddingBlock] = useState(false);
   const handleAddBlock = async () => {
-    const newBlock = await addBlock(currentDate);
-    if (newBlock) {
-      setEditingBlock({ id: newBlock.id, label: newBlock.label, startTime: newBlock.startTime, endTime: newBlock.endTime });
+    if (isAddingBlock) return;
+    setIsAddingBlock(true);
+    try {
+      const newBlock = await addBlock(currentDate);
+      if (newBlock) {
+        setEditingBlock({ id: newBlock.id, label: newBlock.label, startTime: newBlock.startTime, endTime: newBlock.endTime });
+      }
+    } finally {
+      setIsAddingBlock(false);
     }
   };
 
@@ -111,6 +118,7 @@ export function CalendarScreen() {
         </div>
         <button
           onClick={handleAddBlock}
+          disabled={isAddingBlock}
           title="Add new block"
           style={{
             width: '40px',
@@ -123,6 +131,7 @@ export function CalendarScreen() {
             justifyContent: 'center',
             boxShadow: 'var(--shadow-1)',
             flexShrink: 0,
+            opacity: isAddingBlock ? 0.6 : 1,
           }}
         >
           <Plus size={20} />

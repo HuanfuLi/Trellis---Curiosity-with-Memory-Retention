@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Brain, Volume2, Network, Radio, BookOpen, Palette, RotateCcw, CheckCircle, XCircle, Shield, Calendar, Download, Upload } from 'lucide-react';
+import { Brain, Volume2, Network, Radio, BookOpen, Palette, RotateCcw, CheckCircle, XCircle, Shield, Calendar, Download, Upload, Trash2 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { mockSettingsService } from '../services/mock/settings.mock';
@@ -8,6 +8,7 @@ import { testTTSConnection } from '../providers/tts';
 import type { LLMConfig, TTSConfig, AppSettings } from '../types';
 import { toast } from '../lib/toast';
 import { applyTheme } from '../lib/theme';
+import { clearAllTables } from '../services/db.service';
 
 function SectionHeader({ icon, title }: { icon: React.ReactNode; title: string }) {
   return (
@@ -125,11 +126,22 @@ export function SettingsScreen() {
 
   const saveLlm = (current: LLMConfig = llm) => {
     mockSettingsService.set('llm', { ...current, isConfigured: !!current.apiKey || noKeyRequired(current.provider) });
+    // Keep TTS isConfigured in sync: OpenAI TTS reuses the LLM key as a fallback
+    if (tts.provider === 'openai') {
+      const effectiveKey = tts.apiKey || (current.apiKey ?? '');
+      mockSettingsService.set('tts', { ...tts, isConfigured: !!effectiveKey });
+    }
   };
 
+  // The effective TTS API key: use the dedicated TTS key if set, otherwise fall back
+  // to the LLM key when both provider is OpenAI (they share the same credentials).
+  const effectiveTtsApiKey = tts.apiKey || (tts.provider === 'openai' ? (llm.apiKey ?? '') : '');
+
   const saveTts = (current: TTSConfig = tts) => {
+    const fallbackKey = current.provider === 'openai' ? (llm.apiKey ?? '') : '';
+    const effectiveKey = current.apiKey || fallbackKey;
     const isConfigured =
-      current.provider === 'openai' ? !!current.apiKey :
+      current.provider === 'openai' ? !!effectiveKey :
         current.provider === 'gptsovits' ? !!current.baseUrl :
           false;
     mockSettingsService.set('tts', { ...current, isConfigured });
@@ -151,11 +163,12 @@ export function SettingsScreen() {
   const handleTestTTS = async () => {
     setIsTesting((prev) => ({ ...prev, tts: true }));
     setTestResult((prev) => ({ ...prev, tts: null }));
-    const isConfigured =
-      tts.provider === 'openai' ? !!tts.apiKey :
-        tts.provider === 'gptsovits' ? !!tts.baseUrl :
-          false;
-    const config = { ...tts, isConfigured };
+    // Use fallback key so the test works even when TTS key field is empty
+    const config = {
+      ...tts,
+      apiKey: effectiveTtsApiKey,
+      isConfigured: tts.provider === 'openai' ? !!effectiveTtsApiKey : !!tts.baseUrl,
+    };
     const result = await testTTSConnection(config);
     setIsTesting((prev) => ({ ...prev, tts: false }));
     setTestResult((prev) => ({
@@ -182,6 +195,19 @@ export function SettingsScreen() {
     setLlm(nextLlm);
     setTts(nextTts);
     toast('All API keys deleted.', 'success');
+  };
+
+  const handleClearAllData = () => {
+    if (!confirm('Delete ALL data?\n\nThis removes every question, flashcard, session, calendar entry, and podcast. Settings are kept.\n\nThis cannot be undone.')) return;
+    const keys = Object.keys(localStorage).filter((k) => k.startsWith('echolearn_') && k !== 'echolearn_settings');
+    for (const k of keys) localStorage.removeItem(k);
+    // Explicitly set an empty array so flashcardService doesn't auto-re-seed on next load
+    localStorage.setItem('echolearn_flashcards', '[]');
+    // Clear SQLite tables (Android native) — fire-and-forget before reload
+    void clearAllTables().finally(() => {
+      toast('All data cleared — reloading…', 'success');
+      setTimeout(() => window.location.reload(), 800);
+    });
   };
 
   const handleReset = async () => {
@@ -305,7 +331,7 @@ export function SettingsScreen() {
       </Card>
 
       {/* TTS Section */}
-      <SectionHeader icon={<Volume2 size={20} />} title="Text-to-Speech" />
+      <SectionHeader icon={<Volume2 size={20} />} title="Text-to-Speech & Speech Recognition" />
       <Card style={{ marginBottom: '8px' }}>
         <SettingRow label="Provider">
           <SelectInput
@@ -328,13 +354,16 @@ export function SettingsScreen() {
           />
         </SettingRow>
         {tts.provider === 'openai' && (
-          <SettingRow label="API Key">
+          <SettingRow
+            label="API Key"
+            description={!tts.apiKey && llm.apiKey ? '✓ Using your LLM API key' : undefined}
+          >
             <TextInput
               type="password"
               value={tts.apiKey ?? ''}
               onChange={(v) => setTts((prev) => ({ ...prev, apiKey: v }))}
               onBlur={() => saveTts()}
-              placeholder="sk-..."
+              placeholder={llm.apiKey ? '(using LLM key)' : 'sk-...'}
             />
           </SettingRow>
         )}
@@ -538,6 +567,22 @@ export function SettingsScreen() {
             Delete API Keys
           </Button>
         </div>
+      </Card>
+
+      {/* Developer / Debug */}
+      <SectionHeader icon={<Trash2 size={20} />} title="Developer" />
+      <Card style={{ marginBottom: '8px' }}>
+        <p style={{ fontSize: '0.8rem', color: 'var(--muted-foreground)', marginBottom: '16px', lineHeight: 1.5 }}>
+          Debug tools for development. Destructive actions cannot be undone.
+        </p>
+        <Button
+          variant="danger"
+          size="sm"
+          onClick={handleClearAllData}
+          style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}
+        >
+          <Trash2 size={16} /> Clear All Data
+        </Button>
       </Card>
 
       {/* Reset & About */}

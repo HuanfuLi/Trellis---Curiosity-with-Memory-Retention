@@ -10,12 +10,23 @@ export interface Question {
   answer: string;
   summary: string;
   title?: string;          // short AI-derived title (4-7 words), used in listings
+  storyHook?: string;      // intriguing one-liner to spark curiosity, shown in Info Flow
+  parentId?: string;       // parent node ID for hierarchical graph organisation
   keywords: string[];
   relatedQuestionIds: string[];
   categoryIds: string[];
   embedding?: number[];
   reviewSchedule: ReviewSchedule;
   createdAt: number;
+}
+
+/** A milestone or trivia card injected into the Info Flow every ~5 items. */
+export interface BlindboxItem {
+  id: string;
+  type: 'milestone' | 'trivia';
+  emoji: string;
+  headline: string;
+  body: string;
 }
 
 export interface ReviewSchedule {
@@ -76,6 +87,8 @@ export interface DailyPodcast {
   questionIds: string[];
   script: string;
   audioPath?: string;
+  /** Base64 data URI of the synthesized audio — survives page reloads unlike blob URLs. */
+  audioDataUri?: string;
   duration?: number;
   status: PodcastStatus;
   progress?: number;
@@ -161,6 +174,7 @@ export interface ChatSession {
   updatedAt: number;
   messages: SessionMessage[];
   processed: boolean;  // true once flashcard post-processing has run
+  origin?: SessionOrigin;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -175,6 +189,60 @@ export interface FlashCard {
   createdAt: number;
   pinned?: boolean;         // if true, appears in review queue every day
   reviewSchedule: ReviewSchedule;
+}
+
+export type PostNarrativeMode =
+  | 'example-first'
+  | 'historical-story'
+  | 'contrast'
+  | 'analogy'
+  | 'false-intuition'
+  | 'mnemonic'
+  | 'mechanism-breakdown'
+  | 'starter';
+
+export interface FeedTeaser {
+  hook: string;
+  preview: string;
+}
+
+export interface PostSnapshot {
+  id: string;
+  date: string;
+  title: string;
+  teaser: FeedTeaser;
+  bodyMarkdown: string;
+  whyCare: string;
+  takeaway: string;
+  quickAskPrompts: string[];
+  narrativeMode: PostNarrativeMode;
+  contextLabel: string;
+  sourceType: 'recent' | 'related' | 'resurfaced' | 'starter' | 'mixed';
+  sourceQuestionIds: string[];
+  sourceQuestionTitles: string[];
+  keywords: string[];
+}
+
+export interface DailyPost extends PostSnapshot {
+  generatedAt: number;
+  origin: 'ai' | 'fallback';
+}
+
+export interface PostOriginContext {
+  post: PostSnapshot;
+  sourceQuestions: Array<{
+    id: string;
+    title: string;
+    content: string;
+    summary: string;
+  }>;
+}
+
+export interface SessionOrigin {
+  type: 'post';
+  postId: string;
+  postTitle: string;
+  context: PostOriginContext;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -1,40 +1,58 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Brain, BookOpen, CheckSquare, Headphones, Mic, Loader2 } from 'lucide-react';
+import { BookOpen, CheckSquare, Headphones, Mic, Loader2 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
-import { ImmersiveInfoFlow, InfoFlowPreview, type InfoFlowItem } from '../components/InfoFlow';
+import { InlineInfoFlow, type InfoFlowItem } from '../components/InfoFlow';
+import type { BlindboxItem, DailyPost } from '../types';
 import { useQuestions } from '../state/useQuestions';
 import { useReview } from '../state/useReview';
 import { usePodcast } from '../state/usePodcast';
 import { mockCalendarService } from '../services/mock/calendar.mock';
 import { mockSettingsService } from '../services/mock/settings.mock';
+import { conceptFeedService } from '../services/concept-feed.service';
 import { graphService } from '../services/graph.service';
 import { transcribeAudio } from '../providers/stt';
 import { eventBus } from '../lib/event-bus';
 import { today, getGreeting, formatDateLabel } from '../lib/date';
 import { toast } from '../lib/toast';
 
+const MILESTONE_POOL: BlindboxItem[] = [
+  { id: 'm-0', type: 'milestone', emoji: '🔥', headline: 'Momentum looks like curiosity', body: 'The more often you open ideas from different angles, the easier it becomes to stay in motion without forcing yourself.' },
+  { id: 'm-1', type: 'trivia',    emoji: '🧠', headline: 'Did you know?',         body: 'The brain keeps details that feel reusable. Retrieval, surprise, and connection all make an idea feel worth keeping.' },
+  { id: 'm-2', type: 'milestone', emoji: '⚡', headline: 'Your feed is learning you', body: 'Recent questions create the spark, older questions add depth, and the space between them is where insight usually shows up.' },
+  { id: 'm-3', type: 'trivia',    emoji: '💡', headline: 'Memory likes contrast', body: 'When a familiar idea meets a new angle, your brain has to reconcile them, and that tension often makes both easier to remember.' },
+  { id: 'm-4', type: 'milestone', emoji: '🌱', headline: 'Knowledge compounds!', body: 'Every connection you keep is another route back into the same concept later. That is why understanding starts to feel faster over time.' },
+];
+
 export function HomeScreen() {
   const navigate = useNavigate();
-  const { getByDate, questions } = useQuestions();
-  const { reviewCount, items: reviewItems, submitReview, isLoading: isReviewLoading } = useReview();
+  const { questions } = useQuestions();
+  const { reviewCount } = useReview();
   const { getPodcastForDate } = usePodcast();
+  const [dailyPosts, setDailyPosts] = useState<DailyPost[]>(() => conceptFeedService.getCachedDailyPosts());
 
   const t = today();
-  const todayQuestions = getByDate(t);
   const todayPodcast = getPodcastForDate(t);
 
-  // Build the Info Flow feed: interleave concept cards with connection cards
+  useEffect(() => {
+    let cancelled = false;
+    void conceptFeedService.getDailyPosts(questions).then((posts) => {
+      if (!cancelled) setDailyPosts(posts);
+    });
+    return () => { cancelled = true; };
+  }, [questions]);
+
+  // Build the Home curiosity feed from recent, related, and resurfaced concepts.
   const infoFlowItems = useMemo<InfoFlowItem[]>(() => {
     const items: InfoFlowItem[] = [];
     const connCandidates = questions.filter((q) => q.relatedQuestionIds.length > 0);
     const added = new Set<string>();
 
-    reviewItems.forEach((card, idx) => {
-      items.push({ kind: 'concept', card });
+    dailyPosts.forEach((post, idx) => {
+      items.push({ kind: 'concept', post });
 
-      // After every 2nd concept card, inject a connection card if available
+      // After every 2nd concept post, inject a connection card if available.
       if ((idx + 1) % 2 === 0) {
         const base = connCandidates[Math.floor(idx / 2) % connCandidates.length];
         if (base) {
@@ -64,18 +82,19 @@ export function HomeScreen() {
       }
     }
 
-    return items.slice(0, 20);
-  }, [reviewItems, questions]);
+    // Inject milestone cards every 5 regular cards
+    const withMilestones: InfoFlowItem[] = [];
+    let milestoneIdx = 0;
+    items.forEach((item, idx) => {
+      if (idx > 0 && idx % 5 === 0) {
+        withMilestones.push({ kind: 'milestone', item: MILESTONE_POOL[milestoneIdx % MILESTONE_POOL.length] });
+        milestoneIdx++;
+      }
+      withMilestones.push(item);
+    });
 
-  const [flowOpen, setFlowOpen] = useState(false);
-  // Bug #8: snapshot items when opening so rating a card doesn't mutate the live prop,
-  // which would rebuild the IntersectionObserver and reset activeIndex mid-flow
-  const [flowItems, setFlowItems] = useState(infoFlowItems);
-
-  const handleOpenFlow = () => {
-    setFlowItems(infoFlowItems);
-    setFlowOpen(true);
-  };
+    return withMilestones.slice(0, 24);
+  }, [dailyPosts, questions]);
 
   const handleAhaConnection = (idA: string, idB: string) => {
     void graphService.reinforceEdge(idA, idB);
@@ -87,6 +106,7 @@ export function HomeScreen() {
   const [isTranscribing, setIsTranscribing] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
@@ -104,9 +124,13 @@ export function HomeScreen() {
     return () => { unsub1(); unsub2(); };
   }, []);
 
-  // Cleanup recorder if component unmounts mid-recording
+  // Cleanup: stop stream tracks immediately on unmount so the mic is released right away.
+  // We stop tracks before calling recorder.stop() because recorder.onstop fires async
+  // and the stream would otherwise stay open until that callback completes.
   useEffect(() => {
     return () => {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
       if (mediaRecorderRef.current?.state === 'recording') {
         mediaRecorderRef.current.stop();
       }
@@ -116,7 +140,19 @@ export function HomeScreen() {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      streamRef.current = stream;
+
+      let recorder: MediaRecorder;
+      try {
+        recorder = new MediaRecorder(stream);
+      } catch {
+        // Some Android devices don't support the default codec — stop stream and bail
+        stream.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+        toast('Recording not supported on this device.', 'error');
+        return;
+      }
+
       mediaRecorderRef.current = recorder;
       audioChunksRef.current = [];
 
@@ -125,19 +161,19 @@ export function HomeScreen() {
       };
 
       recorder.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
+        // Tracks are stopped by the cleanup effect or stopRecording — no need to repeat here
         const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         setIsTranscribing(true);
         try {
           const settings = mockSettingsService.getSync();
-          const text = await transcribeAudio(blob, settings.llm);
+          const text = await transcribeAudio(blob, settings.tts);
           navigate('/ask', { state: { prompt: text?.trim() || '' } });
         } catch (err) {
           const msg = err instanceof Error ? err.message : '';
           toast(
             msg.includes('API key') || msg.includes('No API')
-              ? 'STT requires an OpenAI API key — check Settings.'
-              : 'Transcription failed. Check your API settings.',
+              ? 'Add your API key in Text-to-Speech & Speech Recognition settings.'
+              : 'Transcription failed. Check your TTS API settings.',
             'error',
           );
           setIsTranscribing(false);
@@ -146,12 +182,23 @@ export function HomeScreen() {
 
       recorder.start();
       setIsRecording(true);
-    } catch {
-      toast('Microphone access denied.', 'error');
+    } catch (err) {
+      const name = err instanceof DOMException ? err.name : '';
+      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+        toast('Microphone permission denied. Check app settings.', 'error');
+      } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+        toast('No microphone found on this device.', 'error');
+      } else if (name === 'NotReadableError' || name === 'TrackStartError') {
+        toast('Microphone is in use by another app.', 'error');
+      } else {
+        toast('Could not start recording. Try again.', 'error');
+      }
     }
   };
 
   const stopRecording = () => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
     mediaRecorderRef.current?.stop();
     mediaRecorderRef.current = null;
     setIsRecording(false);
@@ -177,37 +224,7 @@ export function HomeScreen() {
         {/* Bento Grid */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
 
-          {/* Today's Summary — full width */}
-          <div
-            style={{
-              gridColumn: '1 / -1',
-              padding: '24px',
-              background: 'var(--summary-bg)',
-              borderRadius: 'var(--radius-xl)',
-              boxShadow: 'var(--shadow-2)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px' }}>
-              <Brain size={32} color="var(--summary-text)" />
-              <div style={{ textAlign: 'right' }}>
-                <p style={{ fontSize: '2.5rem', fontWeight: 600, color: 'var(--summary-text)', lineHeight: 1 }}>{todayQuestions.length}</p>
-                <p style={{ fontSize: '0.875rem', color: 'var(--summary-text-muted)' }}>questions today</p>
-              </div>
-            </div>
-            <h3 style={{ color: 'var(--summary-text)', marginBottom: '12px' }}>Today's Summary</h3>
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <div style={{ flex: 1, padding: '8px 12px', backgroundColor: 'var(--summary-stat-bg)', borderRadius: '16px', backdropFilter: 'blur(8px)' }}>
-                <p style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--summary-text)' }}>{reviewCount}</p>
-                <p style={{ fontSize: '0.75rem', color: 'var(--summary-text-muted)' }}>Due for review</p>
-              </div>
-              <div style={{ flex: 1, padding: '8px 12px', backgroundColor: 'var(--summary-stat-bg)', borderRadius: '16px', backdropFilter: 'blur(8px)' }}>
-                <p style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--summary-text)' }}>{pendingTodos}</p>
-                <p style={{ fontSize: '0.75rem', color: 'var(--summary-text-muted)' }}>Tasks pending</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Flashcard Card */}
+            {/* Flashcard Card */}
           <button
             onClick={() => navigate('/review')}
             style={{ textAlign: 'left', background: 'none', padding: 0 }}
@@ -219,8 +236,8 @@ export function HomeScreen() {
                 transition: 'transform 0.2s',
                 height: '100%',
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.02)')}
-              onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+              onPointerEnter={(e) => (e.currentTarget.style.transform = 'scale(1.02)')}
+              onPointerLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
             >
               <BookOpen size={28} color="var(--bento-card-text)" style={{ marginBottom: '12px' }} />
               <h4 style={{ marginBottom: '8px', color: 'var(--bento-card-text)' }}>Flashcard</h4>
@@ -243,8 +260,8 @@ export function HomeScreen() {
                 transition: 'transform 0.2s',
                 height: '100%',
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.02)')}
-              onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+              onPointerEnter={(e) => (e.currentTarget.style.transform = 'scale(1.02)')}
+              onPointerLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
             >
               <CheckSquare size={28} color="var(--bento-card-text)" style={{ marginBottom: '12px' }} />
               <h4 style={{ marginBottom: '8px', color: 'var(--bento-card-text)' }}>Tasks</h4>
@@ -266,8 +283,8 @@ export function HomeScreen() {
                 cursor: 'pointer',
                 transition: 'transform 0.2s',
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.01)')}
-              onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+              onPointerEnter={(e) => (e.currentTarget.style.transform = 'scale(1.01)')}
+              onPointerLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
@@ -290,32 +307,24 @@ export function HomeScreen() {
             </Card>
           </button>
 
-          {/* Info Flow preview — full width; hidden during initial load (Bug #4) */}
-          {!isReviewLoading && (
-            <div style={{ gridColumn: '1 / -1' }}>
-              <InfoFlowPreview items={infoFlowItems} onOpen={handleOpenFlow} />
-            </div>
-          )}
+          {/* Inline Info Flow — full width */}
+          <div style={{ gridColumn: '1 / -1' }}>
+            <InlineInfoFlow
+              items={infoFlowItems}
+              onAhaConnection={handleAhaConnection}
+              onOpenPost={(postId) => navigate(`/posts/${postId}`)}
+            />
+          </div>
 
         </div>
       </div>
-
-      {/* Immersive Info Flow overlay */}
-      {flowOpen && (
-        <ImmersiveInfoFlow
-          items={flowItems}
-          onRateConcept={async (id, rating) => { await submitReview(id, rating); }}
-          onAhaConnection={handleAhaConnection}
-          onClose={() => setFlowOpen(false)}
-        />
-      )}
 
       {/* Prompt bubble — shown while recording or transcribing */}
       {fabActive && (
         <div
           style={{
             position: 'fixed',
-            bottom: '172px',
+            bottom: 'calc(172px + env(safe-area-inset-bottom, 0px))',
             right: '16px',
             padding: '12px 20px',
             backgroundColor: 'var(--surface-variant)',
@@ -365,7 +374,7 @@ export function HomeScreen() {
         title={isRecording ? 'Tap to stop' : 'Ask a question'}
         style={{
           position: 'fixed',
-          bottom: '96px',
+          bottom: 'calc(96px + env(safe-area-inset-bottom, 0px))',
           right: '24px',
           width: '56px',
           height: '56px',

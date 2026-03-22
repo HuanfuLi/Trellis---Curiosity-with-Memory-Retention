@@ -1,10 +1,54 @@
 import type { FlashCard, ChatSession, ReviewSchedule } from '../types';
 import { today } from '../lib/date';
 import { eventBus } from '../lib/event-bus';
+import { toast } from '../lib/toast';
 import { mockSettingsService } from './mock/settings.mock';
 import { chatCompletion } from '../providers/llm';
 
 const STORAGE_KEY = 'echolearn_flashcards';
+
+// Seed cards shown on first launch so the Info Flow has content before
+// any LLM sessions are processed.
+function makeSeedCards(): FlashCard[] {
+  const t = today();
+  return [
+    {
+      id: 'fc-seed-1', sessionId: 'seed',
+      front: 'What is dialectical materialism?',
+      back: "Marx's framework combining Hegelian dialectics with materialism — change occurs through opposing forces (thesis → antithesis → synthesis).",
+      createdAt: Date.now() - 86400000 * 3,
+      reviewSchedule: { nextReviewDate: t, reviewCount: 1, easeFactor: 2.5 },
+    },
+    {
+      id: 'fc-seed-2', sessionId: 'seed',
+      front: 'What is quantum entanglement?',
+      back: 'Two particles correlate so that measuring one instantly affects the other, regardless of distance — Einstein\'s "spooky action at a distance."',
+      createdAt: Date.now() - 86400000 * 2,
+      reviewSchedule: { nextReviewDate: t, reviewCount: 0, easeFactor: 2.5 },
+    },
+    {
+      id: 'fc-seed-3', sessionId: 'seed',
+      front: 'How does backpropagation train neural networks?',
+      back: 'Forward pass computes output; backward pass propagates error gradients via chain rule; weights updated by gradient descent to minimise loss.',
+      createdAt: Date.now() - 86400000,
+      reviewSchedule: { nextReviewDate: t, reviewCount: 0, easeFactor: 2.5 },
+    },
+    {
+      id: 'fc-seed-4', sessionId: 'seed',
+      front: 'Supervised vs unsupervised learning?',
+      back: 'Supervised: trains on labelled input-output pairs (classification, regression). Unsupervised: finds patterns in unlabelled data (clustering, PCA).',
+      createdAt: Date.now() - 86400000,
+      reviewSchedule: { nextReviewDate: t, reviewCount: 0, easeFactor: 2.5 },
+    },
+    {
+      id: 'fc-seed-5', sessionId: 'seed',
+      front: 'What does the second law of thermodynamics state?',
+      back: 'Entropy of an isolated system always increases — explaining heat flow direction, engine inefficiency, and the arrow of time.',
+      createdAt: Date.now() - 3600000,
+      reviewSchedule: { nextReviewDate: t, reviewCount: 0, easeFactor: 2.5 },
+    },
+  ];
+}
 
 let idCounter = Date.now();
 function newId(): string {
@@ -14,7 +58,12 @@ function newId(): string {
 function loadAll(): FlashCard[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
+    if (!raw) {
+      // First launch — persist seed cards so they show up in the review queue
+      const seeds = makeSeedCards();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(seeds));
+      return seeds;
+    }
     return JSON.parse(raw) as FlashCard[];
   } catch {
     return [];
@@ -24,8 +73,10 @@ function loadAll(): FlashCard[] {
 function saveAll(cards: FlashCard[]): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
-  } catch {
-    // ignore storage errors
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+      toast('Storage full — flashcards may not be saved. Clear old data in Settings.', 'error');
+    }
   }
 }
 

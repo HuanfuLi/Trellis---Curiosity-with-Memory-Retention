@@ -67,11 +67,16 @@ async function initEdgeTable(): Promise<void> {
 }
 
 async function loadEdgeWeights(): Promise<Record<string, number>> {
-  await initEdgeTable();
-  const rows = await dbQuery<{ edge_key: string; weight: number }>('SELECT * FROM edge_weights');
-  const map: Record<string, number> = {};
-  for (const row of rows) map[row.edge_key] = row.weight;
-  return map;
+  try {
+    await initEdgeTable();
+    const rows = await dbQuery<{ edge_key: string; weight: number }>('SELECT * FROM edge_weights');
+    const map: Record<string, number> = {};
+    for (const row of rows) map[row.edge_key] = row.weight;
+    return map;
+  } catch {
+    // SQLite unavailable (e.g. plugin not ready on Android) — proceed without weights
+    return {};
+  }
 }
 
 async function incrementEdgeWeight(key: string): Promise<number> {
@@ -146,6 +151,21 @@ export const graphService = {
   async getEdgeWeight(idA: string, idB: string): Promise<number> {
     const weights = await loadEdgeWeights();
     return weights[edgeKey(idA, idB)] ?? 0;
+  },
+
+  /**
+   * Return direct children of a node in the hierarchy.
+   * Pass `null` to get top-level nodes (parentId === undefined).
+   */
+  getChildren(parentId: string | null): Question[] {
+    return questionService.getAll().filter((q) =>
+      parentId === null ? !q.parentId : q.parentId === parentId,
+    );
+  },
+
+  /** Move a node to a new parent in the hierarchy. Pass `null` to make it a root node. */
+  moveToParent(nodeId: string, newParentId: string | null): void {
+    questionService.patchQuestion(nodeId, { parentId: newParentId ?? undefined });
   },
 
   /** Get all nodes and edges for the graph canvas. */

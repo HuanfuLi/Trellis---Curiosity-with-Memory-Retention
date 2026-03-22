@@ -343,6 +343,32 @@
   40%       { filter: drop-shadow(0 0 18px rgba(76,175,80,0.9)); }
 }
 
+/* Aha! pulsing ring — applied to connection card on double-tap */
+@keyframes aha-pulse {
+  0%   { box-shadow: 0 0 0 0   color-mix(in srgb, var(--primary-40) 70%, transparent); }
+  50%  { box-shadow: 0 0 0 20px color-mix(in srgb, var(--primary-40) 0%,  transparent); }
+  100% { box-shadow: 0 0 0 0   color-mix(in srgb, var(--primary-40) 0%,  transparent); }
+}
+
+/* Graph drill-down: current bucket level scales away before new level appears */
+@keyframes drill-in-out {
+  from { opacity: 1; transform: scale(1);    }
+  to   { opacity: 0; transform: scale(0.88); }
+}
+@keyframes drill-in-enter {
+  from { opacity: 0; transform: scale(1.06); }
+  to   { opacity: 1; transform: scale(1);    }
+}
+.view-drill-in  { animation: drill-in-out   0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+.view-drill-enter { animation: drill-in-enter 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+
+/* Milestone card pop */
+@keyframes milestone-pop {
+  0%   { opacity: 0; transform: scale(0.92) translateY(12px); }
+  60%  { opacity: 1; transform: scale(1.03) translateY(-2px); }
+  100% { opacity: 1; transform: scale(1)    translateY(0);    }
+}
+
 /* Graph node appearing */
 @keyframes node-pop {
   0%   { opacity: 0; r: 0; }

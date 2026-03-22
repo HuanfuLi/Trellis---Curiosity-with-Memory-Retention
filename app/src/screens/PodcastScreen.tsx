@@ -7,6 +7,7 @@ import { ProgressBar } from '../components/ui/ProgressBar';
 import { Button } from '../components/ui/Button';
 import { usePodcast } from '../state/usePodcast';
 import { today, formatDateLabel, isToday } from '../lib/date';
+import { toast } from '../lib/toast';
 import type { DailyPodcast } from '../types';
 
 export function PodcastScreen() {
@@ -54,11 +55,17 @@ export function PodcastScreen() {
       setIsPlaying(false);
       setPlaybackProgress(0);
     };
+    audio.onerror = () => {
+      toast('Audio unavailable — try regenerating.', 'error');
+      setIsPlaying(false);
+      audioRef.current = null;
+    };
 
     return () => {
       audio.pause();
       audio.ontimeupdate = null;
       audio.onended = null;
+      audio.onerror = null;
       audioRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -359,8 +366,8 @@ export function PodcastScreen() {
                 border: selected?.id === pod.id ? '2px solid var(--primary-40)' : '2px solid transparent',
                 transition: 'transform 0.2s',
               }}
-              onMouseEnter={(e) => { if (pod.status === 'ready') e.currentTarget.style.transform = 'scale(1.01)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+              onPointerEnter={(e) => { if (pod.status === 'ready') e.currentTarget.style.transform = 'scale(1.01)'; }}
+              onPointerLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>

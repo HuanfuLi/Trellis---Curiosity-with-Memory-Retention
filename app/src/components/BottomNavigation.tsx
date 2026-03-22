@@ -48,6 +48,7 @@ export function BottomNavigation({ onAskLongPress }: BottomNavigationProps) {
         backgroundColor: 'var(--surface-container)',
         borderTop: '1px solid var(--border)',
         padding: '8px',
+        paddingBottom: 'calc(8px + env(safe-area-inset-bottom, 0px))',
         boxShadow: '0 -2px 8px rgba(0,0,0,0.06)',
         zIndex: 100,
       }}

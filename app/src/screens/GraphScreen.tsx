@@ -1,16 +1,14 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { RefreshCw, GitBranch, Plus, X } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import MindElixir from 'mind-elixir';
+import 'mind-elixir/style';
+import type { MindElixirData, MindElixirInstance, NodeObj } from 'mind-elixir';
+import { RefreshCw, GitBranch, Plus, X, ChevronRight } from 'lucide-react';
 import type { Question } from '../types';
 import { graphService } from '../services/graph.service';
 import { toast } from '../lib/toast';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-interface NodePosition {
-  id: string;
-  x: number;
-  y: number;
-}
 
 interface GraphEdge {
   source: string;
@@ -18,114 +16,134 @@ interface GraphEdge {
   weight: number;
 }
 
-// ─── Mindmap tree layout ──────────────────────────────────────────────────────
+// ─── Graph → MindElixir categorised tree ─────────────────────────────────────
 //
-// Root = most-connected node. A BFS spanning tree is built from the root,
-// then each subtree is assigned a proportional angular sector so branches
-// radiate outward like a classic mindmap spider diagram.
+// Root = "Knowledge". Direct children are category nodes derived from the most
+// frequent shared keywords. Each question is a leaf under its best-fit category.
+// Questions with no shared keywords fall directly under the root.
 
-function mindmapLayout(
-  nodes: Question[],
-  edges: GraphEdge[],
-  width: number,
-  height: number,
-): NodePosition[] {
-  if (nodes.length === 0) return [];
-  if (nodes.length === 1) return [{ id: nodes[0].id, x: width / 2, y: height / 2 }];
+function truncate(s: string, n: number): string {
+  return s.length > n ? s.slice(0, n - 1) + '…' : s;
+}
 
-  const cx = width / 2;
-  const cy = height / 2;
+// Keywords that are too generic to be useful category names
+const GRAPH_STOP_WORDS = new Set([
+  'a','an','the','and','but','or','for','in','on','at','by','to','of',
+  'as','is','it','be','do','not','from','into','through','when','where',
+  'why','how','what','which','who','this','that','these','those','some',
+  'only','very','just','with','about','if','while','get','use','make',
+  'give','go','come','take','see','know','think','say','your','our',
+  'their','my','we','they','you','he','she','all','any','also','between',
+  'difference','explain','define','describe','between','more','most',
+]);
 
-  // Build undirected adjacency set
-  const adj: Record<string, Set<string>> = {};
-  for (const n of nodes) adj[n.id] = new Set<string>();
-  for (const e of edges) {
-    adj[e.source]?.add(e.target);
-    adj[e.target]?.add(e.source);
+function buildMindElixirData(nodes: Question[]): MindElixirData {
+  const rootObj: NodeObj = {
+    id: 'root-knowledge',
+    topic: 'Knowledge',
+    children: [],
+    expanded: true,
+  };
+
+  if (nodes.length === 0) return { nodeData: rootObj };
+
+  // Count how many questions share each keyword
+  const keywordFreq: Record<string, number> = {};
+  for (const n of nodes) {
+    for (const k of n.keywords) {
+      keywordFreq[k] = (keywordFreq[k] ?? 0) + 1;
+    }
   }
 
-  // Root = highest-degree node (most edges); ties broken by array order
-  const rootId = nodes.reduce(
-    (best, n) => ((adj[n.id]?.size ?? 0) > (adj[best]?.size ?? 0) ? n.id : best),
-    nodes[0].id,
-  );
+  // Keywords shared by ≥ 2 questions become category branches (up to 10 categories).
+  // Filter out stop words and single-word fragments shorter than 3 chars.
+  const categoryKeys = Object.entries(keywordFreq)
+    .filter(([k, count]) => count >= 2 && k.length >= 3 && !GRAPH_STOP_WORDS.has(k.toLowerCase()))
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 10)
+    .map(([k]) => k);
 
-  // BFS to build a spanning tree (each node gets exactly one parent)
-  const treeChildren: Record<string, string[]> = {};
-  for (const n of nodes) treeChildren[n.id] = [];
-  const visited = new Set<string>([rootId]);
-  const queue: string[] = [rootId];
-  while (queue.length > 0) {
-    const curr = queue.shift()!;
-    for (const nb of (adj[curr] ?? [])) {
-      if (!visited.has(nb)) {
-        visited.add(nb);
-        treeChildren[curr].push(nb);
-        queue.push(nb);
+  // Assign each question to the highest-frequency category it belongs to
+  const buckets: Record<string, Question[]> = {};
+  const assigned = new Set<string>();
+
+  for (const cat of categoryKeys) {
+    for (const n of nodes) {
+      if (!assigned.has(n.id) && n.keywords.includes(cat)) {
+        (buckets[cat] ??= []).push(n);
+        assigned.add(n.id);
       }
     }
   }
 
-  // Count leaf nodes in a subtree (used for proportional angle allocation)
-  function leafCount(id: string): number {
-    const kids = treeChildren[id];
-    return kids.length === 0 ? 1 : kids.reduce((s, c) => s + leafCount(c), 0);
+  // Build category subtrees
+  for (const cat of categoryKeys) {
+    const questions = buckets[cat];
+    if (!questions?.length) continue;
+    rootObj.children!.push({
+      id: `cat-${cat}`,
+      topic: cat.charAt(0).toUpperCase() + cat.slice(1),
+      children: questions.map((q) => ({
+        id: q.id,
+        topic: truncate(String(q.title ?? q.content ?? ''), 60),
+        children: [],
+      })),
+      expanded: true,
+    });
   }
 
-  // Radii (distance from parent to child) per depth level
-  const RADII = [145, 125, 105, 90];
-
-  const positions: Record<string, NodePosition> = {
-    [rootId]: { id: rootId, x: cx, y: cy },
-  };
-
-  // Recursively place a node's children within an angular sector [startA, endA]
-  function place(
-    id: string,
-    parentX: number,
-    parentY: number,
-    startA: number,
-    endA: number,
-    depth: number,
-  ): void {
-    const r = RADII[Math.min(depth - 1, RADII.length - 1)];
-    const mid = (startA + endA) / 2;
-    positions[id] = { id, x: parentX + r * Math.cos(mid), y: parentY + r * Math.sin(mid) };
-
-    const kids = treeChildren[id];
-    if (kids.length === 0) return;
-    const total = kids.reduce((s, c) => s + leafCount(c), 0);
-    let a = startA;
-    for (const kid of kids) {
-      const span = (endA - startA) * (leafCount(kid) / total);
-      place(kid, positions[id].x, positions[id].y, a, a + span, depth + 1);
-      a += span;
+  // Uncategorised questions hang directly under the root
+  for (const n of nodes) {
+    if (!assigned.has(n.id)) {
+      rootObj.children!.push({
+        id: n.id,
+        topic: truncate(String(n.title ?? n.content ?? ''), 60),
+        children: [],
+      });
     }
   }
 
-  // Spread root's direct children across the full 360°, starting at the top
-  const rootKids = treeChildren[rootId];
-  if (rootKids.length > 0) {
-    const total = rootKids.reduce((s, c) => s + leafCount(c), 0);
-    let a = -Math.PI / 2;
-    for (const kid of rootKids) {
-      const span = (2 * Math.PI) * (leafCount(kid) / total);
-      place(kid, cx, cy, a, a + span, 1);
-      a += span;
-    }
-  }
-
-  // Disconnected nodes (no edges at all) placed on an outer ring
-  const disconnected = nodes.filter((n) => !visited.has(n.id));
-  disconnected.forEach((n, i) => {
-    const a = (2 * Math.PI * i) / Math.max(disconnected.length, 1) - Math.PI / 2;
-    positions[n.id] = { id: n.id, x: cx + 230 * Math.cos(a), y: cy + 230 * Math.sin(a) };
-  });
-
-  return nodes.map((n) => positions[n.id] ?? { id: n.id, x: cx, y: cy });
+  return { nodeData: rootObj };
 }
 
-// ─── Master Map (View 1) ──────────────────────────────────────────────────────
+// ─── EchoLearn theme for mind-elixir ─────────────────────────────────────────
+
+function buildTheme() {
+  const isDark = document.documentElement.classList.contains('dark') ||
+    window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+  return {
+    name: 'EchoLearn',
+    type: (isDark ? 'dark' : 'light') as 'dark' | 'light',
+    // Branch colours map to EchoLearn's node palette
+    palette: ['#66BB6A', '#FF7043', '#AB47BC', '#FFA726', '#42A5F5'],
+    cssVar: {
+      '--node-gap-x': '20px',
+      '--node-gap-y': '10px',
+      '--main-gap-x': '52px',
+      '--main-gap-y': '14px',
+      '--main-color': '#ffffff',
+      '--main-bgcolor': '#4CAF50',
+      '--main-bgcolor-transparent': 'rgba(76,175,80,0)',
+      '--color': isDark ? '#e0e0e0' : '#1a1a1a',
+      '--bgcolor': isDark ? '#2e2e2e' : '#ffffff',
+      '--selected': '#4CAF50',
+      '--accent-color': '#4CAF50',
+      '--root-color': '#ffffff',
+      '--root-bgcolor': '#388E3C',
+      '--root-border-color': 'transparent',
+      '--root-radius': '12px',
+      '--main-radius': '8px',
+      '--topic-padding': '7px 14px',
+      '--panel-color': isDark ? '#e0e0e0' : '#1a1a1a',
+      '--panel-bgcolor': isDark ? '#2e2e2e' : '#ffffff',
+      '--panel-border-color': isDark ? '#444444' : '#e0e0e0',
+      '--map-padding': '40px',
+    },
+  };
+}
+
+// ─── Master Map (mind-elixir) ─────────────────────────────────────────────────
 
 interface MasterMapProps {
   nodes: Question[];
@@ -133,135 +151,75 @@ interface MasterMapProps {
   onNodeClick: (q: Question) => void;
 }
 
-const NODE_COLORS = [
-  'var(--node-mint)',
-  'var(--node-salmon)',
-  'var(--node-lilac)',
-  'var(--node-peach)',
-  'var(--node-sky)',
-];
-
-// Rounded-rectangle node dimensions
-const NODE_W = 160;
-const NODE_H = 50;
-const ROOT_W = 184;
-const ROOT_H = 56;
-
-// Logical canvas — matches the fixed container height so coordinates map 1:1 to pixels.
-// Width is set larger than the container so deep branches can extend off-screen (user pans).
-const W = 420;
-const H = 460;
-
 function MasterMap({ nodes, edges, onNodeClick }: MasterMapProps) {
-  const svgRef = useRef<SVGSVGElement>(null);
-  const [positions, setPositions] = useState<NodePosition[]>([]);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const instanceRef = useRef<MindElixirInstance | null>(null);
 
-  // Dragging state (pan canvas)
-  const isPanning = useRef(false);
-  const panStart = useRef({ x: 0, y: 0 });
-  const panOrigin = useRef({ x: 0, y: 0 });
+  // Keep a stable ref to the callback so the effect doesn't re-run when it changes
+  const onNodeClickRef = useRef(onNodeClick);
+  useEffect(() => { onNodeClickRef.current = onNodeClick; }, [onNodeClick]);
 
-  // Dragging a node
-  const draggingNodeId = useRef<string | null>(null);
-  const nodeStart = useRef({ x: 0, y: 0 });
+  // Node lookup ref — populated synchronously inside the main effect
+  const nodeMapRef = useRef<Record<string, Question>>({});
 
-  // Recompute layout whenever nodes OR edges change (edges determine the tree structure)
   useEffect(() => {
-    setPositions(mindmapLayout(nodes, edges, W, H));
-  }, [nodes, edges]);
+    if (!containerRef.current) return;
 
-  // Node color by index + identify root (most-connected node)
-  const { colorMap, rootId } = useMemo(() => {
-    const m: Record<string, string> = {};
-    const degree: Record<string, number> = {};
-    for (const n of nodes) degree[n.id] = 0;
-    for (const e of edges) {
-      degree[e.source] = (degree[e.source] ?? 0) + 1;
-      degree[e.target] = (degree[e.target] ?? 0) + 1;
+    // Populate nodeMap synchronously before creating listeners
+    nodeMapRef.current = Object.fromEntries(nodes.map((n) => [n.id, n]));
+
+    if (instanceRef.current) {
+      instanceRef.current.destroy();
+      instanceRef.current = null;
     }
-    let root = nodes[0]?.id ?? null;
-    nodes.forEach((n, i) => {
-      m[n.id] = NODE_COLORS[i % NODE_COLORS.length];
-      if (root !== null && (degree[n.id] ?? 0) > (degree[root] ?? 0)) root = n.id;
+
+    const mei = new MindElixir({
+      el: containerRef.current,
+      direction: MindElixir.SIDE,
+      editable: false,
+      draggable: true,
+      contextMenu: false,
+      toolBar: false,
+      keypress: false,
+      theme: buildTheme(),
     });
-    return { colorMap: m, rootId: root };
+
+    mei.init(buildMindElixirData(nodes));
+
+    // Zoom to 50% and centre after the layout has been painted
+    setTimeout(() => {
+      mei.scale(0.5);
+      mei.toCenter();
+    }, 0);
+
+    // mind-elixir does NOT fire a bus event for regular node clicks.
+    // Instead, each <me-tpc> custom element carries a `.nodeObj` property on the
+    // DOM node itself. We capture clicks at the container level and walk up.
+    const handleClick = (e: MouseEvent) => {
+      const tpc = (e.target as HTMLElement).closest('me-tpc') as (HTMLElement & { nodeObj?: NodeObj }) | null;
+      if (!tpc?.nodeObj) return;
+      const id = tpc.nodeObj.id;
+      if (!id || id.startsWith('cat-') || id === 'root-knowledge') return;
+      const q = nodeMapRef.current[id];
+      if (q) onNodeClickRef.current(q);
+    };
+    containerRef.current.addEventListener('click', handleClick);
+
+    instanceRef.current = mei;
+    const container = containerRef.current;
+
+    return () => {
+      container.removeEventListener('click', handleClick);
+      instanceRef.current?.destroy();
+      instanceRef.current = null;
+    };
   }, [nodes, edges]);
-
-  const posMap = useMemo(() => {
-    const m: Record<string, NodePosition> = {};
-    positions.forEach((p) => (m[p.id] = p));
-    return m;
-  }, [positions]);
-
-  // ── Wheel to zoom ──────────────────────────────────────────────────────────
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    setZoom((z) => Math.max(0.3, Math.min(3, z * delta)));
-  }, []);
-
-  // ── Pointer events for pan / node-drag ────────────────────────────────────
-  const handlePointerDown = useCallback(
-    (e: React.PointerEvent<SVGSVGElement>) => {
-      const target = e.target as SVGElement;
-      const nodeId = target.closest('[data-node-id]')?.getAttribute('data-node-id');
-
-      if (nodeId) {
-        draggingNodeId.current = nodeId;
-        nodeStart.current = { x: e.clientX, y: e.clientY };
-        (e.target as Element).setPointerCapture(e.pointerId);
-      } else {
-        isPanning.current = true;
-        panStart.current = { x: e.clientX, y: e.clientY };
-        panOrigin.current = { ...pan };
-        (e.target as Element).setPointerCapture(e.pointerId);
-      }
-    },
-    [pan],
-  );
-
-  const handlePointerMove = useCallback(
-    (e: React.PointerEvent<SVGSVGElement>) => {
-      if (draggingNodeId.current) {
-        const dx = (e.clientX - nodeStart.current.x) / zoom;
-        const dy = (e.clientY - nodeStart.current.y) / zoom;
-        nodeStart.current = { x: e.clientX, y: e.clientY };
-        setPositions((prev) =>
-          prev.map((p) =>
-            p.id === draggingNodeId.current ? { ...p, x: p.x + dx, y: p.y + dy } : p,
-          ),
-        );
-      } else if (isPanning.current) {
-        const dx = e.clientX - panStart.current.x;
-        const dy = e.clientY - panStart.current.y;
-        setPan({ x: panOrigin.current.x + dx, y: panOrigin.current.y + dy });
-      }
-    },
-    [zoom],
-  );
-
-  const handlePointerUp = useCallback(() => {
-    draggingNodeId.current = null;
-    isPanning.current = false;
-  }, []);
-
-  const handleNodeClick = useCallback(
-    (e: React.MouseEvent, q: Question) => {
-      e.stopPropagation();
-      setSelectedId((prev) => (prev === q.id ? null : q.id));
-      onNodeClick(q);
-    },
-    [onNodeClick],
-  );
 
   if (nodes.length === 0) {
     return (
       <div
         style={{
-          flex: 1,
+          height: '460px',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -270,6 +228,9 @@ function MasterMap({ nodes, edges, onNodeClick }: MasterMapProps) {
           color: 'var(--muted-foreground)',
           padding: '40px',
           textAlign: 'center',
+          borderRadius: 'var(--radius-xl)',
+          border: '1px solid var(--border)',
+          backgroundColor: 'var(--surface-variant)',
         }}
       >
         <GitBranch size={48} style={{ opacity: 0.3 }} />
@@ -279,182 +240,30 @@ function MasterMap({ nodes, edges, onNodeClick }: MasterMapProps) {
     );
   }
 
-  const transform = `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`;
-  // Zoom origin fixed at canvas centre so zoom/unzoom stays centred on the mindmap
-  const transformOrigin = `${W / 2}px ${H / 2}px`;
-
   return (
-    // Fix #3: explicit fixed height so the grey background and SVG always match exactly
     <div
       style={{
         height: '460px',
-        overflow: 'hidden',
         borderRadius: 'var(--radius-xl)',
         border: '1px solid var(--border)',
+        overflow: 'hidden',
         backgroundColor: 'var(--surface-variant)',
-        position: 'relative',
-        cursor: 'grab',
       }}
     >
-      <svg
-        ref={svgRef}
-        width="100%"
-        height="100%"
-        style={{ display: 'block' }}
-        onWheel={handleWheel}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerUp}
-      >
-        <g style={{ transform, transformOrigin, transition: 'none' }}>
-          {/* Edges — rendered first so node rects overlay the line ends cleanly */}
-          {edges.map((edge) => {
-            const src = posMap[edge.source];
-            const tgt = posMap[edge.target];
-            if (!src || !tgt) return null;
-            const thickness = 1 + Math.min(edge.weight, 5) * 0.5;
-            return (
-              <line
-                key={`${edge.source}-${edge.target}`}
-                x1={src.x}
-                y1={src.y}
-                x2={tgt.x}
-                y2={tgt.y}
-                stroke="var(--muted-foreground)"
-                strokeWidth={thickness}
-                strokeOpacity={0.3}
-              />
-            );
-          })}
-
-          {/* Nodes — Fix #2: rounded rectangles instead of circles */}
-          {nodes.map((node) => {
-            const pos = posMap[node.id];
-            if (!pos) return null;
-            const color = colorMap[node.id];
-            const isSelected = selectedId === node.id;
-            const isRoot = node.id === rootId;
-            const nw = isRoot ? ROOT_W : NODE_W;
-            const nh = isRoot ? ROOT_H : NODE_H;
-            // Truncate to keep text within ~2 lines inside the rect
-            const rawLabel = node.title ?? node.content;
-            const label = rawLabel.length > 62 ? rawLabel.slice(0, 59) + '…' : rawLabel;
-
-            return (
-              <g
-                key={node.id}
-                data-node-id={node.id}
-                onClick={(e) => handleNodeClick(e, node)}
-                style={{ cursor: 'pointer' }}
-              >
-                {/* Selection / root glow ring */}
-                {(isSelected || isRoot) && (
-                  <rect
-                    x={pos.x - nw / 2 - 5}
-                    y={pos.y - nh / 2 - 5}
-                    width={nw + 10}
-                    height={nh + 10}
-                    rx={14}
-                    fill={color}
-                    fillOpacity={isSelected ? 0.28 : 0.18}
-                  />
-                )}
-                {/* Node body */}
-                <rect
-                  x={pos.x - nw / 2}
-                  y={pos.y - nh / 2}
-                  width={nw}
-                  height={nh}
-                  rx={10}
-                  fill={color}
-                  fillOpacity={isRoot ? 1 : 0.88}
-                  stroke={isSelected ? 'white' : isRoot ? 'rgba(255,255,255,0.6)' : 'none'}
-                  strokeWidth={isSelected ? 2.5 : isRoot ? 1.5 : 0}
-                />
-                {/* Label inside the rect */}
-                <foreignObject
-                  x={pos.x - nw / 2}
-                  y={pos.y - nh / 2}
-                  width={nw}
-                  height={nh}
-                  style={{ pointerEvents: 'none' }}
-                >
-                  <div
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      padding: '4px 10px',
-                      boxSizing: 'border-box',
-                      textAlign: 'center',
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: isRoot ? '0.72rem' : '0.65rem',
-                        fontWeight: 700,
-                        color: 'white',
-                        lineHeight: 1.3,
-                        overflow: 'hidden',
-                        maxHeight: `${nh - 10}px`,
-                        wordBreak: 'break-word',
-                      }}
-                    >
-                      {label}
-                    </span>
-                  </div>
-                </foreignObject>
-              </g>
-            );
-          })}
-        </g>
-      </svg>
-
-      {/* Zoom controls */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: '12px',
-          right: '12px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '4px',
-        }}
-      >
-        {[
-          { label: '+', delta: 1.2 },
-          { label: '−', delta: 0.8 },
-        ].map(({ label, delta }) => (
-          <button
-            key={label}
-            onClick={() => setZoom((z) => Math.max(0.3, Math.min(3, z * delta)))}
-            style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '8px',
-              border: '1px solid var(--border)',
-              backgroundColor: 'var(--surface)',
-              color: 'var(--foreground)',
-              fontWeight: 700,
-              fontSize: '1rem',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
     </div>
   );
 }
 
 // ─── Card Stack Inbox (View 2) ────────────────────────────────────────────────
+
+const NODE_COLORS = [
+  'var(--node-mint)',
+  'var(--node-salmon)',
+  'var(--node-lilac)',
+  'var(--node-peach)',
+  'var(--node-sky)',
+];
 
 interface CardStackInboxProps {
   unlinked: Question[];
@@ -470,118 +279,131 @@ function CardStackInbox({ unlinked, allNodes, onLink, onCreateDomain, onClose }:
   const [dragging, setDragging] = useState(false);
   const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [dropTarget, setDropTarget] = useState<string | null>(null); // node id or 'new-domain'
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  // Hierarchical drill-down
+  const [currentParentId, setCurrentParentId] = useState<string | null>(null);
+  const [navHistory, setNavHistory] = useState<Array<string | null>>([]);
+  // New branch modal
+  const [branchModalSourceId, setBranchModalSourceId] = useState<string | null>(null);
+  const [branchName, setBranchName] = useState('');
   const cardRef = useRef<HTMLDivElement>(null);
   const dropZoneRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  // 800 ms hover-to-drill timer
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastHoveredRef = useRef<string | null>(null);
 
   const activeNode = unlinked[stackIndex] ?? null;
 
-  // Refresh recommendations when active node changes
+  const currentParentName = currentParentId
+    ? (allNodes.find((n) => n.id === currentParentId)?.title ?? allNodes.find((n) => n.id === currentParentId)?.content ?? 'Parent')
+    : null;
+
+  // Build bucket list: children of currentParent padded with similar nodes to reach 4
   useEffect(() => {
     if (!activeNode) return;
-    const recs = graphService.getSimilarNodes(activeNode.id, 4);
-    // If not enough, pad with random unrelated nodes
-    if (recs.length < 3) {
-      const extras = allNodes
-        .filter((n) => n.id !== activeNode.id && !recs.find((r) => r.id === n.id))
-        .slice(0, 4 - recs.length);
-      setRecommended([...recs, ...extras]);
-    } else {
-      setRecommended(recs.slice(0, 4));
+    const children = graphService.getChildren(currentParentId).filter((n) => n.id !== activeNode.id);
+    if (children.length >= 4) {
+      setRecommended(children.slice(0, 4));
+      return;
     }
-  }, [activeNode, allNodes]);
+    const similar = graphService.getSimilarNodes(activeNode.id, 4)
+      .filter((n) => !children.find((c) => c.id === n.id));
+    setRecommended([...children, ...similar].slice(0, 4));
+  }, [activeNode, allNodes, currentParentId]);
 
   const refreshRecommendations = () => {
     if (!activeNode) return;
-    const allRecs = graphService.getSimilarNodes(activeNode.id, allNodes.length);
-    const shuffled = [...allRecs].sort(() => Math.random() - 0.5);
-    setRecommended(shuffled.slice(0, 4));
+    const children = graphService.getChildren(currentParentId).filter((n) => n.id !== activeNode.id);
+    const allSimilar = graphService.getSimilarNodes(activeNode.id, allNodes.length)
+      .filter((n) => !children.find((c) => c.id === n.id));
+    const shuffled = [...allSimilar].sort(() => Math.random() - 0.5);
+    setRecommended([...children, ...shuffled].slice(0, 4));
   };
 
-  // ── Drag handling ──────────────────────────────────────────────────────────
+  const drillInto = (nodeId: string) => {
+    setNavHistory((h) => [...h, currentParentId]);
+    setCurrentParentId(nodeId);
+  };
+
+  const drillBack = () => {
+    const prev = navHistory[navHistory.length - 1] ?? null;
+    setNavHistory((h) => h.slice(0, -1));
+    setCurrentParentId(prev);
+  };
+
   const handleDragStart = (e: React.PointerEvent<HTMLDivElement>) => {
     setDragging(true);
     setDragStart({ x: e.clientX, y: e.clientY });
     setDragPos({ x: 0, y: 0 });
     setDropTarget(null);
+    lastHoveredRef.current = null;
     (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
   };
 
   const handleDragMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!dragging) return;
-    const dx = e.clientX - dragStart.x;
-    const dy = e.clientY - dragStart.y;
-    setDragPos({ x: dx, y: dy });
-
-    // Check overlap with drop targets
+    setDragPos({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
     let found: string | null = null;
     for (const [key, el] of Object.entries(dropZoneRefs.current)) {
       if (!el) continue;
       const rect = el.getBoundingClientRect();
-      if (
-        e.clientX >= rect.left &&
-        e.clientX <= rect.right &&
-        e.clientY >= rect.top &&
-        e.clientY <= rect.bottom
-      ) {
+      if (e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom) {
         found = key;
         break;
       }
     }
     setDropTarget(found);
+
+    // 800 ms hover-to-drill: if hovering a node bucket (not special zones), drill into it
+    if (found !== lastHoveredRef.current) {
+      if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
+      lastHoveredRef.current = found;
+      if (found && found !== 'new-domain' && found !== 'back') {
+        hoverTimerRef.current = setTimeout(() => { drillInto(found); }, 800);
+      }
+    }
   };
 
   const handleDragEnd = async () => {
+    if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
     if (!dragging || !activeNode) return;
     setDragging(false);
     setDragPos({ x: 0, y: 0 });
+    const target = dropTarget;
+    setDropTarget(null);
+    lastHoveredRef.current = null;
 
-    if (dropTarget === 'new-domain') {
-      onCreateDomain(activeNode.id);
-      advanceStack();
-    } else if (dropTarget) {
-      await onLink(activeNode.id, dropTarget);
+    if (target === 'new-domain') {
+      setBranchModalSourceId(activeNode.id);
+      setBranchName(activeNode.title ?? activeNode.content.slice(0, 40));
+    } else if (target === 'back') {
+      drillBack();
+    } else if (target) {
+      graphService.moveToParent(activeNode.id, target);
+      await onLink(activeNode.id, target);
       advanceStack();
     }
-    setDropTarget(null);
   };
 
-  const advanceStack = () => {
-    setStackIndex((i) => i + 1);
+  const handleBranchConfirm = () => {
+    if (!branchModalSourceId) return;
+    const trimmed = branchName.trim();
+    if (trimmed) graphService.moveToParent(branchModalSourceId, currentParentId);
+    onCreateDomain(branchModalSourceId);
+    setBranchModalSourceId(null);
+    setBranchName('');
+    advanceStack();
   };
+
+  const advanceStack = () => setStackIndex((i) => i + 1);
 
   if (!activeNode) {
     return (
-      <div
-        style={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '12px',
-          padding: '32px',
-          textAlign: 'center',
-        }}
-      >
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px', padding: '32px', textAlign: 'center' }}>
         <p style={{ fontSize: '2rem' }}>✅</p>
         <p style={{ fontWeight: 700, fontSize: '1.1rem' }}>All nodes linked!</p>
-        <p style={{ color: 'var(--muted-foreground)', fontSize: '0.875rem' }}>
-          Your knowledge graph is fully connected.
-        </p>
-        <button
-          onClick={onClose}
-          style={{
-            marginTop: '12px',
-            padding: '10px 28px',
-            borderRadius: '100px',
-            backgroundColor: 'var(--primary-40)',
-            color: 'white',
-            fontWeight: 600,
-            border: 'none',
-            cursor: 'pointer',
-          }}
-        >
+        <p style={{ color: 'var(--muted-foreground)', fontSize: '0.875rem' }}>Your knowledge graph is fully connected.</p>
+        <button onClick={onClose} style={{ marginTop: '12px', padding: '10px 28px', borderRadius: '100px', backgroundColor: 'var(--primary-40)', color: 'white', fontWeight: 600, border: 'none', cursor: 'pointer' }}>
           Back to Graph
         </button>
       </div>
@@ -592,54 +414,53 @@ function CardStackInbox({ unlinked, allNodes, onLink, onCreateDomain, onClose }:
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '16px', padding: '0 0 16px' }}>
-      {/* Header */}
+      {/* New branch name modal */}
+      {branchModalSourceId && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 300, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+          <div style={{ backgroundColor: 'var(--surface)', borderRadius: 'var(--radius-xl)', padding: '24px', width: '100%', maxWidth: '340px', boxShadow: 'var(--shadow-3)' }}>
+            <p style={{ fontWeight: 700, fontSize: '1.05rem', marginBottom: '6px' }}>Create New Domain</p>
+            <p style={{ fontSize: '0.8rem', color: 'var(--muted-foreground)', marginBottom: '16px' }}>Name this root concept. It will anchor a new branch in your knowledge graph.</p>
+            <input
+              autoFocus
+              value={branchName}
+              onChange={(e) => setBranchName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleBranchConfirm(); }}
+              placeholder="e.g. Machine Learning, Physics…"
+              style={{ width: '100%', padding: '10px 14px', borderRadius: 'var(--radius)', border: '1.5px solid var(--border)', backgroundColor: 'var(--surface-variant)', color: 'var(--foreground)', fontSize: '0.95rem', marginBottom: '16px', boxSizing: 'border-box' }}
+            />
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={() => { setBranchModalSourceId(null); setBranchName(''); }} style={{ flex: 1, padding: '10px', borderRadius: '100px', border: '1px solid var(--border)', backgroundColor: 'transparent', color: 'var(--muted-foreground)', fontSize: '0.875rem', cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button onClick={handleBranchConfirm} style={{ flex: 1, padding: '10px', borderRadius: '100px', backgroundColor: 'var(--primary-40)', color: 'white', fontWeight: 600, fontSize: '0.875rem', border: 'none', cursor: 'pointer' }}>
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <p style={{ fontWeight: 700, fontSize: '1rem' }}>Classify Nodes</p>
-          <p style={{ fontSize: '0.8rem', color: 'var(--muted-foreground)' }}>
-            {remaining} unlinked remaining
-          </p>
+          {currentParentName ? (
+            <p style={{ fontSize: '0.8rem', color: 'var(--primary-40)', fontWeight: 600 }}>
+              Inside: {currentParentName}
+            </p>
+          ) : (
+            <p style={{ fontSize: '0.8rem', color: 'var(--muted-foreground)' }}>{remaining} unlinked remaining</p>
+          )}
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            onClick={refreshRecommendations}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 14px',
-              borderRadius: '100px',
-              border: '1px solid var(--border)',
-              backgroundColor: 'var(--surface-variant)',
-              color: 'var(--foreground)',
-              fontSize: '0.8rem',
-              cursor: 'pointer',
-            }}
-          >
-            <RefreshCw size={14} />
-            Shuffle
+          <button onClick={refreshRecommendations} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '100px', border: '1px solid var(--border)', backgroundColor: 'var(--surface-variant)', color: 'var(--foreground)', fontSize: '0.8rem', cursor: 'pointer' }}>
+            <RefreshCw size={14} /> Shuffle
           </button>
-          <button
-            onClick={onClose}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '36px',
-              height: '36px',
-              borderRadius: '50%',
-              border: '1px solid var(--border)',
-              backgroundColor: 'var(--surface-variant)',
-              color: 'var(--foreground)',
-              cursor: 'pointer',
-            }}
-          >
+          <button onClick={onClose} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '50%', border: '1px solid var(--border)', backgroundColor: 'var(--surface-variant)', color: 'var(--foreground)', cursor: 'pointer' }}>
             <X size={16} />
           </button>
         </div>
       </div>
 
-      {/* Active node card (draggable) */}
       <div style={{ position: 'relative', zIndex: 10 }}>
         <div
           ref={cardRef}
@@ -659,73 +480,48 @@ function CardStackInbox({ unlinked, allNodes, onLink, onCreateDomain, onClose }:
             touchAction: 'none',
           }}
         >
-          <p style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--muted-foreground)', marginBottom: '8px', letterSpacing: '0.08em' }}>
-            DRAG TO LINK
-          </p>
-          <p style={{ fontWeight: 700, fontSize: '1.05rem', marginBottom: '6px', color: 'var(--foreground)' }}>
-            {activeNode.title ?? activeNode.content}
-          </p>
+          <p style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--muted-foreground)', marginBottom: '8px', letterSpacing: '0.08em' }}>DRAG TO LINK</p>
+          <p style={{ fontWeight: 700, fontSize: '1.05rem', marginBottom: '6px', color: 'var(--foreground)' }}>{activeNode.title ?? activeNode.content}</p>
           {activeNode.keywords.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px' }}>
               {activeNode.keywords.slice(0, 4).map((k) => (
-                <span
-                  key={k}
-                  style={{
-                    fontSize: '0.7rem',
-                    padding: '2px 8px',
-                    borderRadius: '100px',
-                    backgroundColor: 'var(--surface-variant)',
-                    color: 'var(--muted-foreground)',
-                    border: '1px solid var(--border)',
-                  }}
-                >
-                  {k}
-                </span>
+                <span key={k} style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '100px', backgroundColor: 'var(--surface-variant)', color: 'var(--muted-foreground)', border: '1px solid var(--border)' }}>{k}</span>
               ))}
             </div>
           )}
         </div>
-
-        {/* Stack shadow cards */}
         {remaining > 1 && (
-          <div
-            style={{
-              position: 'absolute',
-              top: '6px',
-              left: '8px',
-              right: '8px',
-              height: '100%',
-              borderRadius: 'var(--radius-xl)',
-              backgroundColor: 'var(--surface-variant)',
-              border: '1px solid var(--border)',
-              zIndex: -1,
-              opacity: 0.6,
-            }}
-          />
+          <div style={{ position: 'absolute', top: '6px', left: '8px', right: '8px', height: '100%', borderRadius: 'var(--radius-xl)', backgroundColor: 'var(--surface-variant)', border: '1px solid var(--border)', zIndex: -1, opacity: 0.6 }} />
         )}
         {remaining > 2 && (
-          <div
-            style={{
-              position: 'absolute',
-              top: '12px',
-              left: '16px',
-              right: '16px',
-              height: '100%',
-              borderRadius: 'var(--radius-xl)',
-              backgroundColor: 'var(--surface-variant)',
-              border: '1px solid var(--border)',
-              zIndex: -2,
-              opacity: 0.35,
-            }}
-          />
+          <div style={{ position: 'absolute', top: '12px', left: '16px', right: '16px', height: '100%', borderRadius: 'var(--radius-xl)', backgroundColor: 'var(--surface-variant)', border: '1px solid var(--border)', zIndex: -2, opacity: 0.35 }} />
         )}
       </div>
 
-      {/* Recommended nodes grid (drop targets) */}
+      {/* Breadcrumb "Back" drop-zone — visible when drilled into a node */}
+      {navHistory.length > 0 && (
+        <div
+          ref={(el) => { dropZoneRefs.current['back'] = el; }}
+          onClick={drillBack}
+          style={{
+            padding: '10px 16px',
+            borderRadius: 'var(--radius-xl)',
+            border: `2px solid ${dropTarget === 'back' ? 'var(--primary-40)' : 'var(--border)'}`,
+            backgroundColor: dropTarget === 'back' ? 'color-mix(in srgb, var(--primary-40) 12%, var(--surface))' : 'var(--surface-variant)',
+            display: 'flex', alignItems: 'center', gap: '8px',
+            cursor: 'pointer', transition: 'all 0.15s',
+            transform: dropTarget === 'back' ? 'scale(1.02)' : 'scale(1)',
+          }}
+        >
+          <span style={{ fontSize: '1.1rem' }}>↖</span>
+          <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--foreground)' }}>
+            Back to {navHistory.length === 1 ? 'Root' : (allNodes.find((n) => n.id === navHistory[navHistory.length - 1])?.title ?? 'Parent')}
+          </span>
+        </div>
+      )}
+
       <div>
-        <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--muted-foreground)', marginBottom: '8px' }}>
-          Drop onto an existing concept to link:
-        </p>
+        <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--muted-foreground)', marginBottom: '8px' }}>Drop onto an existing concept to link:</p>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
           {recommended.map((node, idx) => {
             const isTarget = dropTarget === node.id;
@@ -736,27 +532,16 @@ function CardStackInbox({ unlinked, allNodes, onLink, onCreateDomain, onClose }:
                 style={{
                   padding: '12px',
                   borderRadius: 'var(--radius-xl)',
-                  backgroundColor: isTarget
-                    ? 'color-mix(in srgb, var(--primary-40) 20%, var(--surface-variant))'
-                    : 'var(--surface-variant)',
+                  backgroundColor: isTarget ? 'color-mix(in srgb, var(--primary-40) 20%, var(--surface-variant))' : 'var(--surface-variant)',
                   border: `2px solid ${isTarget ? 'var(--primary-40)' : 'var(--border)'}`,
                   transition: 'all 0.15s',
-                  transform: isTarget ? 'scale(1.05)' : 'scale(1)',
+                  transform: isTarget ? 'scale(1.08)' : 'scale(1)',
+                  boxShadow: isTarget ? '0 0 0 3px color-mix(in srgb, var(--primary-40) 25%, transparent)' : 'none',
                 }}
               >
-                <div
-                  style={{
-                    width: '10px',
-                    height: '10px',
-                    borderRadius: '50%',
-                    backgroundColor: NODE_COLORS[idx % NODE_COLORS.length],
-                    marginBottom: '6px',
-                  }}
-                />
+                <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: NODE_COLORS[idx % NODE_COLORS.length], marginBottom: '6px' }} />
                 <p style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--foreground)', lineHeight: 1.3 }}>
-                  {(node.title ?? node.content).length > 40
-                    ? (node.title ?? node.content).slice(0, 37) + '…'
-                    : node.title ?? node.content}
+                  {(node.title ?? node.content).length > 40 ? (node.title ?? node.content).slice(0, 37) + '…' : node.title ?? node.content}
                 </p>
               </div>
             );
@@ -764,17 +549,13 @@ function CardStackInbox({ unlinked, allNodes, onLink, onCreateDomain, onClose }:
         </div>
       </div>
 
-      {/* New Domain drop zone */}
       <div
         ref={(el) => { dropZoneRefs.current['new-domain'] = el; }}
         style={{
           padding: '16px',
           borderRadius: 'var(--radius-xl)',
           border: `2px dashed ${dropTarget === 'new-domain' ? 'var(--primary-40)' : 'var(--border)'}`,
-          backgroundColor:
-            dropTarget === 'new-domain'
-              ? 'color-mix(in srgb, var(--primary-40) 10%, var(--surface))'
-              : 'transparent',
+          backgroundColor: dropTarget === 'new-domain' ? 'color-mix(in srgb, var(--primary-40) 10%, var(--surface))' : 'transparent',
           display: 'flex',
           alignItems: 'center',
           gap: '10px',
@@ -784,29 +565,12 @@ function CardStackInbox({ unlinked, allNodes, onLink, onCreateDomain, onClose }:
       >
         <Plus size={20} color="var(--muted-foreground)" />
         <div>
-          <p style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--foreground)' }}>
-            New Domain / Category
-          </p>
-          <p style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)' }}>
-            Drop here to create a root node
-          </p>
+          <p style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--foreground)' }}>New Domain / Category</p>
+          <p style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)' }}>Drop here to create a root node</p>
         </div>
       </div>
 
-      {/* Skip button */}
-      <button
-        onClick={advanceStack}
-        style={{
-          width: '100%',
-          padding: '10px',
-          borderRadius: '100px',
-          border: '1px solid var(--border)',
-          backgroundColor: 'transparent',
-          color: 'var(--muted-foreground)',
-          fontSize: '0.875rem',
-          cursor: 'pointer',
-        }}
-      >
+      <button onClick={advanceStack} style={{ width: '100%', padding: '10px', borderRadius: '100px', border: '1px solid var(--border)', backgroundColor: 'transparent', color: 'var(--muted-foreground)', fontSize: '0.875rem', cursor: 'pointer' }}>
         Skip for now
       </button>
     </div>
@@ -816,6 +580,7 @@ function CardStackInbox({ unlinked, allNodes, onLink, onCreateDomain, onClose }:
 // ─── Graph Screen ─────────────────────────────────────────────────────────────
 
 export function GraphScreen() {
+  const navigate = useNavigate();
   const [view, setView] = useState<'map' | 'inbox'>('map');
   const [nodes, setNodes] = useState<Question[]>([]);
   const [edges, setEdges] = useState<GraphEdge[]>([]);
@@ -826,14 +591,11 @@ export function GraphScreen() {
     void graphService.getGraph().then(({ nodes: n, edges: e }) => {
       setNodes(n);
       setEdges(e);
-      // Bug #5: getUnlinkedNodes must run after getGraph resolves to see updated edges
       setUnlinked(graphService.getUnlinkedNodes());
     });
   }, []);
 
-  useEffect(() => {
-    reload();
-  }, [reload]);
+  useEffect(() => { reload(); }, [reload]);
 
   const handleLink = useCallback(
     async (sourceId: string, targetId: string) => {
@@ -846,7 +608,6 @@ export function GraphScreen() {
 
   const handleCreateDomain = useCallback(
     (sourceId: string) => {
-      // Mark it as a root node by giving it an empty categoryIds placeholder
       toast(`"${nodes.find((n) => n.id === sourceId)?.title ?? 'Node'}" set as root.`, 'success');
       reload();
     },
@@ -854,17 +615,7 @@ export function GraphScreen() {
   );
 
   return (
-    <div
-      style={{
-        padding: '24px 16px 16px',
-        maxWidth: '448px',
-        margin: '0 auto',
-        display: 'flex',
-        flexDirection: 'column',
-        minHeight: 'calc(100vh - 80px)',
-        gap: '16px',
-      }}
-    >
+    <div style={{ padding: '24px 16px 16px', maxWidth: '448px', margin: '0 auto', display: 'flex', flexDirection: 'column', minHeight: 'calc(100vh - 80px)', gap: '16px' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
@@ -873,24 +624,10 @@ export function GraphScreen() {
             {nodes.length} nodes · {edges.length} connections
           </p>
         </div>
-
         {unlinked.length > 0 && view === 'map' && (
           <button
             onClick={() => setView('inbox')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 16px',
-              borderRadius: '100px',
-              backgroundColor: 'var(--primary-40)',
-              color: 'white',
-              fontWeight: 600,
-              fontSize: '0.8rem',
-              border: 'none',
-              cursor: 'pointer',
-              boxShadow: 'var(--shadow-1)',
-            }}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '100px', backgroundColor: 'var(--primary-40)', color: 'white', fontWeight: 600, fontSize: '0.8rem', border: 'none', cursor: 'pointer', boxShadow: 'var(--shadow-1)' }}
           >
             <Plus size={14} />
             {unlinked.length} Unlinked
@@ -902,59 +639,38 @@ export function GraphScreen() {
         <>
           <MasterMap nodes={nodes} edges={edges} onNodeClick={setSelectedNode} />
 
-          {/* Selected node detail */}
           {selectedNode && (
             <div
-              style={{
-                padding: '16px',
-                borderRadius: 'var(--radius-xl)',
-                backgroundColor: 'var(--surface-variant)',
-                border: '1px solid var(--border)',
-                animation: 'fade-in 0.2s ease',
-              }}
+              onClick={() => navigate(`/ask/${selectedNode.id}`)}
+              style={{ padding: '16px', borderRadius: 'var(--radius-xl)', backgroundColor: 'var(--surface-variant)', border: '1px solid var(--border)', animation: 'fade-in 0.2s ease', cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' }}
+              onPointerEnter={(e) => { e.currentTarget.style.transform = 'scale(1.01)'; e.currentTarget.style.boxShadow = 'var(--shadow-2)'; }}
+              onPointerLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <p style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--foreground)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                <p style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--foreground)', flex: 1 }}>
                   {selectedNode.title ?? selectedNode.content}
                 </p>
-                <button
-                  onClick={() => setSelectedNode(null)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: 'var(--muted-foreground)',
-                    padding: '0 0 0 8px',
-                  }}
-                >
+                <button onClick={(e) => { e.stopPropagation(); setSelectedNode(null); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-foreground)', padding: '0 0 0 8px' }}>
                   <X size={16} />
                 </button>
               </div>
-              <p style={{ fontSize: '0.8rem', color: 'var(--muted-foreground)', lineHeight: 1.5 }}>
-                {selectedNode.summary}
-              </p>
+              <p style={{ fontSize: '0.8rem', color: 'var(--muted-foreground)', lineHeight: 1.5 }}>{selectedNode.summary}</p>
               {selectedNode.keywords.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px' }}>
                   {selectedNode.keywords.map((k) => (
-                    <span
-                      key={k}
-                      style={{
-                        fontSize: '0.7rem',
-                        padding: '2px 8px',
-                        borderRadius: '100px',
-                        backgroundColor: 'var(--surface)',
-                        color: 'var(--muted-foreground)',
-                        border: '1px solid var(--border)',
-                      }}
-                    >
-                      {k}
-                    </span>
+                    <span key={k} style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '100px', backgroundColor: 'var(--surface)', color: 'var(--muted-foreground)', border: '1px solid var(--border)' }}>{k}</span>
                   ))}
                 </div>
               )}
-              <p style={{ fontSize: '0.72rem', color: 'var(--muted-foreground)', marginTop: '8px' }}>
-                {selectedNode.relatedQuestionIds.length} connections
-              </p>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px' }}>
+                <p style={{ fontSize: '0.72rem', color: 'var(--muted-foreground)' }}>
+                  {selectedNode.relatedQuestionIds.length} connections
+                </p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: 'var(--primary-40)', fontWeight: 600 }}>
+                  <span>View details</span>
+                  <ChevronRight size={14} />
+                </div>
+              </div>
             </div>
           )}
         </>

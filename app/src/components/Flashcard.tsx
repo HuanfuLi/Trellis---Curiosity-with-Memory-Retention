@@ -116,8 +116,8 @@ export function Flashcard({ front, back, onRate, pinned, onTogglePin }: Flashcar
             fontWeight: 500,
             transition: 'transform 0.2s',
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.02)')}
-          onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+          onPointerEnter={(e) => (e.currentTarget.style.transform = 'scale(1.02)')}
+          onPointerLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
         >
           Show Answer
         </button>
@@ -150,8 +150,8 @@ export function Flashcard({ front, back, onRate, pinned, onTogglePin }: Flashcar
                     boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
                     transition: 'transform 0.2s',
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.1)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                  onPointerEnter={(e) => (e.currentTarget.style.transform = 'scale(1.1)')}
+                  onPointerLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
                 >
                   {rating.label}
                 </button>

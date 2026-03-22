@@ -159,10 +159,16 @@ export async function getDB(): Promise<DBBackend> {
   if (backend) return backend;
   if (initPromise) { await initPromise; return backend!; }
 
-  backend = Capacitor.isNativePlatform() ? new SQLiteBackend() : new LocalStorageBackend();
-  initPromise = backend.init();
+  const candidate = Capacitor.isNativePlatform() ? new SQLiteBackend() : new LocalStorageBackend();
+  initPromise = candidate.init().then(() => {
+    backend = candidate;
+  }).catch((err) => {
+    // Reset so callers can retry after a transient failure
+    initPromise = null;
+    throw err;
+  });
   await initPromise;
-  return backend;
+  return backend!;
 }
 
 // ─── Convenience helpers ──────────────────────────────────────────────────────
@@ -175,4 +181,14 @@ export async function dbExecute(sql: string, values?: (string | number | null)[]
 export async function dbQuery<T extends Row>(sql: string, values?: (string | number | null)[]): Promise<T[]> {
   const db = await getDB();
   return db.query<T>(sql, values);
+}
+
+/** Wipe all known application tables. Called by "Clear All Data" in Settings. */
+export async function clearAllTables(): Promise<void> {
+  try {
+    await dbExecute('DELETE FROM questions');
+    await dbExecute('DELETE FROM edge_weights');
+  } catch {
+    // DB may not be available (e.g. tables not yet created) — silently ignore
+  }
 }

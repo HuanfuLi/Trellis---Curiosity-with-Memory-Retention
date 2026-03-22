@@ -1,18 +1,20 @@
-import type { LLMConfig } from '../../types';
+function timeoutSignal(ms: number): AbortSignal {
+  const ac = new AbortController();
+  const id = setTimeout(() => ac.abort(new DOMException(`Request timed out after ${ms / 1000}s`, 'TimeoutError')), ms);
+  ac.signal.addEventListener('abort', () => clearTimeout(id), { once: true });
+  return ac.signal;
+}
 
 /**
  * Transcribe audio using OpenAI Whisper (/v1/audio/transcriptions).
- * Works with any OpenAI-compatible endpoint that supports the Whisper API.
+ * Uses the TTS API key/base URL — both STT and TTS share the same OpenAI credentials.
  */
-export async function transcribeAudio(audioBlob: Blob, config: LLMConfig): Promise<string> {
-  if (!config.apiKey) throw new Error('No API key configured. Add your OpenAI key in Settings.');
+export async function transcribeAudio(audioBlob: Blob, config: { apiKey?: string; baseUrl?: string }): Promise<string> {
+  if (!config.apiKey) throw new Error('No API key configured. Add your OpenAI key in Text-to-Speech & Speech Recognition settings.');
 
-  // Always hit openai.com for Whisper unless the user has overridden the base URL
-  // (local OpenAI-compatible servers that support Whisper will also work).
   const baseUrl = (config.baseUrl?.replace(/\/$/, '')) || 'https://api.openai.com';
 
   const formData = new FormData();
-  // The file name extension tells Whisper the codec — webm is broadly supported.
   formData.append('file', audioBlob, 'recording.webm');
   formData.append('model', 'whisper-1');
   formData.append('response_format', 'json');
@@ -21,6 +23,7 @@ export async function transcribeAudio(audioBlob: Blob, config: LLMConfig): Promi
     method: 'POST',
     headers: { Authorization: `Bearer ${config.apiKey}` },
     body: formData,
+    signal: timeoutSignal(60_000),
   });
 
   if (!res.ok) {
