@@ -18,6 +18,17 @@ export interface Question {
   embedding?: number[];
   reviewSchedule: ReviewSchedule;
   createdAt: number;
+  aliases?: string[];
+  sourcePrompts?: string[];
+  sourceQuestionIds?: string[];
+  rootLabel?: string;
+  branchLabel?: string;
+  clusterLabel?: string;
+  nodeSummary?: string;
+  placementReason?: string;
+  lastReviewedAt?: number;
+  pinned?: boolean;
+  coCreationSignals?: Partial<Record<StructuralSignalType, number>> & { lastSignalAt?: number };
 }
 
 /** A milestone or trivia card injected into the Info Flow every ~5 items. */
@@ -189,6 +200,97 @@ export interface FlashCard {
   createdAt: number;
   pinned?: boolean;         // if true, appears in review queue every day
   reviewSchedule: ReviewSchedule;
+  nodeId?: string;
+  nodeTitle?: string;
+  rootLabel?: string;
+  branchLabel?: string;
+  clusterLabel?: string;
+  placementReason?: string;
+  sourceType?: 'canonical' | 'legacy';
+}
+
+export type StructuralSignalType = 'sameIdea' | 'connect' | 'refine';
+
+export interface KnowledgeNode {
+  id: string;
+  title: string;
+  content: string;
+  answer: string;
+  summary: string;
+  storyHook?: string;
+  keywords: string[];
+  relatedQuestionIds: string[];
+  parentId?: string;
+  aliases: string[];
+  sourcePrompts: string[];
+  sourceQuestionIds: string[];
+  rootLabel: string;
+  branchLabel: string;
+  clusterLabel: string;
+  nodeSummary: string;
+  placementReason: string;
+  reviewSchedule: ReviewSchedule;
+  createdAt: number;
+  date: string;
+  timestamp: number;
+  lastReviewedAt?: number;
+  pinned?: boolean;
+  coCreationSignals?: Partial<Record<StructuralSignalType, number>> & { lastSignalAt?: number };
+}
+
+export interface HierarchySummary {
+  id: string;
+  label: string;
+  summary: string;
+  representativeKeywords: string[];
+  representativeNodeIds: string[];
+  nodeCount: number;
+}
+
+export interface CandidateContextPack {
+  roots: HierarchySummary[];
+  branches: HierarchySummary[];
+  clusters: HierarchySummary[];
+  candidates: KnowledgeNode[];
+}
+
+export interface IngestionDecision {
+  outcome: 'merge' | 'refine' | 'new';
+  targetNodeId?: string;
+  rootLabel?: string;
+  branchLabel?: string;
+  clusterLabel?: string;
+  placementReason?: string;
+}
+
+export interface ReviewMapLeaf {
+  nodeId: string;
+  label: string;
+  state: 'hidden' | 'revealed' | 'active';
+}
+
+export interface ReviewMapCluster {
+  id: string;
+  label: string;
+  leaves: ReviewMapLeaf[];
+}
+
+export interface ReviewMapBranch {
+  id: string;
+  label: string;
+  clusters: ReviewMapCluster[];
+}
+
+export interface ReviewMapRoot {
+  id: string;
+  label: string;
+  branches: ReviewMapBranch[];
+}
+
+export interface DailyReviewMap {
+  roots: ReviewMapRoot[];
+  totalDue: number;
+  revealedCount: number;
 }
 
 export type PostNarrativeMode =

@@ -4,6 +4,8 @@ import { eventBus } from '../lib/event-bus';
 import { toast } from '../lib/toast';
 import { mockSettingsService } from './mock/settings.mock';
 import { chatCompletion } from '../providers/llm';
+import { questionService } from './question.service';
+import { getDueProjectedFlashcards, getProjectedFlashcards } from './canonical-knowledge.service';
 
 const STORAGE_KEY = 'echolearn_flashcards';
 
@@ -90,16 +92,31 @@ function defaultSchedule(): ReviewSchedule {
 
 export const flashcardService = {
   getAll(): FlashCard[] {
-    return loadAll();
+    const projected = getProjectedFlashcards(questionService.getAll());
+    return projected.length > 0 ? projected : loadAll();
   },
 
   getDue(): FlashCard[] {
+    const projected = getDueProjectedFlashcards(questionService.getAll());
+    if (projected.length > 0) return projected;
     const t = today();
-    // Pinned cards always appear in the review queue regardless of schedule
     return loadAll().filter((c) => c.pinned || c.reviewSchedule.nextReviewDate <= t);
   },
 
   togglePin(id: string): void {
+    if (id.startsWith('node-')) {
+      const nodeId = id.slice('node-'.length);
+      const question = questionService.getAll().find((candidate) => candidate.id === nodeId);
+      if (!question) return;
+      const wasPinned = question.pinned ?? false;
+      questionService.patchQuestion(nodeId, {
+        pinned: !wasPinned,
+        reviewSchedule: !wasPinned
+          ? { ...question.reviewSchedule, nextReviewDate: today() }
+          : question.reviewSchedule,
+      });
+      return;
+    }
     const all = loadAll();
     const idx = all.findIndex((c) => c.id === id);
     if (idx === -1) return;
@@ -133,6 +150,10 @@ export const flashcardService = {
   },
 
   updateReviewSchedule(id: string, schedule: ReviewSchedule): void {
+    if (id.startsWith('node-')) {
+      questionService.updateReviewSchedule(id.slice('node-'.length), schedule);
+      return;
+    }
     const all = loadAll();
     const idx = all.findIndex((c) => c.id === id);
     if (idx !== -1) {
@@ -142,6 +163,10 @@ export const flashcardService = {
   },
 
   deleteById(id: string): void {
+    if (id.startsWith('node-')) {
+      void questionService.delete(id.slice('node-'.length));
+      return;
+    }
     saveAll(loadAll().filter((c) => c.id !== id));
   },
 

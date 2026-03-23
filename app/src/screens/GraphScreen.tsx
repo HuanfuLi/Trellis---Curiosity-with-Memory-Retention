@@ -7,6 +7,7 @@ import { RefreshCw, GitBranch, Plus, X, ChevronRight } from 'lucide-react';
 import type { Question } from '../types';
 import { graphService } from '../services/graph.service';
 import { toast } from '../lib/toast';
+import { buildReflectionTree } from '../services/canonical-knowledge.service';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,90 +19,44 @@ interface GraphEdge {
 
 // ─── Graph → MindElixir categorised tree ─────────────────────────────────────
 //
-// Root = "Knowledge". Direct children are category nodes derived from the most
-// frequent shared keywords. Each question is a leaf under its best-fit category.
-// Questions with no shared keywords fall directly under the root.
+// Root = canonical root label. Branches and clusters come from the canonical
+// reflection tree so the Graph screen reflects the knowledge structure the
+// system is learning, instead of rebuilding ad hoc keyword buckets every time.
 
 function truncate(s: string, n: number): string {
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
 }
 
-// Keywords that are too generic to be useful category names
-const GRAPH_STOP_WORDS = new Set([
-  'a','an','the','and','but','or','for','in','on','at','by','to','of',
-  'as','is','it','be','do','not','from','into','through','when','where',
-  'why','how','what','which','who','this','that','these','those','some',
-  'only','very','just','with','about','if','while','get','use','make',
-  'give','go','come','take','see','know','think','say','your','our',
-  'their','my','we','they','you','he','she','all','any','also','between',
-  'difference','explain','define','describe','between','more','most',
-]);
-
 function buildMindElixirData(nodes: Question[]): MindElixirData {
   const rootObj: NodeObj = {
     id: 'root-knowledge',
-    topic: 'Knowledge',
+    topic: 'Knowledge Reflection',
     children: [],
     expanded: true,
   };
 
   if (nodes.length === 0) return { nodeData: rootObj };
-
-  // Count how many questions share each keyword
-  const keywordFreq: Record<string, number> = {};
-  for (const n of nodes) {
-    for (const k of n.keywords) {
-      keywordFreq[k] = (keywordFreq[k] ?? 0) + 1;
-    }
-  }
-
-  // Keywords shared by ≥ 2 questions become category branches (up to 10 categories).
-  // Filter out stop words and single-word fragments shorter than 3 chars.
-  const categoryKeys = Object.entries(keywordFreq)
-    .filter(([k, count]) => count >= 2 && k.length >= 3 && !GRAPH_STOP_WORDS.has(k.toLowerCase()))
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 10)
-    .map(([k]) => k);
-
-  // Assign each question to the highest-frequency category it belongs to
-  const buckets: Record<string, Question[]> = {};
-  const assigned = new Set<string>();
-
-  for (const cat of categoryKeys) {
-    for (const n of nodes) {
-      if (!assigned.has(n.id) && n.keywords.includes(cat)) {
-        (buckets[cat] ??= []).push(n);
-        assigned.add(n.id);
-      }
-    }
-  }
-
-  // Build category subtrees
-  for (const cat of categoryKeys) {
-    const questions = buckets[cat];
-    if (!questions?.length) continue;
-    rootObj.children!.push({
-      id: `cat-${cat}`,
-      topic: cat.charAt(0).toUpperCase() + cat.slice(1),
-      children: questions.map((q) => ({
-        id: q.id,
-        topic: truncate(String(q.title ?? q.content ?? ''), 60),
-        children: [],
-      })),
+  const reflection = buildReflectionTree(nodes);
+  rootObj.children = reflection.map((root) => ({
+    id: `root-${root.rootLabel}`,
+    topic: root.rootLabel,
+    expanded: true,
+    children: root.branches.map((branch) => ({
+      id: `branch-${root.rootLabel}-${branch.branchLabel}`,
+      topic: branch.branchLabel,
       expanded: true,
-    });
-  }
-
-  // Uncategorised questions hang directly under the root
-  for (const n of nodes) {
-    if (!assigned.has(n.id)) {
-      rootObj.children!.push({
-        id: n.id,
-        topic: truncate(String(n.title ?? n.content ?? ''), 60),
-        children: [],
-      });
-    }
-  }
+      children: branch.clusters.map((cluster) => ({
+        id: `cluster-${root.rootLabel}-${branch.branchLabel}-${cluster.clusterLabel}`,
+        topic: cluster.clusterLabel,
+        expanded: true,
+        children: cluster.nodes.map((node) => ({
+          id: node.id,
+          topic: truncate(node.title, 60),
+          children: [],
+        })),
+      })),
+    })),
+  }));
 
   return { nodeData: rootObj };
 }
@@ -234,8 +189,8 @@ function MasterMap({ nodes, edges, onNodeClick }: MasterMapProps) {
         }}
       >
         <GitBranch size={48} style={{ opacity: 0.3 }} />
-        <p style={{ fontWeight: 600 }}>Your knowledge graph is empty.</p>
-        <p style={{ fontSize: '0.875rem' }}>Ask questions to start building connections.</p>
+        <p style={{ fontWeight: 600 }}>Your knowledge reflection map is empty.</p>
+        <p style={{ fontSize: '0.875rem' }}>Ask questions and review ideas to let the structure emerge.</p>
       </div>
     );
   }
@@ -442,13 +397,13 @@ function CardStackInbox({ unlinked, allNodes, onLink, onCreateDomain, onClose }:
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <p style={{ fontWeight: 700, fontSize: '1rem' }}>Classify Nodes</p>
+        <p style={{ fontWeight: 700, fontSize: '1rem' }}>Repair Structure</p>
           {currentParentName ? (
             <p style={{ fontSize: '0.8rem', color: 'var(--primary-40)', fontWeight: 600 }}>
               Inside: {currentParentName}
             </p>
           ) : (
-            <p style={{ fontSize: '0.8rem', color: 'var(--muted-foreground)' }}>{remaining} unlinked remaining</p>
+              <p style={{ fontSize: '0.8rem', color: 'var(--muted-foreground)' }}>{remaining} nodes still need placement repair</p>
           )}
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
@@ -480,7 +435,7 @@ function CardStackInbox({ unlinked, allNodes, onLink, onCreateDomain, onClose }:
             touchAction: 'none',
           }}
         >
-          <p style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--muted-foreground)', marginBottom: '8px', letterSpacing: '0.08em' }}>DRAG TO LINK</p>
+          <p style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--muted-foreground)', marginBottom: '8px', letterSpacing: '0.08em' }}>REPAIR PLACEMENT</p>
           <p style={{ fontWeight: 700, fontSize: '1.05rem', marginBottom: '6px', color: 'var(--foreground)' }}>{activeNode.title ?? activeNode.content}</p>
           {activeNode.keywords.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px' }}>
@@ -619,9 +574,9 @@ export function GraphScreen() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <h2 style={{ fontWeight: 700, fontSize: '1.4rem', marginBottom: '2px' }}>Knowledge Graph</h2>
+        <h2 style={{ fontWeight: 700, fontSize: '1.4rem', marginBottom: '2px' }}>Knowledge Graph</h2>
           <p style={{ fontSize: '0.875rem', color: 'var(--muted-foreground)' }}>
-            {nodes.length} nodes · {edges.length} connections
+            {nodes.length} nodes · {edges.length} connections · reflection & repair
           </p>
         </div>
         {unlinked.length > 0 && view === 'map' && (
@@ -630,7 +585,7 @@ export function GraphScreen() {
             style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '100px', backgroundColor: 'var(--primary-40)', color: 'white', fontWeight: 600, fontSize: '0.8rem', border: 'none', cursor: 'pointer', boxShadow: 'var(--shadow-1)' }}
           >
             <Plus size={14} />
-            {unlinked.length} Unlinked
+            {unlinked.length} Repair
           </button>
         )}
       </div>
@@ -655,6 +610,11 @@ export function GraphScreen() {
                 </button>
               </div>
               <p style={{ fontSize: '0.8rem', color: 'var(--muted-foreground)', lineHeight: 1.5 }}>{selectedNode.summary}</p>
+              {selectedNode.placementReason && (
+                <p style={{ fontSize: '0.75rem', color: 'var(--primary-40)', lineHeight: 1.45, marginTop: '8px' }}>
+                  {selectedNode.placementReason}
+                </p>
+              )}
               {selectedNode.keywords.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px' }}>
                   {selectedNode.keywords.map((k) => (

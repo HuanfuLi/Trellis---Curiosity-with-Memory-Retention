@@ -5,6 +5,12 @@ import { toast } from '../lib/toast';
 import { mockSettingsService } from './mock/settings.mock';
 import { chatCompletion } from '../providers/llm';
 import { dbExecute, dbQuery } from './db.service';
+import {
+  buildCanonicalQuestionPatch,
+  buildCandidateContextPack,
+  decideIngestionOutcome,
+  formatCandidateContextPack,
+} from './canonical-knowledge.service';
 
 const STORAGE_KEY = 'echolearn_questions';
 
@@ -170,12 +176,15 @@ export const questionService = {
     const contextLines = recentContext
       .map((q) => `Q: ${q.content}\nA: ${q.summary}`)
       .join('\n');
+    const candidatePack = buildCandidateContextPack(content, store);
 
     const systemPrompt = [
       'You are a knowledgeable learning assistant. Answer questions clearly and thoroughly.',
       'Do not generate harmful, illegal, sexually explicit, or deceptive content.',
       recentContext.length > 0 ? `Recent questions for context:\n${contextLines}` : '',
-      'Respond ONLY with JSON: {"answer":"...","summary":"one sentence","keywords":["kw1","kw2","kw3"],"storyHook":"An intriguing hook (≤15 words) to spark curiosity about this topic."}',
+      `Knowledge graph candidate context:\n${formatCandidateContextPack(candidatePack)}`,
+      'Respond ONLY with JSON:',
+      '{"answer":"...","summary":"one sentence","keywords":["kw1","kw2","kw3"],"storyHook":"An intriguing hook (≤15 words) to spark curiosity about this topic.","knowledgeDecision":{"outcome":"merge|refine|new","targetNodeId":"optional existing node id","rootLabel":"short root","branchLabel":"short branch","clusterLabel":"short cluster","placementReason":"why this belongs there"}}',
     ]
       .filter(Boolean)
       .join('\n');
@@ -193,6 +202,14 @@ export const questionService = {
       let summary: string;
       let keywords: string[];
       let storyHook: string | undefined;
+      let knowledgeDecision: {
+        outcome?: 'merge' | 'refine' | 'new';
+        targetNodeId?: string;
+        rootLabel?: string;
+        branchLabel?: string;
+        clusterLabel?: string;
+        placementReason?: string;
+      } | undefined;
 
       try {
         const jsonMatch = raw.match(/\{[\s\S]*\}/);
@@ -201,18 +218,27 @@ export const questionService = {
           summary?: string;
           keywords?: string[];
           storyHook?: string;
+          knowledgeDecision?: {
+            outcome?: 'merge' | 'refine' | 'new';
+            targetNodeId?: string;
+            rootLabel?: string;
+            branchLabel?: string;
+            clusterLabel?: string;
+            placementReason?: string;
+          };
         };
         answer = parsed.answer ?? raw;
         summary = parsed.summary ?? extractSummary(answer);
         keywords = Array.isArray(parsed.keywords) ? parsed.keywords : extractKeywords(answer);
         storyHook = typeof parsed.storyHook === 'string' && parsed.storyHook ? parsed.storyHook : undefined;
+        knowledgeDecision = parsed.knowledgeDecision;
       } catch {
         answer = raw;
         summary = extractSummary(raw);
         keywords = extractKeywords(raw);
       }
 
-      const question = this.buildAndSave(content, answer, store, { summary, keywords, storyHook });
+      const question = this.buildAndSave(content, answer, store, { summary, keywords, storyHook, knowledgeDecision });
       const relatedQuestions = store.filter((q) =>
         question.relatedQuestionIds.includes(q.id),
       );
@@ -241,12 +267,46 @@ export const questionService = {
     content: string,
     answer: string,
     existingQuestions?: Question[],
-    meta?: { summary?: string; keywords?: string[]; storyHook?: string },
+    meta?: {
+      summary?: string;
+      keywords?: string[];
+      storyHook?: string;
+      knowledgeDecision?: {
+        outcome?: 'merge' | 'refine' | 'new';
+        targetNodeId?: string;
+        rootLabel?: string;
+        branchLabel?: string;
+        clusterLabel?: string;
+        placementReason?: string;
+      };
+    },
   ): Question {
     const store = existingQuestions ?? loadStore();
     const summary = meta?.summary ?? extractSummary(answer);
     const keywords = meta?.keywords ?? extractKeywords(answer);
     const relatedQuestionIds = findRelated(keywords, store);
+    const decision = decideIngestionOutcome(content, store, meta?.knowledgeDecision);
+
+    if (decision.outcome === 'merge' && decision.targetNodeId) {
+      const target = store.find((candidate) => candidate.id === decision.targetNodeId);
+      if (target) {
+        const idx = store.findIndex((candidate) => candidate.id === target.id);
+        const mergedQuestion: Question = {
+          ...target,
+          answer: target.answer.length >= answer.length ? target.answer : answer,
+          summary: target.summary.length >= summary.length ? target.summary : summary,
+          storyHook: target.storyHook || meta?.storyHook,
+          keywords: Array.from(new Set([...target.keywords, ...keywords])).slice(0, 8),
+          relatedQuestionIds: Array.from(new Set([...target.relatedQuestionIds, ...relatedQuestionIds])).filter((id) => id !== target.id),
+          ...buildCanonicalQuestionPatch(content, target, decision),
+        };
+        store[idx] = mergedQuestion;
+        saveStore(store);
+        persistToSQLite(mergedQuestion);
+        eventBus.emit({ type: 'QUESTION_ASKED', payload: mergedQuestion });
+        return mergedQuestion;
+      }
+    }
 
     const question: Question = {
       id: newId(),
@@ -266,6 +326,15 @@ export const questionService = {
         easeFactor: 2.5,
       },
       createdAt: Date.now(),
+      aliases: [],
+      sourcePrompts: [content],
+      sourceQuestionIds: [],
+      rootLabel: decision.rootLabel,
+      branchLabel: decision.branchLabel,
+      clusterLabel: decision.clusterLabel,
+      nodeSummary: summary,
+      placementReason: decision.placementReason,
+      ...(decision.outcome === 'refine' && decision.targetNodeId ? { parentId: decision.targetNodeId } : {}),
     };
 
     saveStore([question, ...store]);
@@ -321,6 +390,7 @@ export const questionService = {
     if (idx !== -1) {
       store[idx] = { ...store[idx], reviewSchedule: schedule };
       saveStore(store);
+      persistToSQLite(store[idx]);
     }
   },
 
@@ -341,6 +411,7 @@ export const questionService = {
     if (idx !== -1) {
       store[idx] = { ...store[idx], ...patch };
       saveStore(store);
+      persistToSQLite(store[idx]);
     }
   },
 };

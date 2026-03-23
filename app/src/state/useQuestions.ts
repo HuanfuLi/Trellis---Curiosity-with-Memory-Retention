@@ -4,6 +4,7 @@ import { questionService } from '../services/question.service';
 import { mockSettingsService } from '../services/mock/settings.mock';
 import { chatStream } from '../providers/llm';
 import { today } from '../lib/date';
+import { buildCandidateContextPack, formatCandidateContextPack } from '../services/canonical-knowledge.service';
 
 interface UseQuestionsReturn {
   questions: Question[];
@@ -39,7 +40,7 @@ export function useQuestions(): UseQuestionsReturn {
     setError(null);
     const result = await questionService.ask(content);
     if (result.success && result.data) {
-      setQuestions((prev) => [result.data!.question, ...prev]);
+      setQuestions((prev) => [result.data!.question, ...prev.filter((q) => q.id !== result.data!.question.id)]);
       setIsAsking(false);
       return result.data.question;
     } else {
@@ -79,11 +80,13 @@ export function useQuestions(): UseQuestionsReturn {
         const contextLines = recentContext
           .map((q) => `Q: ${q.content}\nA: ${q.summary}`)
           .join('\n');
+        const candidatePack = buildCandidateContextPack(content, store);
 
         const systemPrompt = [
           'You are a knowledgeable learning assistant. Answer questions clearly and thoroughly.',
           'Do not generate harmful, illegal, sexually explicit, or deceptive content.',
           recentContext.length > 0 ? `Recent questions for context:\n${contextLines}` : '',
+          `Knowledge graph candidate context:\n${formatCandidateContextPack(candidatePack)}`,
         ]
           .filter(Boolean)
           .join('\n');
@@ -104,7 +107,7 @@ export function useQuestions(): UseQuestionsReturn {
 
         // Persist and get structured question
         const question = questionService.buildAndSave(content, accumulated, store);
-        setQuestions((prev) => [question, ...prev]);
+        setQuestions((prev) => [question, ...prev.filter((q) => q.id !== question.id)]);
         setIsAsking(false);
         return question;
       } catch (e) {
