@@ -8,7 +8,7 @@ import { OnboardingScreen } from './screens/OnboardingScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { AskScreen } from './screens/AskScreen';
 import { QuestionDetailScreen } from './screens/QuestionDetailScreen';
-import { CalendarScreen } from './screens/CalendarScreen';
+import { PlannerScreen } from './screens/PlannerScreen';
 import { ReviewScreen } from './screens/ReviewScreen';
 import { PodcastScreen } from './screens/PodcastScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
@@ -71,7 +71,7 @@ const router = createBrowserRouter([
       { path: 'ask', element: <PageTransition><AskScreen /></PageTransition> },
       { path: 'ask/:id', element: <PageTransition><QuestionDetailScreen /></PageTransition> },
       { path: 'graph', element: <PageTransition><GraphScreen /></PageTransition> },
-      { path: 'calendar', element: <PageTransition><CalendarScreen /></PageTransition> },
+      { path: 'planner', element: <PageTransition><PlannerScreen /></PageTransition> },
       { path: 'review', element: <PageTransition><ReviewScreen /></PageTransition> },
       { path: 'podcast', element: <PageTransition><PodcastScreen /></PageTransition> },
       { path: 'settings', element: <PageTransition><SettingsScreen /></PageTransition> },

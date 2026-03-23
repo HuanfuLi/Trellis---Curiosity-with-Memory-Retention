@@ -53,7 +53,7 @@ export interface Category {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// CALENDAR & TODO DOMAIN
+// CALENDAR & TODO DOMAIN (legacy — kept for data isolation, not actively used)
 // ═══════════════════════════════════════════════════════════════════════════
 
 export interface DaySchedule {
@@ -70,8 +70,8 @@ export interface TimeBlock {
   label: string;
   todos: TodoItem[];
   sortOrder: number;
-  pinned?: boolean;     // if true, block appears on every day
-  templateId?: string;  // present on injected copies; equals the original pinned block's id
+  pinned?: boolean;
+  templateId?: string;
 }
 
 export interface TodoItem {
@@ -82,10 +82,90 @@ export interface TodoItem {
   createdAt: number;
   completedAt?: number;
   postponedFrom?: string;
-  pinned?: boolean;  // if true, todo appears in its block every day
+  pinned?: boolean;
 }
 
 export type TodoStatus = 'pending' | 'completed' | 'postponed';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PLANNER DOMAIN
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Learning action types that a chunk can represent. */
+export type ChunkType = 'retrieve' | 'repair' | 'connect' | 'create';
+
+/** Soft lifecycle states for a planner chunk — no overdue/failure framing. */
+export type ChunkStatus = 'suggested' | 'in_progress' | 'saved_for_later' | 'done';
+
+/** A lightweight learning action card in the Planner. */
+export interface PlannerChunk {
+  id: string;
+  type: ChunkType;
+  /** Short learning goal or action label (e.g. "Compare X vs Y"). */
+  goal: string;
+  /** Optional longer description or context. */
+  description?: string;
+  /** IDs of related knowledge questions/nodes. */
+  linkedConceptIds: string[];
+  /** Thread this chunk was spawned from, if any. */
+  threadId?: string;
+  status: ChunkStatus;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** A persistent learning topic or unresolved area the user may return to. */
+export interface PlannerThread {
+  id: string;
+  /** Short topic label (e.g. "TCP vs UDP differences"). */
+  title: string;
+  /** Optional longer description of the thread. */
+  description?: string;
+  /** Keywords for matching check-in signals to existing threads. */
+  keywords: string[];
+  /** IDs of related knowledge questions/nodes. */
+  linkedConceptIds: string[];
+  /** Whether the user explicitly saved this thread. */
+  saved: boolean;
+  /** Last time this thread was created or updated by a check-in. */
+  lastActivityAt: number;
+  createdAt: number;
+}
+
+/** Structured signals extracted from a single Learning Check-In. */
+export interface CheckInSignals {
+  /** Concepts the user feels confident about. */
+  confidence: string[];
+  /** Concepts or areas that feel fuzzy or unresolved. */
+  confusion: string[];
+  /** Connections the user noticed or wants to explore. */
+  connections: string[];
+  /** Topics the user is curious about. */
+  curiosity: string[];
+  /** Specific items the user wants to revisit. */
+  revisitIntent: string[];
+}
+
+/** A single Learning Check-In entry. */
+export interface LearningCheckIn {
+  id: string;
+  /** Raw freeform text from the user (typed or transcribed). */
+  content: string;
+  /** Extracted structured signals. */
+  signals: CheckInSignals;
+  /** IDs of threads created or updated as a result. */
+  affectedThreadIds: string[];
+  /** IDs of chunks suggested as a result. */
+  generatedChunkIds: string[];
+  createdAt: number;
+}
+
+/** Top-level planner data shape for persistence and state hooks. */
+export interface PlannerData {
+  chunks: PlannerChunk[];
+  threads: PlannerThread[];
+  checkIns: LearningCheckIn[];
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PODCAST DOMAIN
@@ -389,6 +469,7 @@ export type AppEvent =
   | { type: 'CATEGORY_CREATED'; payload: Category }
   | { type: 'REVIEW_SUBMITTED'; payload: { questionId: string; rating: number } }
   | { type: 'REVIEW_DUE_COUNT_CHANGED'; payload: { count: number } }
+  | { type: 'PLANNER_UPDATED'; payload: { reason: 'chunk' | 'thread' | 'checkin' } }
   | { type: 'TODO_CREATED'; payload: TodoItem }
   | { type: 'TODO_STATUS_CHANGED'; payload: TodoItem }
   | { type: 'BLOCK_CREATED'; payload: TimeBlock }

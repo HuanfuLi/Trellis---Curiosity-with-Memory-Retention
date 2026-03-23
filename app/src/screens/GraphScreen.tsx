@@ -37,26 +37,53 @@ function buildMindElixirData(nodes: Question[]): MindElixirData {
 
   if (nodes.length === 0) return { nodeData: rootObj };
   const reflection = buildReflectionTree(nodes);
-  rootObj.children = reflection.map((root) => ({
-    id: `root-${root.rootLabel}`,
-    topic: root.rootLabel,
-    expanded: true,
-    children: root.branches.map((branch) => ({
-      id: `branch-${root.rootLabel}-${branch.branchLabel}`,
-      topic: branch.branchLabel,
-      expanded: true,
-      children: branch.clusters.map((cluster) => ({
-        id: `cluster-${root.rootLabel}-${branch.branchLabel}-${cluster.clusterLabel}`,
-        topic: cluster.clusterLabel,
+
+  const children: NodeObj[] = [];
+  for (const root of reflection) {
+    if (root.rootLabel === 'Knowledge') {
+      // Promote the fallback "Knowledge" root's branches directly under the main root
+      // to avoid a near-duplicate of "Knowledge Reflection" → "Knowledge".
+      for (const branch of root.branches) {
+        children.push({
+          id: `branch-${root.rootLabel}-${branch.branchLabel}`,
+          topic: branch.branchLabel,
+          expanded: true,
+          children: branch.clusters.map((cluster) => ({
+            id: `cluster-${root.rootLabel}-${branch.branchLabel}-${cluster.clusterLabel}`,
+            topic: cluster.clusterLabel,
+            expanded: true,
+            children: cluster.nodes.map((node) => ({
+              id: node.id,
+              topic: truncate(node.title, 60),
+              children: [],
+            })),
+          })),
+        });
+      }
+    } else {
+      children.push({
+        id: `root-${root.rootLabel}`,
+        topic: root.rootLabel,
         expanded: true,
-        children: cluster.nodes.map((node) => ({
-          id: node.id,
-          topic: truncate(node.title, 60),
-          children: [],
+        children: root.branches.map((branch) => ({
+          id: `branch-${root.rootLabel}-${branch.branchLabel}`,
+          topic: branch.branchLabel,
+          expanded: true,
+          children: branch.clusters.map((cluster) => ({
+            id: `cluster-${root.rootLabel}-${branch.branchLabel}-${cluster.clusterLabel}`,
+            topic: cluster.clusterLabel,
+            expanded: true,
+            children: cluster.nodes.map((node) => ({
+              id: node.id,
+              topic: truncate(node.title, 60),
+              children: [],
+            })),
+          })),
         })),
-      })),
-    })),
-  }));
+      });
+    }
+  }
+  rootObj.children = children;
 
   return { nodeData: rootObj };
 }

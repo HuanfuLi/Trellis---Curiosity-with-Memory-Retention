@@ -8,8 +8,10 @@ import { sessionService } from '../services/session.service';
 import { flashcardService } from '../services/flashcard.service';
 import type { ChatSession, SessionMessage } from '../types';
 import { formatDate } from '../lib/date';
-import { questionService, deriveTitleFromQuestion } from '../services/question.service';
+import { questionService } from '../services/question.service';
 import { postContextQaService } from '../services/post-context-qa.service';
+import { chatCompletion } from '../providers/llm';
+import { mockSettingsService } from '../services/mock/settings.mock';
 import { toast } from '../lib/toast';
 
 const SUGGESTED_PROMPTS = [
@@ -29,6 +31,30 @@ interface StreamingOverlay {
 let msgIdCounter = 0;
 function newMsgId(prefix: string): string {
   return `${prefix}-${Date.now()}-${++msgIdCounter}`;
+}
+
+/** Ask the LLM for a short conversation title based on the first Q&A exchange. */
+async function generateSessionTitle(userMessage: string, aiReply: string): Promise<string> {
+  try {
+    const settings = mockSettingsService.getSync();
+    if (!settings.preferences.aiConsentGiven || !settings.llm.isConfigured) {
+      return '';
+    }
+    const raw = await chatCompletion(
+      [
+        {
+          role: 'system',
+          content: 'Generate a short (3-6 word) conversation title from the user question and AI reply below. Return ONLY the title text, nothing else. No quotes, no punctuation at the end.',
+        },
+        { role: 'user', content: `Question: ${userMessage}\n\nReply: ${aiReply.slice(0, 400)}` },
+      ],
+      settings.llm,
+    );
+    const title = raw.trim().replace(/^["']|["']$/g, '').slice(0, 60);
+    return title || '';
+  } catch {
+    return '';
+  }
 }
 
 // Bug #2: Guard against concurrent processSession calls for the same session
@@ -183,6 +209,22 @@ export function AskScreen() {
           setSession(updated);
           setStreaming(null);
         }
+
+        // Generate an LLM title after the first exchange (fire-and-forget)
+        if (!updated.title && !updated.origin) {
+          void generateSessionTitle(userContent, aiContent).then((title) => {
+            if (!title) return;
+            const refreshed = sessionService.getById(updated.id);
+            if (refreshed && !refreshed.title) {
+              const titled = { ...refreshed, title };
+              sessionService.save(titled);
+              // Update state only if still on this session
+              if (sessionRef.current.id === titled.id) {
+                setSession(titled);
+              }
+            }
+          });
+        }
       } catch (error) {
         setStreaming(null);
         toast(error instanceof Error ? error.message : 'Failed to continue this conversation.', 'error');
@@ -202,7 +244,6 @@ export function AskScreen() {
       const current = sessionRef.current;
       const updated: ChatSession = {
         ...current,
-        title: current.title || deriveTitleFromQuestion(content),
         messages: [...current.messages, userMsg],
       };
       sessionService.save(updated);

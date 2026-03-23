@@ -20,7 +20,7 @@ const FALLBACK_BADGE = { label: 'Daily', color: '#558B2F' };
 interface ConceptCardProps {
   post: DailyPost;
   isActive: boolean;
-  onOpen: (postId: string) => void;
+  onOpen: (postId: string, post: DailyPost) => void;
 }
 
 function ConceptCard({ post, isActive, onOpen }: ConceptCardProps) {
@@ -58,7 +58,7 @@ function ConceptCard({ post, isActive, onOpen }: ConceptCardProps) {
       </div>
 
       <button
-        onClick={() => onOpen(post.id)}
+        onClick={() => onOpen(post.id, post)}
         style={{
           flex: 1,
           display: 'flex',
@@ -362,7 +362,7 @@ interface ImmersiveInfoFlowProps {
   items: InfoFlowItem[];
   onAhaConnection: (idA: string, idB: string) => void;
   onClose: () => void;
-  onOpenPost: (postId: string) => void;
+  onOpenPost: (postId: string, post: DailyPost) => void;
 }
 
 export function ImmersiveInfoFlow({ items, onAhaConnection, onClose, onOpenPost }: ImmersiveInfoFlowProps) {
@@ -540,10 +540,12 @@ export function ImmersiveInfoFlow({ items, onAhaConnection, onClose, onOpenPost 
 interface InlineInfoFlowProps {
   items: InfoFlowItem[];
   onAhaConnection: (idA: string, idB: string) => void;
-  onOpenPost: (postId: string) => void;
+  onOpenPost: (postId: string, post: DailyPost) => void;
+  onLoadMore?: () => void;
+  isLoadingMore?: boolean;
 }
 
-export function InlineInfoFlow({ items, onAhaConnection, onOpenPost }: InlineInfoFlowProps) {
+export function InlineInfoFlow({ items, onAhaConnection, onOpenPost, onLoadMore, isLoadingMore }: InlineInfoFlowProps) {
   const conceptCount = items.filter((item) => item.kind === 'concept').length;
   const connectionCount = items.filter((item) => item.kind === 'connection').length;
 
@@ -621,6 +623,40 @@ export function InlineInfoFlow({ items, onAhaConnection, onOpenPost }: InlineInf
               )}
             </div>
           ))}
+
+          {/* Load More button at the bottom of the feed */}
+          {onLoadMore && (
+            <button
+              onClick={onLoadMore}
+              disabled={isLoadingMore}
+              className="active-squish"
+              style={{
+                width: '100%',
+                padding: '14px 20px',
+                borderRadius: 'var(--radius-xl)',
+                border: '1.5px solid var(--border)',
+                backgroundColor: 'var(--surface-variant)',
+                color: isLoadingMore ? 'var(--muted-foreground)' : 'var(--primary-40)',
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                cursor: isLoadingMore ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                opacity: isLoadingMore ? 0.7 : 1,
+              }}
+            >
+              {isLoadingMore ? (
+                <>
+                  <span style={{ display: 'inline-block', width: '14px', height: '14px', border: '2px solid var(--muted-foreground)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                  Generating...
+                </>
+              ) : (
+                'More'
+              )}
+            </button>
+          )}
         </div>
       )}
     </div>

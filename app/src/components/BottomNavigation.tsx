@@ -11,11 +11,11 @@ interface NavItem {
 
 const leftItems: NavItem[] = [
   { to: '/home', icon: <Home size={22} />, label: 'Home' },
-  { to: '/graph', icon: <GitBranch size={22} />, label: 'Graph' },
+  { to: '/planner', icon: <Calendar size={22} />, label: 'Planner' },
 ];
 
 const rightItems: NavItem[] = [
-  { to: '/calendar', icon: <Calendar size={22} />, label: 'Calendar' },
+  { to: '/graph', icon: <GitBranch size={22} />, label: 'Graph' },
   { to: '/settings', icon: <Settings size={22} />, label: 'Settings' },
 ];
 

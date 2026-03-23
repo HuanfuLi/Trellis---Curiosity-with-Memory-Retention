@@ -2,15 +2,23 @@ import { chatCompletion } from '../providers/llm/index.ts';
 import type { DailyPost, PostNarrativeMode, PostOriginContext, PostSnapshot, Question } from '../types';
 import { today } from '../lib/date.ts';
 import { mockSettingsService } from './mock/settings.mock.ts';
+import { plannerService } from './planner.service.ts';
 
 const STORAGE_KEY = 'echolearn_daily_posts';
 const MAX_POSTS = 4;
 const CONTEXT_LIMIT = 10;
 
+interface PlannerSignals {
+  activeThreads: string[];
+  confusionAreas: string[];
+  curiosityTopics: string[];
+}
+
 interface DailyKnowledgeContext {
   recent: Question[];
   resurfaced: Question[];
   related: Array<{ source: Question; target: Question }>;
+  plannerSignals: PlannerSignals;
 }
 
 interface CachedDailyPosts {
@@ -19,9 +27,21 @@ interface CachedDailyPosts {
   posts: DailyPost[];
 }
 
+function computePlannerFingerprint(): string {
+  const savedThreads = plannerService.getSavedThreads().map((thread) => `${thread.id}:${thread.lastActivityAt}`);
+  const recentSignals = plannerService.getRecentSignals();
+  return JSON.stringify({
+    threads: savedThreads,
+    confusion: recentSignals.confusion,
+    curiosity: recentSignals.curiosity,
+    connections: recentSignals.connections,
+    revisitIntent: recentSignals.revisitIntent,
+  });
+}
+
 const VALID_SOURCE_TYPES = new Set<DailyPost['sourceType']>(['recent', 'related', 'resurfaced', 'starter', 'mixed']);
 
-const STARTER_POSTS: DailyPost[] = [
+export const STARTER_POSTS: DailyPost[] = [
   makeStarterPost(
     'starter-memory-speed',
     'Why do you forget things that fast?',
@@ -158,10 +178,11 @@ function titleFor(question: Question): string {
 }
 
 function computeFingerprint(questions: Question[]): string {
-  return questions
+  const questionFingerprint = questions
     .slice(0, CONTEXT_LIMIT)
     .map((question) => `${question.id}:${question.createdAt}`)
     .join('|');
+  return `${questionFingerprint}::planner:${computePlannerFingerprint()}`;
 }
 
 export function buildDailyKnowledgeContext(questions: Question[]): DailyKnowledgeContext {
@@ -188,11 +209,20 @@ export function buildDailyKnowledgeContext(questions: Question[]): DailyKnowledg
     if (related.length >= 4) break;
   }
 
-  return { recent, resurfaced, related };
+  // Gather planner signals for feed ranking
+  const savedThreads = plannerService.getSavedThreads();
+  const recentSignals = plannerService.getRecentSignals();
+  const plannerSignals: PlannerSignals = {
+    activeThreads: savedThreads.slice(0, 6).map((t) => t.title),
+    confusionAreas: recentSignals.confusion.slice(0, 4),
+    curiosityTopics: recentSignals.curiosity.slice(0, 4),
+  };
+
+  return { recent, resurfaced, related, plannerSignals };
 }
 
 export function buildFallbackPosts(questions: Question[], date: string): DailyPost[] {
-  if (questions.length === 0) return STARTER_POSTS.map((post) => ({ ...post, date }));
+  if (questions.length === 0) return [];
 
   const context = buildDailyKnowledgeContext(questions);
   const posts: DailyPost[] = [];
@@ -312,6 +342,15 @@ function buildGenerationPrompt(date: string, context: DailyKnowledgeContext): st
     '',
     'Related bridges:',
     ...relatedLines,
+    '',
+    ...(context.plannerSignals.activeThreads.length > 0 || context.plannerSignals.confusionAreas.length > 0 || context.plannerSignals.curiosityTopics.length > 0
+      ? [
+          'Active learning signals (boost relevance for these topics):',
+          ...(context.plannerSignals.activeThreads.length > 0 ? [`Active threads: ${context.plannerSignals.activeThreads.join(', ')}`] : []),
+          ...(context.plannerSignals.confusionAreas.length > 0 ? [`Unresolved areas: ${context.plannerSignals.confusionAreas.join(', ')}`] : []),
+          ...(context.plannerSignals.curiosityTopics.length > 0 ? [`Curiosity topics: ${context.plannerSignals.curiosityTopics.join(', ')}`] : []),
+        ]
+      : []),
   ].join('\n');
 }
 
@@ -417,33 +456,119 @@ export const conceptFeedService = {
       return cached.posts;
     }
 
-    let posts: DailyPost[] = [];
+    let newPosts: DailyPost[] = [];
     try {
-      posts = await generateDailyPostsWithLLM(questions, date);
+      newPosts = await generateDailyPostsWithLLM(questions, date);
     } catch {
-      posts = [];
+      newPosts = [];
     }
 
-    if (posts.length === 0) {
-      posts = buildFallbackPosts(questions, date);
+    if (newPosts.length === 0) {
+      newPosts = buildFallbackPosts(questions, date);
     }
 
-    saveCache({ date, fingerprint, posts });
-    return posts;
+    // Preserve old posts so their IDs remain valid for PostDetailScreen even
+    // after the fingerprint changes (e.g. new question added or new day).
+    const oldPosts = cached?.posts ?? [];
+    const newIds = new Set(newPosts.map((p) => p.id));
+    const preserved = oldPosts.filter((p) => !newIds.has(p.id));
+    // New posts first, then any old posts the user may have already opened.
+    const allPosts = [...newPosts, ...preserved];
+
+    saveCache({ date, fingerprint, posts: allPosts });
+    return allPosts;
   },
 
-  async getPostById(id: string, questions: Question[]): Promise<DailyPost | null> {
+  /**
+   * Look up a post by ID from the cache only. Never triggers regeneration —
+   * this prevents the PostDetailScreen from accidentally invalidating the
+   * cache when the `questions` array changes after mount.
+   */
+  getPostById(id: string): DailyPost | null {
     const cached = loadCache();
-    if (cached) {
-      const existing = cached.posts.find((post) => post.id === id);
-      if (existing) return existing;
-    }
-    const posts = await this.getDailyPosts(questions);
-    return posts.find((post) => post.id === id) ?? null;
+    if (!cached) return null;
+    return cached.posts.find((post) => post.id === id) ?? null;
   },
 
   getCachedDailyPosts(): DailyPost[] {
     return loadCache()?.posts ?? [];
+  },
+
+  /** Explicitly clear the post cache (e.g. after "Clear All Data"). */
+  clearCache(): void {
+    try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+  },
+
+  /**
+   * Generate additional posts that differ from the ones already cached.
+   * Appends to the existing cache so old post IDs remain valid.
+   */
+  async generateMorePosts(questions: Question[], count = 4): Promise<DailyPost[]> {
+    const date = today();
+    const cached = loadCache();
+    const existingPosts = cached?.posts ?? [];
+    const existingIds = new Set(existingPosts.map((p) => p.id));
+    const existingTitles = existingPosts.map((p) => p.title);
+
+    let newPosts: DailyPost[] = [];
+
+    const settings = mockSettingsService.getSync();
+    if (settings.preferences.aiConsentGiven && settings.llm.isConfigured && questions.length > 0) {
+      const context = buildDailyKnowledgeContext(questions.slice(0, CONTEXT_LIMIT));
+      if (context.recent.length > 0 || context.resurfaced.length > 0 || context.related.length > 0) {
+        const avoidClause = existingTitles.length > 0
+          ? `\nIMPORTANT: Do NOT repeat topics already covered. Existing post titles to avoid:\n${existingTitles.map((t) => `- ${t}`).join('\n')}\nChoose different angles, examples, or connections.`
+          : '';
+
+        try {
+          const raw = await chatCompletion(
+            [
+              {
+                role: 'system',
+                content: [
+                  'You are an editorial learning writer.',
+                  'Write rich, intriguing, accurate educational posts from the supplied user knowledge.',
+                  'Do not write flashcards, tiny summaries, or listicles without a narrative spine.',
+                  'Return only valid JSON.',
+                ].join('\n'),
+              },
+              { role: 'user', content: buildGenerationPrompt(date, context) + avoidClause },
+            ],
+            settings.llm,
+          );
+          newPosts = parseGeneratedPosts(raw, questions, date)
+            .filter((p) => !existingIds.has(p.id));
+        } catch {
+          newPosts = [];
+        }
+      }
+    }
+
+    if (newPosts.length === 0) {
+      // Generate fallback posts offset from existing ones
+      newPosts = buildFallbackPosts(questions, date)
+        .filter((p) => !existingIds.has(p.id));
+      if (newPosts.length === 0 && questions.length > 0) {
+        // Create posts from questions not yet covered
+        const coveredIds = new Set(existingPosts.flatMap((p) => p.sourceQuestionIds));
+        const uncovered = questions.filter((q) => !coveredIds.has(q.id));
+        if (uncovered.length > 0) {
+          newPosts = buildFallbackPosts(uncovered, date)
+            .filter((p) => !existingIds.has(p.id));
+        }
+      }
+    }
+
+    newPosts = newPosts.slice(0, count);
+
+    // Append to cache so existing post IDs remain valid
+    if (newPosts.length > 0) {
+      const allPosts = [...existingPosts, ...newPosts];
+      const fingerprint = computeFingerprint(questions);
+      saveCache({ date, fingerprint, posts: allPosts });
+    }
+
+    return newPosts;
   },
 
   buildPostOriginContext,

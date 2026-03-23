@@ -8,7 +8,7 @@ import type { BlindboxItem, DailyPost } from '../types';
 import { useQuestions } from '../state/useQuestions';
 import { useReview } from '../state/useReview';
 import { usePodcast } from '../state/usePodcast';
-import { mockCalendarService } from '../services/mock/calendar.mock';
+import { plannerService } from '../services/planner.service';
 import { mockSettingsService } from '../services/mock/settings.mock';
 import { conceptFeedService } from '../services/concept-feed.service';
 import { graphService } from '../services/graph.service';
@@ -27,21 +27,67 @@ const MILESTONE_POOL: BlindboxItem[] = [
 
 export function HomeScreen() {
   const navigate = useNavigate();
-  const { questions } = useQuestions();
+  const { questions, isLoading: questionsLoading } = useQuestions();
   const { reviewCount } = useReview();
   const { getPodcastForDate } = usePodcast();
   const [dailyPosts, setDailyPosts] = useState<DailyPost[]>(() => conceptFeedService.getCachedDailyPosts());
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const t = today();
   const todayPodcast = getPodcastForDate(t);
 
   useEffect(() => {
+    // Don't fetch posts until questions have finished loading — running with
+    // an empty-but-loading questions array would wipe the cache and flash the feed.
+    if (questionsLoading) return;
+
+    const refreshPlannerSummary = () => {
+      setActiveChunkCount(plannerService.getContinueChunks().length);
+      setThreadCount(plannerService.getSavedThreads().length);
+    };
+
+    const refreshFeed = () => {
+      let cancelled = false;
+      void conceptFeedService.getDailyPosts(questions).then((posts) => {
+        if (!cancelled) setDailyPosts(posts);
+      });
+      return () => { cancelled = true; };
+    };
+
     let cancelled = false;
     void conceptFeedService.getDailyPosts(questions).then((posts) => {
       if (!cancelled) setDailyPosts(posts);
     });
-    return () => { cancelled = true; };
-  }, [questions]);
+    refreshPlannerSummary();
+
+    const unsubPlanner = eventBus.subscribe('PLANNER_UPDATED', () => {
+      refreshPlannerSummary();
+      conceptFeedService.clearCache();
+      refreshFeed();
+    });
+
+    return () => {
+      cancelled = true;
+      unsubPlanner();
+    };
+  }, [questions, questionsLoading]);
+
+  const handleLoadMore = async () => {
+    if (isLoadingMore) return;
+    setIsLoadingMore(true);
+    try {
+      const morePosts = await conceptFeedService.generateMorePosts(questions);
+      if (morePosts.length > 0) {
+        setDailyPosts((prev) => [...prev, ...morePosts]);
+      } else {
+        toast('No more posts to generate right now', 'info');
+      }
+    } catch {
+      toast('Failed to generate more posts', 'error');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
 
   // Build the Home curiosity feed from recent, related, and resurfaced concepts.
   const infoFlowItems = useMemo<InfoFlowItem[]>(() => {
@@ -93,7 +139,7 @@ export function HomeScreen() {
       withMilestones.push(item);
     });
 
-    return withMilestones.slice(0, 24);
+    return withMilestones;
   }, [dailyPosts, questions]);
 
   const handleAhaConnection = (idA: string, idB: string) => {
@@ -101,28 +147,14 @@ export function HomeScreen() {
     toast('Aha! Connection strengthened.', 'success');
   };
 
-  const [pendingTodos, setPendingTodos] = useState(0);
+  const [activeChunkCount, setActiveChunkCount] = useState(0);
+  const [threadCount, setThreadCount] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-
-  useEffect(() => {
-    const refresh = async () => {
-      const result = await mockCalendarService.getDaySchedule(today());
-      if (result.success && result.data) {
-        setPendingTodos(
-          result.data.blocks.flatMap((b) => b.todos).filter((td) => td.status === 'pending').length,
-        );
-      }
-    };
-    void refresh();
-    const unsub1 = eventBus.subscribe('TODO_STATUS_CHANGED', () => void refresh());
-    const unsub2 = eventBus.subscribe('TODO_CREATED', () => void refresh());
-    return () => { unsub1(); unsub2(); };
-  }, []);
 
   // Cleanup: stop stream tracks immediately on unmount so the mic is released right away.
   // We stop tracks before calling recorder.stop() because recorder.onstop fires async
@@ -249,9 +281,9 @@ export function HomeScreen() {
             </Card>
           </button>
 
-          {/* Tasks Card */}
+          {/* Planner Card */}
           <button
-            onClick={() => navigate('/calendar')}
+            onClick={() => navigate('/planner')}
             className="active-squish"
             style={{ textAlign: 'left', background: 'none', padding: 0 }}
           >
@@ -266,11 +298,16 @@ export function HomeScreen() {
               onPointerLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
             >
               <CheckSquare size={28} color="var(--bento-card-text)" style={{ marginBottom: '12px' }} />
-              <h4 style={{ marginBottom: '8px', color: 'var(--bento-card-text)' }}>Tasks</h4>
+              <h4 style={{ marginBottom: '8px', color: 'var(--bento-card-text)' }}>Planner</h4>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-                <p style={{ fontSize: '1.875rem', fontWeight: 600, color: 'var(--bento-card-text)' }}>{pendingTodos}</p>
-                <p style={{ fontSize: '0.875rem', color: 'var(--bento-card-text-muted)' }}>pending</p>
+                <p style={{ fontSize: '1.875rem', fontWeight: 600, color: 'var(--bento-card-text)' }}>{activeChunkCount}</p>
+                <p style={{ fontSize: '0.875rem', color: 'var(--bento-card-text-muted)' }}>{activeChunkCount === 1 ? 'active' : 'active'}</p>
               </div>
+              {threadCount > 0 && (
+                <p style={{ fontSize: '0.78rem', color: 'var(--bento-card-text-muted)', marginTop: '2px' }}>
+                  {threadCount} thread{threadCount !== 1 ? 's' : ''}
+                </p>
+              )}
             </Card>
           </button>
 
@@ -315,7 +352,11 @@ export function HomeScreen() {
             <InlineInfoFlow
               items={infoFlowItems}
               onAhaConnection={handleAhaConnection}
-              onOpenPost={(postId) => navigate(`/posts/${postId}`)}
+              onOpenPost={(postId, post) => {
+                navigate(`/posts/${postId}`, { state: { post } });
+              }}
+              onLoadMore={() => void handleLoadMore()}
+              isLoadingMore={isLoadingMore}
             />
           </div>
 

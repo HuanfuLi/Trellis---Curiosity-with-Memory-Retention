@@ -178,7 +178,7 @@ function findBlock(blockId: string): TimeBlock | null {
 
 // ── Service ────────────────────────────────────────────────────────────────
 
-export const mockCalendarService = {
+export const mockPlannerService = {
   async getDaySchedule(date: string): Promise<ServiceResult<DaySchedule>> {
     const blocks = getBlocksForDate(date);
     // Bug #3: use actual due flashcard count instead of hardcoded value

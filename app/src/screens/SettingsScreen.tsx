@@ -9,6 +9,7 @@ import type { LLMConfig, TTSConfig, AppSettings } from '../types';
 import { toast } from '../lib/toast';
 import { applyTheme } from '../lib/theme';
 import { clearAllTables } from '../services/db.service';
+import { conceptFeedService } from '../services/concept-feed.service';
 
 function SectionHeader({ icon, title }: { icon: React.ReactNode; title: string }) {
   return (
@@ -198,11 +199,13 @@ export function SettingsScreen() {
   };
 
   const handleClearAllData = () => {
-    if (!confirm('Delete ALL data?\n\nThis removes every question, flashcard, session, calendar entry, and podcast. Settings are kept.\n\nThis cannot be undone.')) return;
+    if (!confirm('Delete ALL data?\n\nThis removes every question, flashcard, session, planner entry, and podcast. Settings are kept.\n\nThis cannot be undone.')) return;
     const keys = Object.keys(localStorage).filter((k) => k.startsWith('echolearn_') && k !== 'echolearn_settings');
     for (const k of keys) localStorage.removeItem(k);
     // Explicitly set an empty array so flashcardService doesn't auto-re-seed on next load
     localStorage.setItem('echolearn_flashcards', '[]');
+    // Explicitly clear the concept feed post cache
+    conceptFeedService.clearCache();
     // Clear SQLite tables (Android native) — fire-and-forget before reload
     void clearAllTables().finally(() => {
       toast('All data cleared — reloading…', 'success');
@@ -513,8 +516,8 @@ export function SettingsScreen() {
         </div>
       </Card>
 
-      {/* Calendar Settings */}
-      <SectionHeader icon={<Calendar size={20} />} title="Calendar" />
+      {/* Planner Settings */}
+      <SectionHeader icon={<Calendar size={20} />} title="Planner" />
       <Card style={{ marginBottom: '8px' }}>
         <SettingRow label="Time Blocks Template" description="Configure default daily time blocks">
           <Button size="sm" variant="secondary" onClick={() => toast('Template editor coming soon', 'info')}>Edit</Button>

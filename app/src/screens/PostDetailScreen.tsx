@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, Loader2, MessageSquare } from 'lucide-react';
 import type { ChatSession, DailyPost, SessionMessage } from '../types';
 import { useQuestions } from '../state/useQuestions';
@@ -17,8 +17,11 @@ function newMsgId(prefix: string): string {
 
 export function PostDetailScreen() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
   const { questions } = useQuestions();
+  // Accept the post directly via navigation state so we never depend solely on cache.
+  const passedPost = (location.state as { post?: DailyPost } | null)?.post ?? null;
   const [post, setPost] = useState<DailyPost | null>(null);
   const [session, setSession] = useState<ChatSession | null>(null);
   const [loadingPost, setLoadingPost] = useState(true);
@@ -26,20 +29,22 @@ export function PostDetailScreen() {
   const [input, setInput] = useState('');
   const threadEndRef = useRef<HTMLDivElement>(null);
 
+  // Use a ref for questions so session creation always has the latest value
+  // without re-triggering the post-loading effect.
+  const questionsRef = useRef(questions);
+  questionsRef.current = questions;
+
   useEffect(() => {
     if (!id) return;
-    let cancelled = false;
     setLoadingPost(true);
-    void conceptFeedService.getPostById(id, questions).then((loaded) => {
-      if (cancelled) return;
-      setPost(loaded);
-      setLoadingPost(false);
-      if (loaded) {
-        setSession(sessionService.getOrCreatePostSession(loaded, questions));
-      }
-    });
-    return () => { cancelled = true; };
-  }, [id, questions]);
+    // Try cache first, fall back to the post passed via navigation state.
+    const loaded = conceptFeedService.getPostById(id) ?? passedPost;
+    setPost(loaded);
+    setLoadingPost(false);
+    if (loaded) {
+      setSession(sessionService.getOrCreatePostSession(loaded, questionsRef.current));
+    }
+  }, [id, passedPost]);
 
   // Track initial message count so we only auto-scroll on NEW messages, not on mount
   const initialMsgCount = useRef<number | null>(null);
