@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { NavLink } from 'react-router-dom';
 import { Home, GitBranch, MessageSquare, Calendar, Settings } from 'lucide-react';
+import { hapticImpactLight } from '../lib/haptics';
 
 interface NavItem {
   to: string;
@@ -26,6 +27,7 @@ export function BottomNavigation({ onAskLongPress }: BottomNavigationProps) {
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleAskPointerDown = () => {
+    void hapticImpactLight();
     longPressTimer.current = setTimeout(() => {
       onAskLongPress?.();
     }, 600);
@@ -69,6 +71,7 @@ export function BottomNavigation({ onAskLongPress }: BottomNavigationProps) {
           <NavLink
             key={item.to}
             to={item.to}
+            className="active-squish"
             style={({ isActive }) => ({
               display: 'flex',
               flexDirection: 'column',
@@ -94,6 +97,7 @@ export function BottomNavigation({ onAskLongPress }: BottomNavigationProps) {
         {/* Center FAB — Ask */}
         <NavLink
           to="/ask"
+          className="active-squish"
           onPointerDown={handleAskPointerDown}
           onPointerUp={handleAskPointerUp}
           onPointerLeave={handleAskPointerUp}
@@ -127,6 +131,7 @@ export function BottomNavigation({ onAskLongPress }: BottomNavigationProps) {
           <NavLink
             key={item.to}
             to={item.to}
+            className="active-squish"
             style={({ isActive }) => ({
               display: 'flex',
               flexDirection: 'column',

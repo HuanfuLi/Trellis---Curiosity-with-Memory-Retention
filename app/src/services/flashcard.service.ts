@@ -93,14 +93,17 @@ function defaultSchedule(): ReviewSchedule {
 export const flashcardService = {
   getAll(): FlashCard[] {
     const projected = getProjectedFlashcards(questionService.getAll());
-    return projected.length > 0 ? projected : loadAll();
+    const extracted = loadAll();
+    const seen = new Set(projected.map((c) => c.id));
+    return [...projected, ...extracted.filter((c) => !seen.has(c.id))];
   },
 
   getDue(): FlashCard[] {
-    const projected = getDueProjectedFlashcards(questionService.getAll());
-    if (projected.length > 0) return projected;
     const t = today();
-    return loadAll().filter((c) => c.pinned || c.reviewSchedule.nextReviewDate <= t);
+    const projected = getDueProjectedFlashcards(questionService.getAll());
+    const extracted = loadAll().filter((c) => c.pinned || c.reviewSchedule.nextReviewDate <= t);
+    const seen = new Set(projected.map((c) => c.id));
+    return [...projected, ...extracted.filter((c) => !seen.has(c.id))];
   },
 
   togglePin(id: string): void {

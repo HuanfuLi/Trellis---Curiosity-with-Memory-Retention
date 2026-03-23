@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Pin } from 'lucide-react';
+import { hapticImpactLight } from '../lib/haptics';
 
 interface FlashcardProps {
   front: string;
@@ -21,6 +22,7 @@ export function Flashcard({ front, back, onRate, pinned, onTogglePin }: Flashcar
   const [isFlipped, setIsFlipped] = useState(false);
 
   const handleRate = (rating: number) => {
+    void hapticImpactLight();
     onRate?.(rating);
     setIsFlipped(false);
   };

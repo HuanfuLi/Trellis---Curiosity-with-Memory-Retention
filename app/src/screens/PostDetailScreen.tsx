@@ -41,8 +41,19 @@ export function PostDetailScreen() {
     return () => { cancelled = true; };
   }, [id, questions]);
 
+  // Track initial message count so we only auto-scroll on NEW messages, not on mount
+  const initialMsgCount = useRef<number | null>(null);
   useEffect(() => {
-    threadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const count = session?.messages.length ?? 0;
+    if (initialMsgCount.current === null) {
+      // First render with messages — record baseline, don't scroll
+      initialMsgCount.current = count;
+      return;
+    }
+    // Only scroll when messages are added after initial load, or during streaming
+    if (count > initialMsgCount.current || streaming) {
+      threadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [session?.messages, streaming]);
 
   const quickAskPrompts = useMemo(() => post?.quickAskPrompts ?? [], [post]);
@@ -119,6 +130,8 @@ export function PostDetailScreen() {
           boxShadow: 'var(--shadow-2)',
           border: '1px solid color-mix(in srgb, var(--primary-40) 18%, var(--border))',
           marginBottom: '14px',
+          userSelect: 'text',
+          WebkitTouchCallout: 'default',
         }}
       >
         <p style={{ fontSize: '0.68rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted-foreground)', marginBottom: '8px' }}>

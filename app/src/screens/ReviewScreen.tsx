@@ -10,6 +10,7 @@ import { toast } from '../lib/toast';
 import type { DailyReviewMap, FlashCard, StructuralSignalType } from '../types';
 import { buildDailyReviewMap, recordStructuralSignalPatch } from '../services/canonical-knowledge.service';
 import { questionService } from '../services/question.service';
+import { graphService } from '../services/graph.service';
 
 // ─── Library view ─────────────────────────────────────────────────────────────
 
@@ -303,6 +304,13 @@ export function ReviewScreen() {
     await submitReview(currentItem.id, rating as 1 | 2 | 3 | 4 | 5);
     if (currentItem.nodeId) {
       setRevealedNodeIds((prev) => (prev.includes(currentItem.nodeId!) ? prev : [...prev, currentItem.nodeId!]));
+      // Reinforce graph edges between this node and its related questions
+      const question = questionService.getAll().find((q) => q.id === currentItem.nodeId);
+      if (question) {
+        for (const relatedId of question.relatedQuestionIds) {
+          void graphService.reinforceEdge(question.id, relatedId);
+        }
+      }
     }
     setTotalRatings((prev) => prev + rating);
     const nextReviewed = reviewed + 1;

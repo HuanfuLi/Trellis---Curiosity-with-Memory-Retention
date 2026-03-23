@@ -134,6 +134,30 @@ function ConceptCard({ post, isActive, onOpen }: ConceptCardProps) {
   );
 }
 
+// Color palette for connection cards — vivid, high-contrast pairs.
+// Each entry: [bg, glowRgba]. No two adjacent colors in the pool are similar.
+const CONNECTION_COLORS = [
+  { bg: '#D84315', glow: 'rgba(216,67,21,0.45)' },   // deep orange
+  { bg: '#0277BD', glow: 'rgba(2,119,189,0.45)' },    // ocean blue
+  { bg: '#6A1B9A', glow: 'rgba(106,27,154,0.45)' },   // purple
+  { bg: '#00695C', glow: 'rgba(0,105,92,0.45)' },     // teal
+  { bg: '#AD1457', glow: 'rgba(173,20,87,0.45)' },    // magenta
+  { bg: '#283593', glow: 'rgba(40,53,147,0.45)' },    // indigo
+  { bg: '#E65100', glow: 'rgba(230,81,0,0.45)' },     // vivid orange
+  { bg: '#1565C0', glow: 'rgba(21,101,192,0.45)' },   // bright blue
+];
+
+/** Pick two distinct colors deterministically from a pair of IDs. */
+function pickConnectionColors(idA: string, idB: string) {
+  // Simple hash from string → number
+  let h = 0;
+  for (const ch of idA + idB) h = ((h << 5) - h + ch.charCodeAt(0)) | 0;
+  const i = ((h % CONNECTION_COLORS.length) + CONNECTION_COLORS.length) % CONNECTION_COLORS.length;
+  let j = (i + 1 + (Math.abs(h >> 8) % (CONNECTION_COLORS.length - 1))) % CONNECTION_COLORS.length;
+  if (j === i) j = (i + 1) % CONNECTION_COLORS.length; // safety
+  return { a: CONNECTION_COLORS[i], b: CONNECTION_COLORS[j] };
+}
+
 interface ConnectionCardProps {
   questionA: Question;
   questionB: Question;
@@ -159,6 +183,7 @@ function ConnectionCard({ questionA, questionB, onAha }: ConnectionCardProps) {
   }, [ahaBurst, onAha, questionA.id, questionB.id]);
 
   const sharedKeywords = questionA.keywords.filter((keyword) => questionB.keywords.includes(keyword));
+  const colors = pickConnectionColors(questionA.id, questionB.id);
 
   return (
     <div
@@ -181,13 +206,13 @@ function ConnectionCard({ questionA, questionB, onAha }: ConnectionCardProps) {
             fontWeight: 700,
             letterSpacing: '0.1em',
             textTransform: 'uppercase',
-            color: 'var(--node-sky)',
-            background: 'color-mix(in srgb, var(--node-sky) 20%, transparent)',
+            color: '#ffffff',
+            background: colors.a.bg,
             padding: '4px 12px',
             borderRadius: '100px',
           }}
         >
-          Connection
+          Connect
         </span>
         <span style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)' }}>Double-tap to keep this spark</span>
         {ahaCount > 0 && (
@@ -217,19 +242,8 @@ function ConnectionCard({ questionA, questionB, onAha }: ConnectionCardProps) {
             animation: 'aha-pop 2s ease forwards',
           }}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', animation: 'glow-ring 2s ease forwards' }}>
+          <div style={{ animation: 'glow-ring 2s ease forwards' }}>
             <span style={{ fontSize: '3.5rem', filter: 'drop-shadow(0 0 16px rgba(76,175,80,0.8))' }}>🧠</span>
-            <span
-              style={{
-                fontSize: '1.1rem',
-                fontWeight: 800,
-                color: 'var(--primary-40)',
-                textShadow: '0 0 12px rgba(76,175,80,0.6)',
-                letterSpacing: '0.05em',
-              }}
-            >
-              AHA!
-            </span>
           </div>
         </div>
       )}
@@ -239,12 +253,12 @@ function ConnectionCard({ questionA, questionB, onAha }: ConnectionCardProps) {
           flex: 1,
           padding: '20px',
           borderRadius: 'var(--radius-xl)',
-          backgroundColor: '#D84315',
+          backgroundColor: colors.a.bg,
           marginBottom: '10px',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
-          boxShadow: ahaBurst ? '0 0 24px 6px rgba(216,67,21,0.45)' : 'none',
+          boxShadow: ahaBurst ? `0 0 24px 6px ${colors.a.glow}` : 'none',
           transition: 'box-shadow 0.4s',
         }}
       >
@@ -267,11 +281,11 @@ function ConnectionCard({ questionA, questionB, onAha }: ConnectionCardProps) {
           flex: 1,
           padding: '20px',
           borderRadius: 'var(--radius-xl)',
-          backgroundColor: '#0277BD',
+          backgroundColor: colors.b.bg,
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
-          boxShadow: ahaBurst ? '0 0 24px 6px rgba(2,119,189,0.45)' : 'none',
+          boxShadow: ahaBurst ? `0 0 24px 6px ${colors.b.glow}` : 'none',
           transition: 'box-shadow 0.4s',
         }}
       >
@@ -592,7 +606,7 @@ export function InlineInfoFlow({ items, onAhaConnection, onOpenPost }: InlineInf
                     ? '1.5px solid color-mix(in srgb, var(--primary-40) 30%, var(--border))'
                     : item.kind === 'milestone'
                       ? 'none'
-                      : '1.5px solid rgba(2, 119, 189, 0.35)',
+                      : '1.5px solid var(--border)',
                 boxShadow: item.kind === 'milestone' ? 'var(--shadow-3)' : 'var(--shadow-2)',
                 overflow: 'hidden',
                 minHeight: item.kind === 'concept' ? '320px' : item.kind === 'milestone' ? '200px' : '280px',

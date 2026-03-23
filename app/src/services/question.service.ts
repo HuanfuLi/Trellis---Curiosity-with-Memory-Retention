@@ -15,35 +15,19 @@ import {
 const STORAGE_KEY = 'echolearn_questions';
 
 // ─── SQLite write-through helpers ────────────────────────────────────────────
-
-let sqliteReady = false;
-
-async function ensureQuestionsTable() {
-  if (sqliteReady) return;
-  await dbExecute(
-    `CREATE TABLE IF NOT EXISTS questions (
-      id TEXT PRIMARY KEY,
-      data TEXT NOT NULL
-    )`,
-  );
-  sqliteReady = true;
-}
+// DDL lives in db.service.ts (_runMigrations / init). These helpers only do DML.
 
 /** Write a single question to SQLite (fire-and-forget; localStorage is primary). */
 function persistToSQLite(question: Question) {
-  void ensureQuestionsTable().then(() =>
-    dbExecute('INSERT OR REPLACE INTO questions (id, data) VALUES (?, ?)', [
-      question.id,
-      JSON.stringify(question),
-    ]),
-  );
+  void dbExecute('INSERT OR REPLACE INTO questions (id, data) VALUES (?, ?)', [
+    question.id,
+    JSON.stringify(question),
+  ]);
 }
 
 /** Delete a question from SQLite. */
 function deleteFromSQLite(id: string) {
-  void ensureQuestionsTable().then(() =>
-    dbExecute('DELETE FROM questions WHERE id = ?', [id]),
-  );
+  void dbExecute('DELETE FROM questions WHERE id = ?', [id]);
 }
 
 let hydrated = false;
@@ -56,7 +40,6 @@ export async function hydrateFromSQLite(): Promise<void> {
   if (hydrated) return;
   hydrated = true;
   try {
-    await ensureQuestionsTable();
     const rows = await dbQuery<{ id: string; data: string }>('SELECT * FROM questions');
     if (rows.length === 0) return;
 

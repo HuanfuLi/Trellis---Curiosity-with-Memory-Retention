@@ -15,7 +15,6 @@ export interface Question {
   keywords: string[];
   relatedQuestionIds: string[];
   categoryIds: string[];
-  embedding?: number[];
   reviewSchedule: ReviewSchedule;
   createdAt: number;
   aliases?: string[];

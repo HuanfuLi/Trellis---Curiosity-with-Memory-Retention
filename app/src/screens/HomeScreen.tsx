@@ -227,6 +227,7 @@ export function HomeScreen() {
             {/* Flashcard Card */}
           <button
             onClick={() => navigate('/review')}
+            className="active-squish"
             style={{ textAlign: 'left', background: 'none', padding: 0 }}
           >
             <Card
@@ -251,6 +252,7 @@ export function HomeScreen() {
           {/* Tasks Card */}
           <button
             onClick={() => navigate('/calendar')}
+            className="active-squish"
             style={{ textAlign: 'left', background: 'none', padding: 0 }}
           >
             <Card
@@ -275,6 +277,7 @@ export function HomeScreen() {
           {/* Podcast Card — full width */}
           <button
             onClick={() => navigate('/podcast')}
+            className="active-squish"
             style={{ gridColumn: '1 / -1', textAlign: 'left', background: 'none', padding: 0 }}
           >
             <Card

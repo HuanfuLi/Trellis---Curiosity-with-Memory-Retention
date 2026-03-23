@@ -14,57 +14,111 @@ function newPodcastId(): string {
   return `pod-${++podcastIdCounter}`;
 }
 
-// Convert a blob URL to a base64 data URI for persistent storage.
-async function blobUrlToDataUri(blobUrl: string): Promise<string> {
-  const resp = await fetch(blobUrl);
-  const blob = await resp.blob();
+// ─── IndexedDB audio storage ─────────────────────────────────────────────────
+// Audio blobs are stored in IndexedDB instead of localStorage to avoid the
+// ~5 MB localStorage quota. IndexedDB allows hundreds of MB.
+
+const IDB_NAME = 'echolearn_audio';
+const IDB_STORE = 'blobs';
+const IDB_VERSION = 1;
+
+function openAudioDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
   });
 }
 
-// Reconstruct a blob URL from a base64 data URI.
-function dataUriToBlobUrl(dataUri: string): string {
-  const [header, base64] = dataUri.split(',');
-  const mimeMatch = header.match(/data:([^;]+)/);
-  const mime = mimeMatch?.[1] ?? 'audio/mpeg';
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return URL.createObjectURL(new Blob([bytes], { type: mime }));
+async function saveAudioBlob(podcastId: string, blobUrl: string): Promise<void> {
+  try {
+    const resp = await fetch(blobUrl);
+    const blob = await resp.blob();
+    const db = await openAudioDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(blob, podcastId);
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    });
+  } catch {
+    // Non-fatal — audio works this session but not after reload
+  }
+}
+
+async function loadAudioBlob(podcastId: string): Promise<string | null> {
+  try {
+    const db = await openAudioDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get(podcastId);
+      req.onsuccess = () => {
+        db.close();
+        const blob = req.result as Blob | undefined;
+        if (blob) {
+          resolve(URL.createObjectURL(blob));
+        } else {
+          resolve(null);
+        }
+      };
+      req.onerror = () => { db.close(); reject(req.error); };
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function deleteAudioBlob(podcastId: string): Promise<void> {
+  try {
+    const db = await openAudioDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).delete(podcastId);
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    });
+  } catch {
+    // Non-fatal
+  }
 }
 
 function loadStore(): DailyPodcast[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
-    const podcasts = JSON.parse(raw) as DailyPodcast[];
-    // Restore in-memory blob URLs from persisted data URIs so audio works after reload
-    for (const p of podcasts) {
-      if (p.audioDataUri && !audioBlobUrls.has(p.id)) {
-        try {
-          audioBlobUrls.set(p.id, dataUriToBlobUrl(p.audioDataUri));
-        } catch {
-          // Corrupt data URI — ignore; audio will regenerate on next play
-        }
-      }
-    }
-    return podcasts;
+    return JSON.parse(raw) as DailyPodcast[];
   } catch {
     return [];
   }
 }
 
+/** Restore in-memory blob URLs from IndexedDB for all podcasts that have audio persisted. */
+async function hydrateAudioBlobUrls(): Promise<void> {
+  const podcasts = loadStore();
+  for (const p of podcasts) {
+    if (p.status === 'ready' && !audioBlobUrls.has(p.id)) {
+      const blobUrl = await loadAudioBlob(p.id);
+      if (blobUrl) audioBlobUrls.set(p.id, blobUrl);
+    }
+  }
+}
+
+// Kick off hydration on module load (fire-and-forget)
+void hydrateAudioBlobUrls();
+
 function saveStore(podcasts: DailyPodcast[]): void {
   try {
-    // Strip in-memory blob URL (audioPath) — it doesn't survive reload.
-    // Keep audioDataUri — it's the base64 version that does survive.
+    // Strip transient fields — audio is persisted in IndexedDB, not localStorage.
     const toSave = podcasts.map((p) => {
       const copy = { ...p };
       delete copy.audioPath;
+      delete copy.audioDataUri;
       return copy;
     });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
@@ -164,23 +218,15 @@ export const podcastService = {
         const ttsConfig = { ...settings.tts, apiKey: effectiveTtsKey };
 
         let duration: number | undefined;
-        let audioDataUri: string | undefined;
         if (ttsReady) {
           try {
             const blobUrl = await synthesize(script, ttsConfig);
             audioBlobUrls.set(id, blobUrl);
             duration = Math.round(script.length / 15);
 
-            // Persist audio as a data URI so it survives page reloads.
-            // Skip if too large (> 3 MB as base64) to avoid blowing localStorage quota.
-            try {
-              const dataUri = await blobUrlToDataUri(blobUrl);
-              if (dataUri.length <= 3_000_000) {
-                audioDataUri = dataUri;
-              }
-            } catch {
-              // Conversion failed — audio works this session but not after reload
-            }
+            // Persist audio blob to IndexedDB so it survives page reloads
+            // without consuming the limited localStorage quota.
+            await saveAudioBlob(id, blobUrl);
           } catch (ttsErr) {
             // TTS failure is non-fatal — podcast is still ready, but inform the user
             const msg = ttsErr instanceof Error ? ttsErr.message : String(ttsErr);
@@ -201,7 +247,6 @@ export const podcastService = {
           status: 'ready',
           progress: 100,
           duration,
-          audioDataUri,
           createdAt: pod.createdAt,
         };
 
@@ -243,6 +288,7 @@ export const podcastService = {
       URL.revokeObjectURL(blobUrl);
       audioBlobUrls.delete(podcastId);
     }
+    await deleteAudioBlob(podcastId);
     saveStore(loadStore().filter((p) => p.id !== podcastId));
     return { success: true };
   },

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { createBrowserRouter, RouterProvider, Navigate, Outlet } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate, Outlet, ScrollRestoration } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 import { BottomNavigation } from './components/BottomNavigation';
@@ -17,6 +17,7 @@ import { PostDetailScreen } from './screens/PostDetailScreen';
 import { mockSettingsService } from './services/mock/settings.mock';
 import { hydrateFromSQLite } from './services/question.service';
 import { applyTheme } from './lib/theme';
+import { PageTransition } from './components/PageTransition';
 
 function RootLayout() {
   return (
@@ -40,6 +41,7 @@ function RootLayout() {
       }}>
         <Outlet />
       </div>
+      <ScrollRestoration />
       <BottomNavigation />
       <ToastContainer />
     </div>
@@ -64,15 +66,15 @@ const router = createBrowserRouter([
     element: <RootLayout />,
     children: [
       { index: true, element: <HomeRedirect /> },
-      { path: 'home', element: <HomeScreen /> },
-      { path: 'posts/:id', element: <PostDetailScreen /> },
-      { path: 'ask', element: <AskScreen /> },
-      { path: 'ask/:id', element: <QuestionDetailScreen /> },
-      { path: 'graph', element: <GraphScreen /> },
-      { path: 'calendar', element: <CalendarScreen /> },
-      { path: 'review', element: <ReviewScreen /> },
-      { path: 'podcast', element: <PodcastScreen /> },
-      { path: 'settings', element: <SettingsScreen /> },
+      { path: 'home', element: <PageTransition><HomeScreen /></PageTransition> },
+      { path: 'posts/:id', element: <PageTransition><PostDetailScreen /></PageTransition> },
+      { path: 'ask', element: <PageTransition><AskScreen /></PageTransition> },
+      { path: 'ask/:id', element: <PageTransition><QuestionDetailScreen /></PageTransition> },
+      { path: 'graph', element: <PageTransition><GraphScreen /></PageTransition> },
+      { path: 'calendar', element: <PageTransition><CalendarScreen /></PageTransition> },
+      { path: 'review', element: <PageTransition><ReviewScreen /></PageTransition> },
+      { path: 'podcast', element: <PageTransition><PodcastScreen /></PageTransition> },
+      { path: 'settings', element: <PageTransition><SettingsScreen /></PageTransition> },
     ],
   },
 ]);

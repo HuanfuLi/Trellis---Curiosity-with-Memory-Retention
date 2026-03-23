@@ -5,24 +5,7 @@ import { dbExecute, dbQuery } from './db.service';
 // ─── Similarity helpers ───────────────────────────────────────────────────────
 
 /**
- * Cosine similarity between two embedding vectors.
- * Returns a score in [-1, 1] (higher = more similar).
- */
-function cosineSimilarity(a: number[], b: number[]): number {
-  if (a.length === 0 || b.length === 0 || a.length !== b.length) return 0;
-  let dot = 0, normA = 0, normB = 0;
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-  const denom = Math.sqrt(normA) * Math.sqrt(normB);
-  return denom === 0 ? 0 : dot / denom;
-}
-
-/**
  * Jaccard-style keyword overlap score in [0, 1].
- * Used as a fallback when embeddings are unavailable.
  */
 function keywordSimilarity(a: Question, b: Question): number {
   if (a.keywords.length === 0 || b.keywords.length === 0) return 0;
@@ -33,19 +16,7 @@ function keywordSimilarity(a: Question, b: Question): number {
   return intersection / (setA.size + setB.size - intersection);
 }
 
-/**
- * Combined similarity: prefers cosine on embeddings when both nodes have them,
- * blends with keyword overlap otherwise.
- */
 function similarity(a: Question, b: Question): number {
-  const hasEmbeddings =
-    Array.isArray(a.embedding) && a.embedding.length > 0 &&
-    Array.isArray(b.embedding) && b.embedding.length > 0;
-
-  if (hasEmbeddings) {
-    // Blend 80% cosine + 20% keyword overlap for robustness
-    return 0.8 * cosineSimilarity(a.embedding!, b.embedding!) + 0.2 * keywordSimilarity(a, b);
-  }
   return keywordSimilarity(a, b);
 }
 
@@ -56,19 +27,10 @@ function edgeKey(a: string, b: string): string {
 }
 
 // ─── Edge weight persistence (SQLite / localStorage via db.service) ───────────
-
-async function initEdgeTable(): Promise<void> {
-  await dbExecute(
-    `CREATE TABLE IF NOT EXISTS edge_weights (
-      edge_key TEXT PRIMARY KEY,
-      weight INTEGER NOT NULL DEFAULT 0
-    )`,
-  );
-}
+// DDL lives in db.service.ts (_runMigrations / init). These helpers only do DML.
 
 async function loadEdgeWeights(): Promise<Record<string, number>> {
   try {
-    await initEdgeTable();
     const rows = await dbQuery<{ edge_key: string; weight: number }>('SELECT * FROM edge_weights');
     const map: Record<string, number> = {};
     for (const row of rows) map[row.edge_key] = row.weight;
@@ -80,7 +42,6 @@ async function loadEdgeWeights(): Promise<Record<string, number>> {
 }
 
 async function incrementEdgeWeight(key: string): Promise<number> {
-  await initEdgeTable();
   const existing = await dbQuery<{ edge_key: string; weight: number }>(
     'SELECT * FROM edge_weights WHERE edge_key = ?',
     [key],
@@ -102,8 +63,7 @@ export const graphService = {
   },
 
   /**
-   * Find questions most similar to the given source by cosine similarity
-   * (embedding-based) when available, falling back to keyword Jaccard overlap.
+   * Find questions most similar to the given source by keyword Jaccard overlap.
    * Excludes the source and already-linked nodes.
    */
   getSimilarNodes(sourceId: string, limit = 4): Question[] {

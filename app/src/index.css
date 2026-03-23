@@ -162,6 +162,7 @@
     margin: 0;
     padding: 0;
     border-color: var(--border);
+    -webkit-tap-highlight-color: transparent;
   }
 
   body {
@@ -172,6 +173,8 @@
     font-family: var(--font-family);
     font-size: var(--font-size);
     min-height: 100vh;
+    user-select: none;
+    -webkit-touch-callout: none;
   }
 
   h1 {
@@ -287,6 +290,15 @@
 .md-prose a {
   color: var(--primary-40);
   text-decoration: underline;
+}
+
+/* ── Tactile feedback ───────────────────────── */
+.active-squish {
+  transition: transform 0.12s ease, opacity 0.12s ease;
+}
+.active-squish:active {
+  transform: scale(0.96);
+  opacity: 0.85;
 }
 
 /* ── Animations ─────────────────────────────── */

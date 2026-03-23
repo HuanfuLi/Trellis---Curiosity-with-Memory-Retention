@@ -34,20 +34,27 @@ function newMsgId(prefix: string): string {
 // Bug #2: Guard against concurrent processSession calls for the same session
 const processingSessionIds = new Set<string>();
 
-function startNewSession(current: ChatSession): ChatSession {
-  // Fire-and-forget flashcard processing if session has user messages, hasn't been processed,
-  // and isn't already being processed by a concurrent call
-  if (!current.processed && current.messages.some((m) => m.type === 'user') && !processingSessionIds.has(current.id)) {
-    processingSessionIds.add(current.id);
-    void flashcardService.processSession(current).then(() => {
-      const refreshed = sessionService.getById(current.id);
+/** Fire-and-forget flashcard extraction for a session that is becoming inactive. */
+function processSessionIfNeeded(session: ChatSession): void {
+  if (
+    !session.processed &&
+    session.messages.some((m) => m.type === 'user') &&
+    !processingSessionIds.has(session.id)
+  ) {
+    processingSessionIds.add(session.id);
+    void flashcardService.processSession(session).then(() => {
+      const refreshed = sessionService.getById(session.id);
       if (refreshed) {
         sessionService.save({ ...refreshed, processed: true });
       }
     }).finally(() => {
-      processingSessionIds.delete(current.id);
+      processingSessionIds.delete(session.id);
     });
   }
+}
+
+function startNewSession(current: ChatSession): ChatSession {
+  processSessionIfNeeded(current);
   return sessionService.createNew();
 }
 
@@ -71,8 +78,21 @@ export function AskScreen() {
     sessionRef.current = session;
   }, [session]);
 
+  // Process the current session for flashcard extraction when the screen unmounts
+  // (e.g. user navigates away via BottomNavigation or closes the app)
+  useEffect(() => {
+    return () => {
+      processSessionIfNeeded(sessionRef.current);
+    };
+  }, []);
+
   // Guard against concurrent generateAiReply calls (race condition)
   const generatingRef = useRef(false);
+  // Abort in-flight AI streams on unmount to prevent stale state updates
+  const abortRef = useRef<AbortController | null>(null);
+  useEffect(() => {
+    return () => { abortRef.current?.abort(); };
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -102,6 +122,11 @@ export function AskScreen() {
       if (generatingRef.current) return;
       generatingRef.current = true;
 
+      // Abort any previous in-flight stream; create a fresh controller
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       try {
         setStreaming({ placeholderId, content: '' });
 
@@ -113,15 +138,25 @@ export function AskScreen() {
 
         if (postOrigin) {
           for await (const token of postContextQaService.askStreaming(postOrigin.context, userContent)) {
+            if (controller.signal.aborted) return;
             lastContent += token;
             setStreaming({ placeholderId, content: lastContent });
+          }
+          // Promote post-context Q&A into the knowledge graph so insights
+          // feed into Mind Map, Review, and Podcast surfaces.
+          if (lastContent) {
+            question = questionService.buildAndSave(userContent, lastContent);
           }
         } else {
           question = await askStreaming(userContent, (accumulated) => {
             lastContent = accumulated;
-            setStreaming({ placeholderId, content: accumulated });
+            if (!controller.signal.aborted) {
+              setStreaming({ placeholderId, content: accumulated });
+            }
           });
         }
+
+        if (controller.signal.aborted) return;
 
         const aiContent = question
           ? question.answer
@@ -143,9 +178,11 @@ export function AskScreen() {
         const updated: ChatSession = { ...current, messages: [...current.messages, aiMsg] };
         sessionService.save(updated);
 
-        // Update React state (no-op if unmounted, but data is already safe)
-        setSession(updated);
-        setStreaming(null);
+        // Update React state — skip if aborted (component likely unmounted)
+        if (!controller.signal.aborted) {
+          setSession(updated);
+          setStreaming(null);
+        }
       } catch (error) {
         setStreaming(null);
         toast(error instanceof Error ? error.message : 'Failed to continue this conversation.', 'error');
@@ -255,6 +292,8 @@ export function AskScreen() {
   }, []);
 
   const handleSelectSession = useCallback((id: string) => {
+    // Process the outgoing session before switching
+    processSessionIfNeeded(sessionRef.current);
     sessionService.setActiveId(id);
     const loaded = sessionService.getById(id);
     if (loaded) {
