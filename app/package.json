@@ -18,6 +18,7 @@
     "@capacitor/core": "^8.1.0",
     "@capacitor/haptics": "^8.0.1",
     "@tailwindcss/vite": "^4.2.1",
+    "capacitor-voice-recorder": "^7.0.6",
     "framer-motion": "^12.38.0",
     "lucide-react": "^0.575.0",
     "mind-elixir": "^5.9.3",

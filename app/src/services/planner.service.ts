@@ -6,6 +6,8 @@ import { chatCompletion } from '../providers/llm/index.ts';
 import { mockSettingsService } from './mock/settings.mock.ts';
 import { eventBus } from '../lib/event-bus.ts';
 import { dbExecute, dbQuery } from './db.service.ts';
+import { Capacitor } from '@capacitor/core';
+import { questionService } from './question.service.ts';
 
 // ── Persistence ────────────────────────────────────────────────────────────
 
@@ -31,27 +33,37 @@ function saveJson<T>(key: string, data: T): void {
 // ── SQLite write-through helpers ───────────────────────────────────────────
 // DDL lives in db.service.ts (_runMigrations). These helpers only do DML.
 
+// On web the SQLite layer falls back to a localStorage shim, which would
+// duplicate the data we already persist via saveJson(). Only write through
+// to SQLite on native platforms where it is a real database.
+const isNative = Capacitor.isNativePlatform();
+
 function persistChunkToSQLite(chunk: PlannerChunk): void {
+  if (!isNative) return;
   dbExecute('INSERT OR REPLACE INTO planner_chunks (id, data) VALUES (?, ?)', [chunk.id, JSON.stringify(chunk)])
     .catch((err: unknown) => console.warn('[planner] SQLite chunk persist failed:', err));
 }
 
 function deleteChunkFromSQLite(id: string): void {
+  if (!isNative) return;
   dbExecute('DELETE FROM planner_chunks WHERE id = ?', [id])
     .catch((err: unknown) => console.warn('[planner] SQLite chunk delete failed:', err));
 }
 
 function persistThreadToSQLite(thread: PlannerThread): void {
+  if (!isNative) return;
   dbExecute('INSERT OR REPLACE INTO planner_threads (id, data) VALUES (?, ?)', [thread.id, JSON.stringify(thread)])
     .catch((err: unknown) => console.warn('[planner] SQLite thread persist failed:', err));
 }
 
 function deleteThreadFromSQLite(id: string): void {
+  if (!isNative) return;
   dbExecute('DELETE FROM planner_threads WHERE id = ?', [id])
     .catch((err: unknown) => console.warn('[planner] SQLite thread delete failed:', err));
 }
 
 function persistCheckInToSQLite(checkIn: LearningCheckIn): void {
+  if (!isNative) return;
   dbExecute('INSERT OR REPLACE INTO planner_checkins (id, data) VALUES (?, ?)', [checkIn.id, JSON.stringify(checkIn)])
     .catch((err: unknown) => console.warn('[planner] SQLite check-in persist failed:', err));
 }
@@ -308,6 +320,48 @@ async function extractSignals(content: string): Promise<CheckInSignals> {
   }
 }
 
+// ── Stop-word filter for keyword extraction ──────────────────────────────
+// Matches the pattern used in question.service.ts to avoid low-quality keywords.
+
+const STOP_WORDS = new Set([
+  'the', 'a', 'an', 'is', 'it', 'in', 'on', 'at', 'to', 'for', 'of', 'and', 'or', 'but',
+  'not', 'with', 'as', 'by', 'what', 'how', 'why', 'when', 'where', 'who', 'which', 'this',
+  'that', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does',
+  'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'shall',
+  'about', 'from', 'into', 'through', 'during', 'before', 'after', 'between',
+  'more', 'some', 'such', 'than', 'too', 'very', 'just', 'also',
+]);
+
+function extractKeywords(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !STOP_WORDS.has(w))
+    .slice(0, 6);
+}
+
+// ── Concept linking ─────────────────────────────────────────────────────
+// Find question IDs whose keywords overlap with a signal string.
+
+function findLinkedConceptIds(signal: string): string[] {
+  const signalWords = new Set(extractKeywords(signal));
+  if (signalWords.size === 0) return [];
+
+  const allQuestions = questionService.getAll();
+  const matches: Array<{ id: string; overlap: number }> = [];
+
+  for (const q of allQuestions) {
+    const overlap = q.keywords.filter((kw) => signalWords.has(kw.toLowerCase())).length;
+    if (overlap > 0) matches.push({ id: q.id, overlap });
+  }
+
+  return matches
+    .sort((a, b) => b.overlap - a.overlap)
+    .slice(0, 3)
+    .map((m) => m.id);
+}
+
 // ── Thread matching ────────────────────────────────────────────────────────
 
 function findMatchingThread(threads: PlannerThread[], signal: string): PlannerThread | undefined {
@@ -343,16 +397,23 @@ export const plannerService = {
     return loadCheckIns();
   },
 
+  /** Chunks actively in progress, sorted by most recently updated. */
+  getActiveChunks(): PlannerChunk[] {
+    return loadChunks()
+      .filter((c) => c.status === 'in_progress')
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+  },
+
+  /** Suggested chunks not yet started, sorted by most recently created. */
+  getSuggestedChunks(): PlannerChunk[] {
+    return loadChunks()
+      .filter((c) => c.status === 'suggested')
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+  },
+
   /** Chunks in the Continue section: in_progress items first, then recent suggested. */
   getContinueChunks(): PlannerChunk[] {
-    const chunks = loadChunks();
-    return chunks
-      .filter((c) => c.status === 'in_progress' || c.status === 'suggested')
-      .sort((a, b) => {
-        if (a.status === 'in_progress' && b.status !== 'in_progress') return -1;
-        if (b.status === 'in_progress' && a.status !== 'in_progress') return 1;
-        return b.updatedAt - a.updatedAt;
-      });
+    return [...this.getActiveChunks(), ...this.getSuggestedChunks()];
   },
 
   /** Saved-for-later chunks. */
@@ -453,17 +514,63 @@ export const plannerService = {
 
   /**
    * Process a learning check-in:
-   * 1. Extract signals via LLM
+   * 1. Extract signals via LLM (+ heuristic fallback)
    * 2. Create or update threads from confusion/connection/curiosity signals
-   * 3. Generate chunk suggestions from unresolved signals
-   * 4. Persist everything
+   * 3. Generate chunk suggestions from unresolved signals (with dedup)
+   * 4. Link chunks and threads to matching knowledge-graph concepts
+   * 5. Persist everything in a single batched write + emit
    */
   async submitCheckIn(content: string): Promise<LearningCheckIn> {
     const signals = await extractSignals(content);
     const threads = loadThreads();
+    const chunks = loadChunks();
     const affectedThreadIds: string[] = [];
-    const generatedChunkIds: string[] = [];
+    const newChunks: PlannerChunk[] = [];
     const now = Date.now();
+
+    // Dedup helper: check if an active/suggested chunk with the same goal already exists.
+    const existingGoals = new Set(
+      chunks
+        .filter((c) => c.status === 'suggested' || c.status === 'in_progress')
+        .map((c) => c.goal.toLowerCase()),
+    );
+
+    function makeChunk(
+      type: PlannerChunk['type'],
+      goal: string,
+      linkedConceptIds: string[],
+      threadId?: string,
+    ): PlannerChunk | null {
+      if (existingGoals.has(goal.toLowerCase())) return null;
+      existingGoals.add(goal.toLowerCase());
+      const chunk: PlannerChunk = {
+        id: newId('chunk'),
+        type,
+        goal,
+        linkedConceptIds,
+        threadId,
+        status: 'suggested',
+        createdAt: now,
+        updatedAt: now,
+      };
+      newChunks.push(chunk);
+      return chunk;
+    }
+
+    function makeThread(item: string): PlannerThread {
+      const conceptIds = findLinkedConceptIds(item);
+      const t: PlannerThread = {
+        id: newId('thread'),
+        title: item,
+        keywords: extractKeywords(item),
+        linkedConceptIds: conceptIds,
+        saved: true,
+        lastActivityAt: now,
+        createdAt: now,
+      };
+      threads.push(t);
+      return t;
+    }
 
     // Process confusion signals → threads + repair chunks
     for (const item of signals.confusion) {
@@ -472,27 +579,9 @@ export const plannerService = {
         existing.lastActivityAt = now;
         affectedThreadIds.push(existing.id);
       } else {
-        const t: PlannerThread = {
-          id: newId('thread'),
-          title: item,
-          keywords: item.toLowerCase().split(/\s+/).filter((w) => w.length > 2),
-          linkedConceptIds: [],
-          saved: true,
-          lastActivityAt: now,
-          createdAt: now,
-        };
-        threads.push(t);
+        const t = makeThread(item);
         affectedThreadIds.push(t.id);
-
-        // Generate a repair chunk for this confusion
-        const chunk = this.createChunk({
-          type: 'repair',
-          goal: `Clarify: ${item}`,
-          linkedConceptIds: [],
-          threadId: t.id,
-          status: 'suggested',
-        });
-        generatedChunkIds.push(chunk.id);
+        makeChunk('repair', `Clarify: ${item}`, t.linkedConceptIds, t.id);
       }
     }
 
@@ -503,26 +592,9 @@ export const plannerService = {
         existing.lastActivityAt = now;
         affectedThreadIds.push(existing.id);
       } else {
-        const t: PlannerThread = {
-          id: newId('thread'),
-          title: item,
-          keywords: item.toLowerCase().split(/\s+/).filter((w) => w.length > 2),
-          linkedConceptIds: [],
-          saved: true,
-          lastActivityAt: now,
-          createdAt: now,
-        };
-        threads.push(t);
+        const t = makeThread(item);
         affectedThreadIds.push(t.id);
-
-        const chunk = this.createChunk({
-          type: 'connect',
-          goal: `Explore: ${item}`,
-          linkedConceptIds: [],
-          threadId: t.id,
-          status: 'suggested',
-        });
-        generatedChunkIds.push(chunk.id);
+        makeChunk('connect', `Explore: ${item}`, t.linkedConceptIds, t.id);
       }
     }
 
@@ -533,66 +605,65 @@ export const plannerService = {
         existing.lastActivityAt = now;
         affectedThreadIds.push(existing.id);
       } else {
-        const t: PlannerThread = {
-          id: newId('thread'),
-          title: item,
-          keywords: item.toLowerCase().split(/\s+/).filter((w) => w.length > 2),
-          linkedConceptIds: [],
-          saved: true,
-          lastActivityAt: now,
-          createdAt: now,
-        };
-        threads.push(t);
+        const t = makeThread(item);
         affectedThreadIds.push(t.id);
       }
     }
 
     // Process revisit intent → retrieve chunks
     for (const item of signals.revisitIntent) {
-      const chunk = this.createChunk({
-        type: 'retrieve',
-        goal: `Revisit: ${item}`,
-        linkedConceptIds: [],
-        status: 'suggested',
-      });
-      generatedChunkIds.push(chunk.id);
+      const conceptIds = findLinkedConceptIds(item);
+      makeChunk('retrieve', `Revisit: ${item}`, conceptIds);
+    }
+
+    // ── Batched persist: single write per store, single event emit ────────
+    if (newChunks.length > 0) {
+      chunks.push(...newChunks);
+      saveChunks(chunks);
+      for (const c of newChunks) persistChunkToSQLite(c);
     }
 
     saveThreads(threads);
-    // Write all mutated threads to SQLite
     for (const id of [...new Set(affectedThreadIds)]) {
       const t = threads.find((thread) => thread.id === id);
       if (t) persistThreadToSQLite(t);
     }
 
-    // Persist check-in
     const checkIn: LearningCheckIn = {
       id: newId('checkin'),
       content,
       signals,
       affectedThreadIds: [...new Set(affectedThreadIds)],
-      generatedChunkIds,
+      generatedChunkIds: newChunks.map((c) => c.id),
       createdAt: now,
     };
     const checkIns = loadCheckIns();
     checkIns.push(checkIn);
     saveCheckIns(checkIns);
     persistCheckInToSQLite(checkIn);
+
+    // Single event emit for the entire check-in — prevents render storming.
     eventBus.emit({ type: 'PLANNER_UPDATED', payload: { reason: 'checkin' } });
 
     return checkIn;
   },
 
-  /** Get recent check-in signals for Home feed ranking. */
+  /**
+   * Get recent check-in signals for Home feed ranking, weighted by recency.
+   * Newer signals appear first; duplicates are removed keeping the most recent occurrence.
+   */
   getRecentSignals(maxAge: number = 7 * 24 * 60 * 60 * 1000): CheckInSignals {
     const cutoff = Date.now() - maxAge;
-    const recent = loadCheckIns().filter((c) => c.createdAt > cutoff);
+    // Sort newest-first so that dedup via unique() keeps the most recent occurrence.
+    const recent = loadCheckIns()
+      .filter((c) => c.createdAt > cutoff)
+      .sort((a, b) => b.createdAt - a.createdAt);
     return {
-      confidence: recent.flatMap((c) => c.signals.confidence),
-      confusion: recent.flatMap((c) => c.signals.confusion),
-      connections: recent.flatMap((c) => c.signals.connections),
-      curiosity: recent.flatMap((c) => c.signals.curiosity),
-      revisitIntent: recent.flatMap((c) => c.signals.revisitIntent),
+      confidence: unique(recent.flatMap((c) => c.signals.confidence)),
+      confusion: unique(recent.flatMap((c) => c.signals.confusion)),
+      connections: unique(recent.flatMap((c) => c.signals.connections)),
+      curiosity: unique(recent.flatMap((c) => c.signals.curiosity)),
+      revisitIntent: unique(recent.flatMap((c) => c.signals.revisitIntent)),
     };
   },
 

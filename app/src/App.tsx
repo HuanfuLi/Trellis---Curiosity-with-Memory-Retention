@@ -16,6 +16,7 @@ import { GraphScreen } from './screens/GraphScreen';
 import { PostDetailScreen } from './screens/PostDetailScreen';
 import { mockSettingsService } from './services/mock/settings.mock';
 import { hydrateFromSQLite } from './services/question.service';
+import { hydratePlannerFromSQLite } from './services/planner.service';
 import { applyTheme } from './lib/theme';
 import { PageTransition } from './components/PageTransition';
 
@@ -80,8 +81,11 @@ const router = createBrowserRouter([
 ]);
 
 export default function App() {
-  // Hydrate questions from SQLite on app start (no-op on web)
-  useEffect(() => { void hydrateFromSQLite(); }, []);
+  // Hydrate data from SQLite on app start (no-op on web)
+  useEffect(() => {
+    void hydrateFromSQLite();
+    void hydratePlannerFromSQLite();
+  }, []);
 
   // Keep theme in sync when the OS switches between light/dark while app is open
   useEffect(() => {

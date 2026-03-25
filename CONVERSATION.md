@@ -1,42 +1,61 @@
-# EchoLearn Phase Audit Report: Planner & Learning Chunks
+# Code Audit Report: Planner Learning Chunks
 
-Following a comprehensive audit of the `planner-learning-chunks` implementation and surrounding semantic features, the phase is confirmed as **successfully implemented** and feature-complete. Most previously reported issues in `CONVERSATION.md` have been resolved.
+This report identifies critical bugs, logic errors, and integration gaps discovered during a comprehensive audit of the `planner-learning-chunks` implementation.
 
-## 1. Audit Results
+## 1. Critical Persistence & Data Integrity
 
-| Component | Status | Verification |
-|-----------|--------|--------------|
-| **Planner Domain & Types** | PASS | `app/src/types/index.ts` correctly defines chunks, threads, and check-ins. |
-| **Planner Service** | PASS | `planner.service.ts` handles persistence (localStorage + SQLite) and signal extraction. |
-| **Learning Check-In** | PASS | Signal extraction (LLM + Heuristic) correctly maps to threads and suggested chunks. |
-| **Hybrid Layout** | PASS | `PlannerScreen.tsx` correctly implements Continue, Suggested, and Threads sections. |
-| **Navigation** | PASS | Bottom navigation and routing updated from 'Calendar' to 'Planner'. |
-| **Home Integration** | PASS | `HomeScreen.tsx` shows reactive counts for active chunks and threads via `eventBus`. |
-| **Feed Ranking** | PASS | `concept-feed.service.ts` consumes planner signals to boost feed relevance. |
+### [CRITICAL] Missing SQLite Hydration on Startup
+*   **File:** `app/src/App.tsx` / `app/src/services/planner.service.ts`
+*   **Issue:** `hydratePlannerFromSQLite()` is defined but never called in the app lifecycle.
+*   **Impact:** On native platforms (iOS/Android), planner data will be lost if `localStorage` is cleared, despite being "backed up" in SQLite. This breaks the local-first durability guarantee.
 
-## 2. Resolved Issues (Previously Reported)
+### [HIGH] Dual Storage Redundancy (Web)
+*   **File:** `app/src/services/planner.service.ts`
+*   **Issue:** The service manually manages `localStorage` keys (`echolearn_planner_*`) while simultaneously calling `persist*ToSQLite`, which uses the `LocalStorageBackend` shim on web.
+*   **Impact:** Data is stored twice in `localStorage` under different keys, wasting quota and potentially leading to sync issues if the hydration logic (when fixed) merges stale data from the DB shim back into the primary keys.
 
-- **[FIXED] ESM Module Resolution:** Services now use explicit `.ts` extensions for local imports. Test suite (`npm run test`) executes successfully.
-- **[FIXED] Legacy Domain Removal:** `DaySchedule`, `TimeBlock`, and `TodoItem` have been removed from types and services. `planner.mock.ts` and `CalendarScreen.tsx` have been deleted.
-- **[FIXED] Jaccard Pre-filter:** `graph.service.ts` correctly implements the Jaccard overlap check before cosine similarity in `getSemanticCandidates()`.
-- **[FIXED] ESLint Violations:** Unused variables and malformed comments have been addressed. The project builds cleanly with `npx eslint .`.
-- **[FIXED] Embedding Failures:** Errors in `embedText` are now caught with console warnings in `question.service.ts`.
+## 2. Logic & Synchronization Errors
 
-## 3. Remaining Minor Cleanup
+### [HIGH] Stale State in `usePlanner` Hook
+*   **File:** `app/src/state/usePlanner.ts`
+*   **Issue:** The hook does not subscribe to the `PLANNER_UPDATED` event bus.
+*   **Impact:** If the planner is updated from another surface (e.g., Home feed signal processing or background sync), the Planner screen will show stale data until a manual refresh or navigation event occurs.
 
-The following items are low-priority stylistic or logical improvements identified during the audit:
+### [MEDIUM] Duplicate Chunk Generation
+*   **File:** `app/src/services/planner.service.ts` (`submitCheckIn`)
+*   **Issue:** `submitCheckIn` creates new `retrieve` or `repair` chunks without checking if an existing chunk for the same topic already exists in `suggested` or `in_progress` state.
+*   **Impact:** Repeated check-ins on the same topic (e.g., "TCP") will clutter the Planner with identical cards, increasing cognitive load and user frustration.
 
-### 3.1 Redundant Ternary in HomeScreen
-**Location:** `app/src/screens/HomeScreen.tsx`
-**Description:**
-`{activeChunkCount === 1 ? 'active' : 'active'}`
-Both branches return the same string. This should be simplified to just `'active'` or updated if a different pluralization (e.g., `'chunk'` vs `'chunks'`) was intended.
+### [MEDIUM] Misaligned "Active" Chunk Definition
+*   **File:** `app/src/services/planner.service.ts` / `app/src/state/usePlanner.ts`
+*   **Issue:** `plannerService.getContinueChunks()` includes `suggested` items, but `usePlanner` filters them into a separate `suggestedChunks` array.
+*   **Impact:** The Home bento card (which uses the service directly) shows an "active" count that includes suggestions, while the Planner screen's "Continue" section only shows "in-progress" items. This causes a confusing UI mismatch.
 
-### 3.2 Standardized Persistence Logging
-**Location:** `app/src/services/planner.service.ts`
-**Description:**
-Uses `void dbExecute(...)` for fire-and-forget persistence. While functionally correct, it lacks the explicit `console.warn` pattern used for failures in `question.service.ts`. Standardizing error handling for background persistence across services would improve observability on native devices.
+## 3. Integration & Intelligence Gaps
 
-## 4. Final Verdict
+### [HIGH] Knowledge Graph Isolation
+*   **File:** `app/src/services/planner.service.ts` (`submitCheckIn`)
+*   **Issue:** Generated chunks and threads are created with `linkedConceptIds: []`, even when the signal clearly maps to a known concept (e.g., "closures").
+*   **Impact:** The Planner operates as a "ghost" surface. Users cannot navigate from a chunk back to the relevant knowledge node, and the system cannot use graph adjacency to improve future suggestions.
 
-The **Planner & Learning Chunks** phase is **READY FOR PRODUCTION**. The architectural boundaries between Planner, Ask, and Home are well-preserved, and the continuity-first mental model is successfully established across the codebase.
+### [MEDIUM] Flattened Signal Recency
+*   **File:** `app/src/services/planner.service.ts` (`getRecentSignals`)
+*   **Issue:** The method returns a flat array of all signals from the last 7 days without weighting.
+*   **Impact:** Older signals from early in the week can "drown out" fresh signals in the Home feed ranking, making the feed feel less responsive to the user's current focus.
+
+## 4. Performance & UX Polish
+
+### [MEDIUM] Event/IO Storming in Check-In
+*   **File:** `app/src/services/planner.service.ts` (`submitCheckIn`)
+*   **Issue:** `submitCheckIn` calls `createChunk` in a loop. Each call triggers a separate `saveJson`, `persistToSQLite`, and `eventBus.emit`.
+*   **Impact:** Processing a single check-in with 4 signals can trigger 10+ UI re-renders and redundant disk writes, potentially causing stutter on mobile devices.
+
+### [LOW] Missing Delete Controls
+*   **File:** `app/src/screens/PlannerScreen.tsx`
+*   **Issue:** Suggested and In-Progress chunks lack a direct "Trash" icon. Users must "Save for Later" before they can delete a suggestion they find irrelevant.
+*   **Impact:** Minor UX friction that makes the Planner feel "heavier" and harder to groom.
+
+### [LOW] Thread Keyword Fragmentation
+*   **File:** `app/src/services/planner.service.ts` (`submitCheckIn`)
+*   **Issue:** Thread keywords are generated by a simple whitespace split: `item.toLowerCase().split(/\s+/)`.
+*   **Impact:** This produces low-quality keywords (like "the", "and") that pollute the feed ranking logic. It should use a stop-word filter similar to `question.service.ts`.

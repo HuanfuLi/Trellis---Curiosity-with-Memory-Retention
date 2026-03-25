@@ -1,3 +1,12 @@
+function mimeTypeToExt(mimeType: string): string {
+  if (mimeType.includes('aac') || mimeType.includes('m4a')) return 'm4a';
+  if (mimeType.includes('mp4')) return 'mp4';
+  if (mimeType.includes('ogg')) return 'ogg';
+  if (mimeType.includes('wav')) return 'wav';
+  if (mimeType.includes('mp3') || mimeType.includes('mpeg')) return 'mp3';
+  return 'webm';
+}
+
 function timeoutSignal(ms: number): AbortSignal {
   const ac = new AbortController();
   const id = setTimeout(() => ac.abort(new DOMException(`Request timed out after ${ms / 1000}s`, 'TimeoutError')), ms);
@@ -15,7 +24,7 @@ export async function transcribeAudio(audioBlob: Blob, config: { apiKey?: string
   const baseUrl = (config.baseUrl?.replace(/\/$/, '')) || 'https://api.openai.com';
 
   const formData = new FormData();
-  formData.append('file', audioBlob, 'recording.webm');
+  formData.append('file', audioBlob, `recording.${mimeTypeToExt(audioBlob.type)}`);
   formData.append('model', 'whisper-1');
   formData.append('response_format', 'json');
 

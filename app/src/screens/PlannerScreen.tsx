@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Play, Bookmark, Check, Trash2, Lightbulb, Link2, RefreshCw, Sparkles,
@@ -110,21 +110,49 @@ function ChunkCard({
               >
                 <Bookmark size={13} />
               </button>
+              <button
+                onClick={() => onDelete(chunk.id)}
+                title="Dismiss"
+                className="active-squish"
+                style={{
+                  width: '30px', height: '30px', borderRadius: '50%',
+                  backgroundColor: 'var(--surface-variant)', color: 'var(--muted-foreground)',
+                  border: '1px solid var(--border)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <Trash2 size={13} />
+              </button>
             </>
           )}
           {isActive && (
-            <button
-              onClick={() => onStatusChange(chunk.id, 'done')}
-              title="Mark done"
-              className="active-squish"
-              style={{
-                width: '30px', height: '30px', borderRadius: '50%',
-                backgroundColor: 'var(--primary-40)', color: 'white',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}
-            >
-              <Check size={13} />
-            </button>
+            <>
+              <button
+                onClick={() => onStatusChange(chunk.id, 'done')}
+                title="Mark done"
+                className="active-squish"
+                style={{
+                  width: '30px', height: '30px', borderRadius: '50%',
+                  backgroundColor: 'var(--primary-40)', color: 'white',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <Check size={13} />
+              </button>
+              <button
+                onClick={() => onDelete(chunk.id)}
+                title="Remove"
+                className="active-squish"
+                style={{
+                  width: '30px', height: '30px', borderRadius: '50%',
+                  backgroundColor: 'var(--surface-variant)', color: 'var(--muted-foreground)',
+                  border: '1px solid var(--border)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <Trash2 size={13} />
+              </button>
+            </>
           )}
           {chunk.status === 'saved_for_later' && (
             <>
@@ -289,7 +317,7 @@ export function PlannerScreen() {
   const {
     continueChunks, suggestedChunks, savedChunks, savedThreads, recentCheckIns,
     isLoading,
-    refresh, updateChunkStatus, deleteChunk, toggleThreadSaved, deleteThread, submitCheckIn,
+    updateChunkStatus, deleteChunk, toggleThreadSaved, deleteThread, submitCheckIn,
   } = usePlanner();
   const { reviewCount } = useReview();
 
@@ -304,9 +332,7 @@ export function PlannerScreen() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  // refresh() is now auto-called by usePlanner on mount + PLANNER_UPDATED events
 
   const handleSubmitCheckIn = async () => {
     const content = checkInInput.trim();

@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, CheckSquare, Headphones, Mic, Loader2 } from 'lucide-react';
+import { BookOpen, CheckSquare, Headphones } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { InlineInfoFlow, type InfoFlowItem } from '../components/InfoFlow';
@@ -11,7 +11,6 @@ import { usePodcast } from '../state/usePodcast';
 import { plannerService } from '../services/planner.service';
 import { mockSettingsService } from '../services/mock/settings.mock';
 import { conceptFeedService } from '../services/concept-feed.service';
-import { transcribeAudio } from '../providers/stt';
 import { eventBus } from '../lib/event-bus';
 import { today, getGreeting } from '../lib/date';
 import { toast } from '../lib/toast';
@@ -42,7 +41,7 @@ export function HomeScreen() {
     if (questionsLoading) return;
 
     const refreshPlannerSummary = () => {
-      setActiveChunkCount(plannerService.getContinueChunks().length);
+      setActiveChunkCount(plannerService.getActiveChunks().length);
       setThreadCount(plannerService.getSavedThreads().length);
     };
 
@@ -195,100 +194,6 @@ export function HomeScreen() {
 
   const [activeChunkCount, setActiveChunkCount] = useState(0);
   const [threadCount, setThreadCount] = useState(0);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-
-  // Cleanup: stop stream tracks immediately on unmount so the mic is released right away.
-  // We stop tracks before calling recorder.stop() because recorder.onstop fires async
-  // and the stream would otherwise stay open until that callback completes.
-  useEffect(() => {
-    return () => {
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-      if (mediaRecorderRef.current?.state === 'recording') {
-        mediaRecorderRef.current.stop();
-      }
-    };
-  }, []);
-
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-
-      let recorder: MediaRecorder;
-      try {
-        recorder = new MediaRecorder(stream);
-      } catch {
-        // Some Android devices don't support the default codec — stop stream and bail
-        stream.getTracks().forEach((t) => t.stop());
-        streamRef.current = null;
-        toast('Recording not supported on this device.', 'error');
-        return;
-      }
-
-      mediaRecorderRef.current = recorder;
-      audioChunksRef.current = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-
-      recorder.onstop = async () => {
-        // Tracks are stopped by the cleanup effect or stopRecording — no need to repeat here
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        setIsTranscribing(true);
-        try {
-          const settings = mockSettingsService.getSync();
-          const text = await transcribeAudio(blob, settings.tts);
-          navigate('/ask', { state: { prompt: text?.trim() || '' } });
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : '';
-          toast(
-            msg.includes('API key') || msg.includes('No API')
-              ? 'Add your API key in Text-to-Speech & Speech Recognition settings.'
-              : 'Transcription failed. Check your TTS API settings.',
-            'error',
-          );
-          setIsTranscribing(false);
-        }
-      };
-
-      recorder.start();
-      setIsRecording(true);
-    } catch (err) {
-      const name = err instanceof DOMException ? err.name : '';
-      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-        toast('Microphone permission denied. Check app settings.', 'error');
-      } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
-        toast('No microphone found on this device.', 'error');
-      } else if (name === 'NotReadableError' || name === 'TrackStartError') {
-        toast('Microphone is in use by another app.', 'error');
-      } else {
-        toast('Could not start recording. Try again.', 'error');
-      }
-    }
-  };
-
-  const stopRecording = () => {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-    mediaRecorderRef.current?.stop();
-    mediaRecorderRef.current = null;
-    setIsRecording(false);
-  };
-
-  const handleFabClick = () => {
-    if (isTranscribing) return;
-    if (isRecording) stopRecording();
-    else void startRecording();
-  };
-
-  const fabActive = isRecording || isTranscribing;
 
   return (
     <>
@@ -406,87 +311,6 @@ export function HomeScreen() {
         </div>
       </div>
 
-      {/* Prompt bubble — shown while recording or transcribing */}
-      {fabActive && (
-        <div
-          style={{
-            position: 'fixed',
-            bottom: 'calc(172px + var(--safe-area-bottom))',
-            right: '16px',
-            padding: '12px 20px',
-            backgroundColor: 'var(--surface-variant)',
-            borderRadius: '20px',
-            boxShadow: 'var(--shadow-2)',
-            zIndex: 30,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            fontSize: '0.95rem',
-            color: 'var(--foreground)',
-            animation: 'fade-in 0.2s ease',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {isTranscribing ? (
-            <>
-              <Loader2
-                size={16}
-                style={{ animation: 'spin 1s linear infinite', color: 'var(--primary-40)', flexShrink: 0 }}
-              />
-              Transcribing…
-            </>
-          ) : (
-            <>
-              <span
-                style={{
-                  width: '10px',
-                  height: '10px',
-                  borderRadius: '50%',
-                  backgroundColor: '#E53935',
-                  flexShrink: 0,
-                  animation: 'mic-pulse 1.4s ease-in-out infinite',
-                  display: 'inline-block',
-                }}
-              />
-              Start Asking…
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Floating Ask FAB */}
-      <button
-        onClick={handleFabClick}
-        disabled={isTranscribing}
-        title={isRecording ? 'Tap to stop' : 'Ask a question'}
-        style={{
-          position: 'fixed',
-          bottom: 'calc(96px + var(--safe-area-bottom))',
-          right: '24px',
-          width: '56px',
-          height: '56px',
-          backgroundColor: fabActive ? 'var(--primary-30)' : 'var(--primary-40)',
-          color: 'white',
-          borderRadius: '50%',
-          boxShadow: fabActive
-            ? '0 0 0 6px rgba(76,175,80,0.2), 0 4px 16px rgba(0,0,0,0.25)'
-            : '0 4px 16px rgba(0,0,0,0.25)',
-          border: 'none',
-          cursor: isTranscribing ? 'not-allowed' : 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 30,
-          transform: fabActive ? 'scale(1.18)' : 'scale(1)',
-          transition: 'transform 0.25s cubic-bezier(0.34,1.56,0.64,1), background-color 0.2s, box-shadow 0.25s',
-          animation: isRecording ? 'mic-pulse 1.8s ease-in-out infinite' : 'none',
-        }}
-      >
-        {isTranscribing
-          ? <Loader2 size={24} style={{ animation: 'spin 1s linear infinite' }} />
-          : <Mic size={24} />
-        }
-      </button>
     </>
   );
 }

@@ -202,8 +202,13 @@ export function AskScreen() {
           questionId: question?.id,
         };
 
+        // Re-read sessionRef here (after all awaits) so we have the latest version,
+        // which now includes the user message that handleSend persisted before calling us.
+        // Reading sessionRef.current at the top of this function (before the first await)
+        // captured a stale snapshot that predated the React state flush.
+        const latest = sessionRef.current;
         // Persist to localStorage first — survives component unmount
-        const updated: ChatSession = { ...current, messages: [...current.messages, aiMsg] };
+        const updated: ChatSession = { ...latest, messages: [...latest.messages, aiMsg] };
         sessionService.save(updated);
 
         // Update React state — skip if aborted (component likely unmounted)

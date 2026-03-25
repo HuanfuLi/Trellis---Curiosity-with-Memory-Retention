@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { PlannerChunk, PlannerThread, LearningCheckIn, ChunkStatus } from '../types';
 import { plannerService } from '../services/planner.service';
+import { eventBus } from '../lib/event-bus';
 
 interface UsePlannerReturn {
   // Data
@@ -29,14 +30,21 @@ export function usePlanner(): UsePlannerReturn {
   const [isLoading, setIsLoading] = useState(false);
 
   const refresh = useCallback(() => {
-    const cont = plannerService.getContinueChunks();
-    // Split continue chunks: in_progress go to continue, suggested go to suggestions
-    setContinueChunks(cont.filter((c) => c.status === 'in_progress'));
-    setSuggestedChunks(cont.filter((c) => c.status === 'suggested'));
+    setContinueChunks(plannerService.getActiveChunks());
+    setSuggestedChunks(plannerService.getSuggestedChunks());
     setSavedChunks(plannerService.getSavedChunks());
     setSavedThreads(plannerService.getSavedThreads());
     setRecentCheckIns(plannerService.getCheckIns().slice(-10).reverse());
   }, []);
+
+  // Auto-refresh when planner data changes from another surface (e.g. Home feed,
+  // background sync). Without this the Planner screen shows stale data until a
+  // manual refresh or navigation event.
+  useEffect(() => {
+    refresh();
+    const unsub = eventBus.subscribe('PLANNER_UPDATED', () => refresh());
+    return unsub;
+  }, [refresh]);
 
   const updateChunkStatus = useCallback((chunkId: string, status: ChunkStatus) => {
     plannerService.updateChunkStatus(chunkId, status);
