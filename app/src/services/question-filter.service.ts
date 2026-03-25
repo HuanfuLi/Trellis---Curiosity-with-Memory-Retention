@@ -18,6 +18,9 @@ const PATTERN_LIBRARY: PatternEntry[] = [
   // Meta-questions about the system
   { pattern: /^(what (can|should|will) you|who (are|is) you|how (do|does|can) (you|this) work|tell me (about|who|what) (you|yourself)|what (is|are) (your|the) (name|capabilities|purpose)|describe yourself|are you|can you (actually )?help)/i, confidence: 0.95 },
 
+  // Sarcasm, skepticism, and dismissive meta-commentary
+  { pattern: /\b(really\?|seriously\?|for real|come on|right\?|sure sure|yeah right|whatever|yikes|oh please|uh huh sure)/i, confidence: 0.85 },
+
   // Requests for jokes, entertainment, non-learning content
   { pattern: /^(tell me a joke|make me laugh|give me a riddle|say something funny|tell me a story|write a poem)/i, confidence: 0.95 },
 
