@@ -1,13 +1,18 @@
 import { useState } from 'react';
-import { Brain, Volume2, Network, Radio, BookOpen, Palette, RotateCcw, CheckCircle, XCircle, Shield, Calendar, Download, Upload } from 'lucide-react';
+import { Brain, Volume2, Network, Radio, BookOpen, Palette, RotateCcw, CheckCircle, XCircle, Shield, Download, Upload, Trash2, Sparkles, Loader2 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { mockSettingsService } from '../services/mock/settings.mock';
 import { testLLMConnection } from '../providers/llm';
 import { testTTSConnection } from '../providers/tts';
-import type { LLMConfig, TTSConfig, AppSettings } from '../types';
+import type { LLMConfig, TTSConfig, EmbeddingConfig, EmbeddingDebugConfig, AppSettings } from '../types';
 import { toast } from '../lib/toast';
+import { Header, HEADER_HEIGHT } from '../components/ui/Header';
 import { applyTheme } from '../lib/theme';
+import { clearAllTables } from '../services/db.service';
+import { conceptFeedService } from '../services/concept-feed.service';
+import { plannerService } from '../services/planner.service';
+import { questionService } from '../services/question.service';
 
 function SectionHeader({ icon, title }: { icon: React.ReactNode; title: string }) {
   return (
@@ -100,7 +105,7 @@ function TextInput({ value, onChange, onBlur, type = 'text', placeholder }: { va
         backgroundColor: 'var(--surface-variant)',
         color: 'var(--foreground)',
         fontSize: '0.875rem',
-        width: '160px',
+        width: type === 'time' ? '120px' : '160px',
       }}
     />
   );
@@ -112,7 +117,10 @@ export function SettingsScreen() {
 
   const [llm, setLlm] = useState<LLMConfig>(() => mockSettingsService.getSync().llm);
   const [tts, setTts] = useState<TTSConfig>(() => mockSettingsService.getSync().tts);
+  const [embedding, setEmbedding] = useState<EmbeddingConfig>(() => mockSettingsService.getSync().embedding);
+  const [embeddingDebug, setEmbeddingDebug] = useState<EmbeddingDebugConfig>(() => mockSettingsService.getSync().embeddingDebug);
   const [ztNetworkId, setZtNetworkId] = useState(() => mockSettingsService.getSync().zerotier.networkId ?? '');
+  const [podcastAutoGenerate, setPodcastAutoGenerate] = useState(() => mockSettingsService.getSync().podcast.autoGenerate);
   const [podcastSleepTime, setPodcastSleepTime] = useState(() => mockSettingsService.getSync().podcast.sleepTime);
   const [podcastAdvance, setPodcastAdvance] = useState(() => String(mockSettingsService.getSync().podcast.advanceMinutes));
   const [reviewLimit, setReviewLimit] = useState(() => String(mockSettingsService.getSync().review.dailyLimit));
@@ -120,16 +128,39 @@ export function SettingsScreen() {
   const [reviewReminderTime, setReviewReminderTime] = useState(() => mockSettingsService.getSync().review.reminderTime);
   const [theme, setTheme] = useState<AppSettings['preferences']['theme']>(() => mockSettingsService.getSync().preferences.theme);
   const [aiConsent, setAiConsent] = useState(() => mockSettingsService.getSync().preferences.aiConsentGiven ?? false);
+  const [isGeneratingPlanner, setIsGeneratingPlanner] = useState(false);
 
   const noKeyRequired = (p: LLMConfig['provider']) => p === 'local' || p === 'lmstudio';
 
   const saveLlm = (current: LLMConfig = llm) => {
     mockSettingsService.set('llm', { ...current, isConfigured: !!current.apiKey || noKeyRequired(current.provider) });
+    // Keep TTS isConfigured in sync: OpenAI TTS reuses the LLM key as a fallback
+    if (tts.provider === 'openai') {
+      const effectiveKey = tts.apiKey || (current.apiKey ?? '');
+      mockSettingsService.set('tts', { ...tts, isConfigured: !!effectiveKey });
+    }
+  };
+
+  // The effective TTS API key: use the dedicated TTS key if set, otherwise fall back
+  // to the LLM key when both provider is OpenAI (they share the same credentials).
+  const effectiveTtsApiKey = tts.apiKey || (tts.provider === 'openai' ? (llm.apiKey ?? '') : '');
+
+  const saveEmbedding = (current: EmbeddingConfig = embedding) => {
+    const isConfigured =
+      current.provider === 'local' ? !!current.baseUrl :
+        !!current.apiKey;
+    mockSettingsService.set('embedding', { ...current, isConfigured });
+  };
+
+  const saveEmbeddingDebug = (current: EmbeddingDebugConfig = embeddingDebug) => {
+    mockSettingsService.set('embeddingDebug', current);
   };
 
   const saveTts = (current: TTSConfig = tts) => {
+    const fallbackKey = current.provider === 'openai' ? (llm.apiKey ?? '') : '';
+    const effectiveKey = current.apiKey || fallbackKey;
     const isConfigured =
-      current.provider === 'openai' ? !!current.apiKey :
+      current.provider === 'openai' ? !!effectiveKey :
         current.provider === 'gptsovits' ? !!current.baseUrl :
           false;
     mockSettingsService.set('tts', { ...current, isConfigured });
@@ -148,14 +179,41 @@ export function SettingsScreen() {
     setTimeout(() => setTestResult((prev) => ({ ...prev, llm: null })), 5000);
   };
 
+  const handleTestEmbedding = async () => {
+    setIsTesting((prev) => ({ ...prev, embedding: true }));
+    setTestResult((prev) => ({ ...prev, embedding: null }));
+    const config: EmbeddingConfig = {
+      ...embedding,
+      isConfigured: embedding.provider === 'local' ? !!embedding.baseUrl : !!embedding.apiKey,
+    };
+    const start = Date.now();
+    try {
+      const vec = await import('../providers/embedding').then((m) => m.embedText('test', config));
+      const latencyMs = Date.now() - start;
+      setTestResult((prev) => ({
+        ...prev,
+        embedding: Array.isArray(vec) && vec.length > 0 ? `✓ ${latencyMs}ms (${vec.length}d)` : '✗ Empty vector returned',
+      }));
+    } catch (err) {
+      setTestResult((prev) => ({
+        ...prev,
+        embedding: `✗ ${err instanceof Error ? err.message : 'Failed'}`,
+      }));
+    } finally {
+      setIsTesting((prev) => ({ ...prev, embedding: false }));
+      setTimeout(() => setTestResult((prev) => ({ ...prev, embedding: null })), 5000);
+    }
+  };
+
   const handleTestTTS = async () => {
     setIsTesting((prev) => ({ ...prev, tts: true }));
     setTestResult((prev) => ({ ...prev, tts: null }));
-    const isConfigured =
-      tts.provider === 'openai' ? !!tts.apiKey :
-        tts.provider === 'gptsovits' ? !!tts.baseUrl :
-          false;
-    const config = { ...tts, isConfigured };
+    // Use fallback key so the test works even when TTS key field is empty
+    const config = {
+      ...tts,
+      apiKey: effectiveTtsApiKey,
+      isConfigured: tts.provider === 'openai' ? !!effectiveTtsApiKey : !!tts.baseUrl,
+    };
     const result = await testTTSConnection(config);
     setIsTesting((prev) => ({ ...prev, tts: false }));
     setTestResult((prev) => ({
@@ -184,13 +242,31 @@ export function SettingsScreen() {
     toast('All API keys deleted.', 'success');
   };
 
+  const handleClearAllData = () => {
+    if (!confirm('Delete ALL data?\n\nThis removes every question, flashcard, session, planner entry, and podcast. Settings are kept.\n\nThis cannot be undone.')) return;
+    const keys = Object.keys(localStorage).filter((k) => k.startsWith('echolearn_') && k !== 'echolearn_settings');
+    for (const k of keys) localStorage.removeItem(k);
+    // Explicitly set an empty array so flashcardService doesn't auto-re-seed on next load
+    localStorage.setItem('echolearn_flashcards', '[]');
+    // Explicitly clear the concept feed post cache
+    conceptFeedService.clearCache();
+    // Clear SQLite tables (Android native) — fire-and-forget before reload
+    void clearAllTables().finally(() => {
+      toast('All data cleared — reloading…', 'success');
+      setTimeout(() => window.location.reload(), 800);
+    });
+  };
+
   const handleReset = async () => {
     if (confirm('Reset all settings to defaults?')) {
       await mockSettingsService.reset();
       const s = mockSettingsService.getSync();
       setLlm(s.llm);
       setTts(s.tts);
+      setEmbedding(s.embedding);
+      setEmbeddingDebug(s.embeddingDebug);
       setZtNetworkId(s.zerotier.networkId ?? '');
+      setPodcastAutoGenerate(s.podcast.autoGenerate);
       setPodcastSleepTime(s.podcast.sleepTime);
       setPodcastAdvance(String(s.podcast.advanceMinutes));
       setReviewLimit(String(s.review.dailyLimit));
@@ -202,11 +278,8 @@ export function SettingsScreen() {
   };
 
   return (
-    <div style={{ padding: '24px 16px 96px', maxWidth: '448px', margin: '0 auto' }}>
-      <div style={{ marginBottom: '8px' }}>
-        <h1 style={{ marginBottom: '4px' }}>Settings</h1>
-        <p style={{ color: 'var(--muted-foreground)' }}>Configure your EchoLearn experience</p>
-      </div>
+    <div style={{ padding: `${HEADER_HEIGHT + 8}px 16px 96px`, maxWidth: '448px', margin: '0 auto' }}>
+      <Header title="Settings" />
 
       {/* LLM Section */}
       <SectionHeader icon={<Brain size={20} />} title="Language Model" />
@@ -278,7 +351,7 @@ export function SettingsScreen() {
           />
         </SettingRow>
         <div style={{ display: 'flex', gap: '8px', paddingTop: '12px', alignItems: 'center' }}>
-          <Button size="sm" onClick={() => saveLlm()} variant="secondary">Save</Button>
+          <Button size="sm" onClick={() => { saveLlm(); toast('LLM settings saved.', 'success'); }} variant="secondary">Save</Button>
           <Button
             size="sm"
             variant="outline"
@@ -304,8 +377,143 @@ export function SettingsScreen() {
         </div>
       </Card>
 
+      {/* Embedding Model Section */}
+      <SectionHeader icon={<Sparkles size={20} />} title="Embedding Model" />
+      <Card style={{ marginBottom: '8px' }}>
+        <p style={{ fontSize: '0.8rem', color: 'var(--muted-foreground)', marginBottom: '12px', lineHeight: 1.5 }}>
+          Used for semantic similarity between concepts. Powers connection card quality.
+          Separate from the LLM — Anthropic has no embedding model.
+        </p>
+        <SettingRow label="Provider">
+          <SelectInput
+            value={embedding.provider}
+            onChange={(v) => {
+              const p = v as EmbeddingConfig['provider'];
+              const defaults: Record<string, Partial<EmbeddingConfig>> = {
+                openai: { model: 'text-embedding-3-small', baseUrl: '', apiKey: '' },
+                google: { model: 'text-embedding-004', baseUrl: '', apiKey: '' },
+                local:  { model: 'nomic-embed-text', baseUrl: 'http://localhost:11434', apiKey: '' },
+              };
+              const next = { ...embedding, provider: p, ...defaults[p] } as EmbeddingConfig;
+              setEmbedding(next);
+              saveEmbedding(next);
+            }}
+            options={[
+              { value: 'openai', label: 'OpenAI' },
+              { value: 'google', label: 'Google' },
+              { value: 'local',  label: 'Local (Ollama / LM Studio)' },
+            ]}
+          />
+        </SettingRow>
+        {embedding.provider !== 'local' && (
+          <SettingRow label="API Key">
+            <TextInput
+              type="password"
+              value={embedding.apiKey ?? ''}
+              onChange={(v) => setEmbedding((prev) => ({ ...prev, apiKey: v }))}
+              onBlur={() => saveEmbedding()}
+              placeholder={embedding.provider === 'google' ? 'AIza...' : 'sk-...'}
+            />
+          </SettingRow>
+        )}
+        {embedding.provider === 'local' && (
+          <SettingRow label="Base URL" description="Ollama or LM Studio server URL">
+            <TextInput
+              value={embedding.baseUrl ?? ''}
+              onChange={(v) => setEmbedding((prev) => ({ ...prev, baseUrl: v }))}
+              onBlur={() => saveEmbedding()}
+              placeholder="http://localhost:11434"
+            />
+          </SettingRow>
+        )}
+        <SettingRow label="Model ID">
+          <TextInput
+            value={embedding.model}
+            onChange={(v) => setEmbedding((prev) => ({ ...prev, model: v }))}
+            onBlur={() => saveEmbedding()}
+            placeholder={
+              embedding.provider === 'google' ? 'text-embedding-004' :
+                embedding.provider === 'local' ? 'nomic-embed-text' :
+                  'text-embedding-3-small'
+            }
+          />
+        </SettingRow>
+        <SettingRow label="Dimensions" description="Optional: reduce output size (OpenAI only)">
+          <TextInput
+            value={String(embedding.dimensions ?? '')}
+            onChange={(v) => setEmbedding((prev) => ({ ...prev, dimensions: v ? parseInt(v) || undefined : undefined }))}
+            onBlur={() => saveEmbedding()}
+            placeholder="256"
+          />
+        </SettingRow>
+        <div style={{ display: 'flex', gap: '8px', paddingTop: '12px', alignItems: 'center' }}>
+          <Button size="sm" variant="secondary" onClick={() => { saveEmbedding(); toast('Embedding settings saved.', 'success'); }}>Save</Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleTestEmbedding}
+            loading={isTesting['embedding']}
+          >
+            Test Connection
+          </Button>
+          {testResult['embedding'] && (
+            <span style={{
+              fontSize: '0.8rem',
+              color: testResult['embedding'].startsWith('✓') ? 'var(--primary-40)' : '#E53935',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+            }}>
+              {testResult['embedding'].startsWith('✓')
+                ? <CheckCircle size={16} />
+                : <XCircle size={16} />}
+              {testResult['embedding']}
+            </span>
+          )}
+        </div>
+
+        {/* Developer debug subsection */}
+        <div style={{
+          marginTop: '20px',
+          paddingTop: '16px',
+          borderTop: '1px solid var(--border)',
+        }}>
+          <p style={{ fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted-foreground)', marginBottom: '12px' }}>
+            Debug
+          </p>
+          <SettingRow
+            label="Similarity Threshold"
+            description={`${embeddingDebug.similarityThreshold.toFixed(2)} — minimum cosine score for connection cards`}
+          >
+            <input
+              type="range"
+              min={0.40}
+              max={0.95}
+              step={0.05}
+              value={embeddingDebug.similarityThreshold}
+              onChange={(e) => {
+                const next = { ...embeddingDebug, similarityThreshold: parseFloat(e.target.value) };
+                setEmbeddingDebug(next);
+                saveEmbeddingDebug(next);
+              }}
+              style={{ width: '120px', accentColor: 'var(--primary-40)', cursor: 'pointer' }}
+            />
+          </SettingRow>
+          <SettingRow label="Show Similarity Scores" description="Display cosine score on connection cards">
+            <MaterialSwitch
+              checked={embeddingDebug.showScores}
+              onChange={() => {
+                const next = { ...embeddingDebug, showScores: !embeddingDebug.showScores };
+                setEmbeddingDebug(next);
+                saveEmbeddingDebug(next);
+              }}
+            />
+          </SettingRow>
+        </div>
+      </Card>
+
       {/* TTS Section */}
-      <SectionHeader icon={<Volume2 size={20} />} title="Text-to-Speech" />
+      <SectionHeader icon={<Volume2 size={20} />} title="Text-to-Speech & Speech Recognition" />
       <Card style={{ marginBottom: '8px' }}>
         <SettingRow label="Provider">
           <SelectInput
@@ -328,13 +536,16 @@ export function SettingsScreen() {
           />
         </SettingRow>
         {tts.provider === 'openai' && (
-          <SettingRow label="API Key">
+          <SettingRow
+            label="API Key"
+            description={!tts.apiKey && llm.apiKey ? '✓ Using your LLM API key' : undefined}
+          >
             <TextInput
               type="password"
               value={tts.apiKey ?? ''}
               onChange={(v) => setTts((prev) => ({ ...prev, apiKey: v }))}
               onBlur={() => saveTts()}
-              placeholder="sk-..."
+              placeholder={llm.apiKey ? '(using LLM key)' : 'sk-...'}
             />
           </SettingRow>
         )}
@@ -365,7 +576,7 @@ export function SettingsScreen() {
           />
         </SettingRow>
         <div style={{ display: 'flex', gap: '8px', paddingTop: '12px', alignItems: 'center' }}>
-          <Button size="sm" onClick={() => saveTts()} variant="secondary">Save</Button>
+          <Button size="sm" onClick={() => { saveTts(); toast('TTS settings saved.', 'success'); }} variant="secondary">Save</Button>
           <Button
             size="sm"
             variant="outline"
@@ -411,6 +622,7 @@ export function SettingsScreen() {
                 size="sm"
                 onClick={async () => {
                   await mockSettingsService.set('zerotier', { networkId: ztNetworkId, isConnected: false });
+                  toast('ZeroTier settings saved.', 'success');
                 }}
                 variant="secondary"
               >
@@ -427,8 +639,14 @@ export function SettingsScreen() {
       {/* Podcast Settings */}
       <SectionHeader icon={<Radio size={20} />} title="Podcast" />
       <Card style={{ marginBottom: '8px' }}>
+        <SettingRow label="Auto-Generate" description="Generate podcast automatically at preset time">
+          <MaterialSwitch
+            checked={podcastAutoGenerate}
+            onChange={() => setPodcastAutoGenerate((v) => !v)}
+          />
+        </SettingRow>
         <SettingRow label="Sleep Time" description="When to generate daily podcast">
-          <TextInput value={podcastSleepTime} onChange={setPodcastSleepTime} placeholder="22:00" />
+          <TextInput type="time" value={podcastSleepTime} onChange={setPodcastSleepTime} placeholder="22:00" />
         </SettingRow>
         <SettingRow label="Advance Minutes" description="Minutes before sleep to generate">
           <TextInput value={podcastAdvance} onChange={setPodcastAdvance} placeholder="60" />
@@ -439,10 +657,11 @@ export function SettingsScreen() {
             variant="secondary"
             onClick={async () => {
               await mockSettingsService.set('podcast', {
+                autoGenerate: podcastAutoGenerate,
                 sleepTime: podcastSleepTime,
                 advanceMinutes: parseInt(podcastAdvance) || 60,
-                autoGenerate: mockSettingsService.getSync().podcast.autoGenerate,
               });
+              toast('Podcast settings saved.', 'success');
             }}
           >
             Save
@@ -464,7 +683,7 @@ export function SettingsScreen() {
         </SettingRow>
         {reviewNotif && (
           <SettingRow label="Reminder Time">
-            <TextInput value={reviewReminderTime} onChange={setReviewReminderTime} placeholder="09:00" />
+            <TextInput type="time" value={reviewReminderTime} onChange={setReviewReminderTime} placeholder="09:00" />
           </SettingRow>
         )}
         <div style={{ paddingTop: '12px' }}>
@@ -477,19 +696,12 @@ export function SettingsScreen() {
                 notificationsEnabled: reviewNotif,
                 reminderTime: reviewReminderTime,
               });
+              toast('Review settings saved.', 'success');
             }}
           >
             Save
           </Button>
         </div>
-      </Card>
-
-      {/* Calendar Settings */}
-      <SectionHeader icon={<Calendar size={20} />} title="Calendar" />
-      <Card style={{ marginBottom: '8px' }}>
-        <SettingRow label="Time Blocks Template" description="Configure default daily time blocks">
-          <Button size="sm" variant="secondary" onClick={() => toast('Template editor coming soon', 'info')}>Edit</Button>
-        </SettingRow>
       </Card>
 
       {/* App Preferences */}
@@ -536,6 +748,58 @@ export function SettingsScreen() {
           </Button>
           <Button variant="danger" size="sm" onClick={() => void handleDeleteApiKeys()}>
             Delete API Keys
+          </Button>
+        </div>
+      </Card>
+
+      {/* Developer / Debug */}
+      <SectionHeader icon={<Trash2 size={20} />} title="Developer" />
+      <Card style={{ marginBottom: '8px' }}>
+        <p style={{ fontSize: '0.8rem', color: 'var(--muted-foreground)', marginBottom: '16px', lineHeight: 1.5 }}>
+          Debug tools for development. Destructive actions cannot be undone.
+        </p>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={isGeneratingPlanner}
+            onClick={async () => {
+              const questions = questionService.getAll();
+              if (questions.length === 0) {
+                toast('No questions yet — ask some questions first.', 'info');
+                return;
+              }
+              setIsGeneratingPlanner(true);
+              try {
+                const summaryLines = questions
+                  .slice(0, 20)
+                  .map((q) => q.summary || q.content)
+                  .join('. ');
+                const checkInText = `I want to revisit and deepen my understanding of: ${summaryLines}. I'm curious about connections between these topics and want to explore areas that feel fuzzy.`;
+                const result = await plannerService.submitCheckIn(checkInText);
+                const count = result.generatedChunkIds.length;
+                toast(`Planner generated: ${count} chunk${count !== 1 ? 's' : ''} created.`, 'success');
+              } catch {
+                toast('Failed to generate planner.', 'error');
+              } finally {
+                setIsGeneratingPlanner(false);
+              }
+            }}
+            style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}
+          >
+            {isGeneratingPlanner
+              ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+              : <Sparkles size={16} />
+            }
+            {isGeneratingPlanner ? 'Generating...' : 'Generate Planner'}
+          </Button>
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={handleClearAllData}
+            style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}
+          >
+            <Trash2 size={16} /> Clear All Data
           </Button>
         </div>
       </Card>

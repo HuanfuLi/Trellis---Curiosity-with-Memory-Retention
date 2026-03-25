@@ -4,6 +4,8 @@ import { questionService } from '../services/question.service';
 import { mockSettingsService } from '../services/mock/settings.mock';
 import { chatStream } from '../providers/llm';
 import { today } from '../lib/date';
+import { buildCandidateContextPack, formatCandidateContextPack } from '../services/canonical-knowledge.service';
+import { evaluateQuestion as filterQuestion, type QuestionFilterContext } from '../services/question-filter.service';
 
 interface UseQuestionsReturn {
   questions: Question[];
@@ -11,7 +13,7 @@ interface UseQuestionsReturn {
   isLoading: boolean;
   error: ServiceError | null;
   ask: (content: string) => Promise<Question | null>;
-  askStreaming: (content: string, onToken: (accumulated: string) => void) => Promise<Question | null>;
+  askStreaming: (content: string, onToken: (accumulated: string) => void, sessionContext?: QuestionFilterContext) => Promise<Question | null>;
   getByDate: (date: string) => Question[];
   getRecent: (n: number) => Question[];
   getById: (id: string) => Question | undefined;
@@ -39,7 +41,7 @@ export function useQuestions(): UseQuestionsReturn {
     setError(null);
     const result = await questionService.ask(content);
     if (result.success && result.data) {
-      setQuestions((prev) => [result.data!.question, ...prev]);
+      setQuestions((prev) => [result.data!.question, ...prev.filter((q) => q.id !== result.data!.question.id)]);
       setIsAsking(false);
       return result.data.question;
     } else {
@@ -50,7 +52,7 @@ export function useQuestions(): UseQuestionsReturn {
   }, []);
 
   const askStreaming = useCallback(
-    async (content: string, onToken: (accumulated: string) => void): Promise<Question | null> => {
+    async (content: string, onToken: (accumulated: string) => void, sessionContext?: QuestionFilterContext): Promise<Question | null> => {
       setIsAsking(true);
       setError(null);
 
@@ -79,11 +81,13 @@ export function useQuestions(): UseQuestionsReturn {
         const contextLines = recentContext
           .map((q) => `Q: ${q.content}\nA: ${q.summary}`)
           .join('\n');
+        const candidatePack = buildCandidateContextPack(content, store);
 
         const systemPrompt = [
           'You are a knowledgeable learning assistant. Answer questions clearly and thoroughly.',
           'Do not generate harmful, illegal, sexually explicit, or deceptive content.',
           recentContext.length > 0 ? `Recent questions for context:\n${contextLines}` : '',
+          `Knowledge graph candidate context:\n${formatCandidateContextPack(candidatePack)}`,
         ]
           .filter(Boolean)
           .join('\n');
@@ -103,8 +107,17 @@ export function useQuestions(): UseQuestionsReturn {
         }
 
         // Persist and get structured question
-        const question = questionService.buildAndSave(content, accumulated, store);
-        setQuestions((prev) => [question, ...prev]);
+        const rawQuestion = questionService.buildAndSave(content, accumulated, store);
+
+        // Evaluate for off-topic/meta status (with session context for follow-up handling)
+        const question = await filterQuestion(rawQuestion, sessionContext);
+
+        // Persist the flagged status back to store if it changed
+        if (question.flagged !== rawQuestion.flagged) {
+          questionService.patchQuestion(question.id, { flagged: question.flagged });
+        }
+
+        setQuestions((prev) => [question, ...prev.filter((q) => q.id !== question.id)]);
         setIsAsking(false);
         return question;
       } catch (e) {

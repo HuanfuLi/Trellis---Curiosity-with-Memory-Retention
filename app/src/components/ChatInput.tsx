@@ -1,6 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { Send, Mic, Loader2 } from 'lucide-react';
 import { transcribeAudio } from '../providers/stt';
+import { startVoiceRecording, stopVoiceRecording, MicPermissionDeniedError } from '../lib/voice-recorder';
 import { mockSettingsService } from '../services/mock/settings.mock';
 import { toast } from '../lib/toast';
 
@@ -14,8 +15,6 @@ export function ChatInput({ onSend, placeholder = 'Ask anything...', disabled }:
   const [message, setMessage] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,51 +27,48 @@ export function ChatInput({ onSend, placeholder = 'Ask anything...', disabled }:
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder;
-      audioChunksRef.current = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-
-      recorder.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        setIsTranscribing(true);
-        try {
-          const settings = mockSettingsService.getSync();
-          const text = await transcribeAudio(blob, settings.llm);
-          if (text) setMessage((prev) => (prev ? `${prev} ${text}` : text));
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : '';
-          toast(
-            msg.includes('API key') || msg.includes('No API')
-              ? 'STT requires an OpenAI API key — check Settings.'
-              : 'Transcription failed. Check your API settings.',
-            'error',
-          );
-        } finally {
-          setIsTranscribing(false);
-        }
-      };
-
-      recorder.start();
+      await startVoiceRecording();
       setIsRecording(true);
-    } catch {
-      toast('Microphone access denied.', 'error');
+    } catch (err) {
+      if (err instanceof MicPermissionDeniedError) {
+        toast('Microphone permission denied. Check app settings.', 'error');
+      } else {
+        const code = err instanceof Error ? err.message : String(err);
+        if (code.includes('MICROPHONE_BEING_USED')) {
+          toast('Microphone is in use by another app.', 'error');
+        } else if (code.includes('DEVICE_CANNOT_VOICE_RECORD')) {
+          toast('Recording not supported on this device.', 'error');
+        } else {
+          toast('Could not access microphone. Try again.', 'error');
+        }
+      }
     }
   };
 
-  const stopRecording = () => {
-    mediaRecorderRef.current?.stop();
-    mediaRecorderRef.current = null;
+  const stopRecording = async () => {
     setIsRecording(false);
+    setIsTranscribing(true);
+    try {
+      const blob = await stopVoiceRecording();
+      const settings = mockSettingsService.getSync();
+      const text = await transcribeAudio(blob, settings.tts);
+      if (text) setMessage((prev) => (prev ? `${prev} ${text}` : text));
+    } catch (err) {
+      console.error('[ChatInput] transcription error:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast(
+        msg.includes('API key') || msg.includes('No API')
+          ? 'Add your API key in Text-to-Speech & Speech Recognition settings.'
+          : `Transcription failed: ${msg}`,
+        'error',
+      );
+    } finally {
+      setIsTranscribing(false);
+    }
   };
 
   const toggleMic = () => {
-    if (isRecording) stopRecording();
+    if (isRecording) void stopRecording();
     else void startRecording();
   };
 
@@ -81,7 +77,7 @@ export function ChatInput({ onSend, placeholder = 'Ask anything...', disabled }:
   return (
     <form
       onSubmit={handleSubmit}
-      style={{ position: 'fixed', bottom: '80px', left: 0, right: 0, padding: '0 16px 16px' }}
+      style={{ position: 'fixed', bottom: 'calc(80px + var(--safe-area-bottom))', left: 0, right: 0, padding: '0 16px 16px' }}
     >
       <div style={{ maxWidth: '448px', margin: '0 auto' }}>
         <div

@@ -20,6 +20,10 @@ interface ChatMessageProps {
   onEdit?: () => void;
   onRegenerate?: () => void;
   onDelete?: () => void;
+  // Off-topic flag props
+  questionId?: string;
+  flagged?: boolean;
+  onQuestionOverride?: (questionId: string, shouldSave: boolean) => void;
 }
 
 export function ChatMessage({
@@ -35,8 +39,12 @@ export function ChatMessage({
   onEdit,
   onRegenerate,
   onDelete,
+  questionId,
+  flagged,
+  onQuestionOverride,
 }: ChatMessageProps) {
   const [showActions, setShowActions] = useState(false);
+  const [showOverridePrompt, setShowOverridePrompt] = useState(false);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
 
@@ -199,13 +207,100 @@ export function ChatMessage({
             borderRadius: '24px',
             lineHeight: 1.6,
             color: 'var(--foreground)',
-            userSelect: 'none',
+            userSelect: 'text',
+            WebkitTouchCallout: 'default',
             cursor: 'default',
             overflowWrap: 'break-word',
             wordBreak: 'break-word',
           }}
         >
           <Markdown>{content}</Markdown>
+          {type === 'ai' && flagged && (
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              marginTop: '12px',
+            }}>
+              {/* Off-topic badge — click to show override prompt */}
+              <button
+                onClick={() => setShowOverridePrompt(!showOverridePrompt)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 10px',
+                  borderRadius: '12px',
+                  backgroundColor: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  cursor: 'pointer',
+                  fontSize: '0.75rem',
+                  color: 'var(--muted-foreground)',
+                  fontWeight: '500',
+                  width: 'fit-content',
+                }}
+              >
+                <span>⚠️</span>
+                <span>Off-topic</span>
+              </button>
+
+              {/* Override confirmation — appears inline when badge clicked */}
+              {showOverridePrompt && (
+                <div style={{
+                  padding: '12px 14px',
+                  borderRadius: '8px',
+                  backgroundColor: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  fontSize: '0.85rem',
+                  color: 'var(--foreground)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                }}>
+                  <div style={{ fontWeight: '500' }}>This looks off-topic. Save anyway?</div>
+                  <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                    <button
+                      onClick={() => {
+                        if (questionId) {
+                          onQuestionOverride?.(questionId, true);
+                        }
+                        setShowOverridePrompt(false);
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        backgroundColor: 'var(--primary-40)',
+                        color: 'white',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: '0.85rem',
+                        fontWeight: '500',
+                      }}
+                    >
+                      Yes, save anyway
+                    </button>
+                    <button
+                      onClick={() => setShowOverridePrompt(false)}
+                      style={{
+                        flex: 1,
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        backgroundColor: 'var(--surface-variant)',
+                        color: 'var(--foreground)',
+                        border: '1px solid var(--border)',
+                        cursor: 'pointer',
+                        fontSize: '0.85rem',
+                        fontWeight: '500',
+                      }}
+                    >
+                      Discard
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {relatedKnowledge && relatedKnowledge.length > 0 && (
             <div style={{ marginTop: '16px' }}>
               <p style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--muted-foreground)', marginBottom: '8px' }}>
@@ -230,8 +325,8 @@ export function ChatMessage({
                       cursor: 'pointer',
                       transition: 'background-color 0.2s',
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--surface-container-high)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--card)')}
+                    onPointerEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--surface-container-high)')}
+                    onPointerLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--card)')}
                   >
                     <span style={{ fontWeight: 500 }}>⤴ {knowledge}</span>
                   </button>

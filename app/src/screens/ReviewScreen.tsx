@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Pin, BookOpen, Trash2, Check, X } from 'lucide-react';
+import { ArrowLeft, Pin, BookOpen, Trash2, Check, X, GitBranch } from 'lucide-react';
 import { Flashcard } from '../components/Flashcard';
 import { Confetti } from '../components/Confetti';
 import { ProgressBar } from '../components/ui/ProgressBar';
 import { Button } from '../components/ui/Button';
 import { useReview } from '../state/useReview';
 import { toast } from '../lib/toast';
-import type { FlashCard } from '../types';
+import type { DailyReviewMap, FlashCard, StructuralSignalType } from '../types';
+import { buildDailyReviewMap, recordStructuralSignalPatch } from '../services/canonical-knowledge.service';
+import { questionService } from '../services/question.service';
+import { graphService } from '../services/graph.service';
 
 // ─── Library view ─────────────────────────────────────────────────────────────
 
@@ -151,6 +154,92 @@ function LibraryCard({
   );
 }
 
+function ReviewMiniMap({ map }: { map: DailyReviewMap }) {
+  const visibleRoots = map.roots
+    .map((root) => ({
+      ...root,
+      branches: root.branches
+        .map((branch) => ({
+          ...branch,
+          clusters: branch.clusters
+            .map((cluster) => ({
+              ...cluster,
+              leaves: cluster.leaves.filter((leaf) => leaf.state !== 'hidden'),
+            }))
+            .filter((cluster) => cluster.leaves.length > 0),
+        }))
+        .filter((branch) => branch.clusters.length > 0),
+    }))
+    .filter((root) => root.branches.length > 0);
+
+  return (
+    <div
+      style={{
+        marginTop: '18px',
+        marginInline: '16px',
+        padding: '16px 14px',
+        borderRadius: 'var(--radius-xl)',
+        backgroundColor: 'var(--card)',
+        boxShadow: 'var(--shadow-1)',
+        border: '1px solid var(--border)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <GitBranch size={16} color="var(--primary-40)" />
+          <p style={{ fontWeight: 700, fontSize: '0.92rem' }}>Today&apos;s Review Map</p>
+        </div>
+        <span style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)' }}>
+          {map.revealedCount} / {map.totalDue} revealed
+        </span>
+      </div>
+
+      {visibleRoots.length === 0 ? (
+        <p style={{ fontSize: '0.84rem', lineHeight: 1.55, color: 'var(--muted-foreground)' }}>
+          Your mini map starts empty, then grows as each card becomes part of today&apos;s review path.
+        </p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {visibleRoots.map((root) => (
+            <div key={root.id} style={{ paddingLeft: '4px' }}>
+              <p style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--foreground)' }}>{root.label}</p>
+              {root.branches.map((branch) => (
+                <div key={branch.id} style={{ marginTop: '6px', paddingLeft: '14px', borderLeft: '2px solid var(--surface-variant)' }}>
+                  <p style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--primary-40)' }}>{branch.label}</p>
+                  {branch.clusters.map((cluster) => (
+                    <div key={cluster.id} style={{ marginTop: '6px', paddingLeft: '12px' }}>
+                      <p style={{ fontSize: '0.74rem', color: 'var(--muted-foreground)', marginBottom: '4px' }}>{cluster.label}</p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {cluster.leaves.map((leaf) => (
+                          <div
+                            key={leaf.nodeId}
+                            style={{
+                              padding: '8px 10px',
+                              borderRadius: '12px',
+                              backgroundColor: leaf.state === 'active'
+                                ? 'color-mix(in srgb, var(--primary-40) 16%, var(--surface))'
+                                : 'var(--surface-variant)',
+                              border: `1px solid ${leaf.state === 'active' ? 'var(--primary-40)' : 'transparent'}`,
+                              fontSize: '0.78rem',
+                              color: 'var(--foreground)',
+                            }}
+                          >
+                            {leaf.label}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export function ReviewScreen() {
@@ -162,6 +251,8 @@ export function ReviewScreen() {
   const [done, setDone] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [revealedNodeIds, setRevealedNodeIds] = useState<string[]>([]);
+  const [sessionCards, setSessionCards] = useState<FlashCard[]>([]);
 
   // Trigger confetti + toast when the user completes their review session
   useEffect(() => {
@@ -177,13 +268,50 @@ export function ReviewScreen() {
     return () => clearTimeout(t);
   }, [showConfetti]);
 
+  useEffect(() => {
+    if (items.length > 0 && sessionCards.length === 0 && reviewed === 0) {
+      setSessionCards(items);
+    }
+  }, [items, reviewed, sessionCards.length]);
+
   const total = items.length + reviewed;
   const progress = total > 0 ? (reviewed / total) * 100 : 0;
   const currentItem = items[0];
+  const reviewMap = buildDailyReviewMap(
+    sessionCards.length > 0 ? sessionCards : items,
+    questionService.getAll(),
+    revealedNodeIds,
+    currentItem?.nodeId,
+  );
+
+  const handleSignal = (signal: StructuralSignalType) => {
+    if (!currentItem?.nodeId) return;
+    const question = questionService.getAll().find((candidate) => candidate.id === currentItem.nodeId);
+    if (!question) return;
+    questionService.patchQuestion(question.id, recordStructuralSignalPatch(question, signal));
+    toast(
+      signal === 'sameIdea'
+        ? 'Saved: this card feels like the same idea.'
+        : signal === 'connect'
+          ? 'Saved: this card should stay connected.'
+          : 'Saved: this feels like a deeper refinement.',
+      'success',
+    );
+  };
 
   const handleRate = async (rating: number) => {
     if (!currentItem) return;
     await submitReview(currentItem.id, rating as 1 | 2 | 3 | 4 | 5);
+    if (currentItem.nodeId) {
+      setRevealedNodeIds((prev) => (prev.includes(currentItem.nodeId!) ? prev : [...prev, currentItem.nodeId!]));
+      // Reinforce graph edges between this node and its related questions
+      const question = questionService.getAll().find((q) => q.id === currentItem.nodeId);
+      if (question) {
+        for (const relatedId of question.relatedQuestionIds) {
+          void graphService.reinforceEdge(question.id, relatedId);
+        }
+      }
+    }
     setTotalRatings((prev) => prev + rating);
     const nextReviewed = reviewed + 1;
     setReviewed(nextReviewed);
@@ -195,6 +323,9 @@ export function ReviewScreen() {
   const handleSkip = async () => {
     if (!currentItem) return;
     await skipReview(currentItem.id);
+    if (currentItem.nodeId) {
+      setRevealedNodeIds((prev) => (prev.includes(currentItem.nodeId!) ? prev : [...prev, currentItem.nodeId!]));
+    }
     if (items.length <= 1) {
       setDone(true);
     }
@@ -425,6 +556,47 @@ export function ReviewScreen() {
         pinned={currentItem.pinned}
         onTogglePin={() => togglePin(currentItem.id)}
       />
+
+      {currentItem.placementReason && (
+        <div style={{ padding: '0 16px' }}>
+          <p style={{ fontSize: '0.8rem', lineHeight: 1.55, color: 'var(--muted-foreground)' }}>
+            {currentItem.placementReason}
+          </p>
+        </div>
+      )}
+
+      <ReviewMiniMap map={reviewMap} />
+
+      <div style={{ padding: '0 16px', marginTop: '14px' }}>
+        <p style={{ fontSize: '0.74rem', color: 'var(--muted-foreground)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          Shape the map
+        </p>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          {[
+            { id: 'sameIdea', label: 'Same idea' },
+            { id: 'connect', label: 'Keep connected' },
+            { id: 'refine', label: 'Feels deeper' },
+          ].map((action) => (
+            <button
+              key={action.id}
+              onClick={() => handleSignal(action.id as StructuralSignalType)}
+              style={{
+                padding: '8px 12px',
+                borderRadius: '999px',
+                border: '1px solid var(--border)',
+                backgroundColor: 'var(--surface-variant)',
+                color: 'var(--foreground)',
+                fontSize: '0.8rem',
+              }}
+            >
+              {action.label}
+            </button>
+          ))}
+        </div>
+        <p style={{ fontSize: '0.78rem', lineHeight: 1.5, color: 'var(--muted-foreground)', marginTop: '10px' }}>
+          Review is also how you co-create the mindmap. As you rate cards and nudge these relationships, the graph learns how your knowledge fits together.
+        </p>
+      </div>
 
       {/* Skip */}
       <div style={{ textAlign: 'center', marginTop: '16px', padding: '0 16px' }}>

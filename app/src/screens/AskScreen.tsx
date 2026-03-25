@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { History, SquarePen, Trash2, Flag, X, Check } from 'lucide-react';
+import { Menu, SquarePen, Trash2, Flag, X, Check, Search } from 'lucide-react';
 import { ChatMessage } from '../components/ChatMessage';
 import { ChatInput } from '../components/ChatInput';
 import { useQuestions } from '../state/useQuestions';
@@ -8,8 +8,15 @@ import { sessionService } from '../services/session.service';
 import { flashcardService } from '../services/flashcard.service';
 import type { ChatSession, SessionMessage } from '../types';
 import { formatDate } from '../lib/date';
-import { questionService, deriveTitleFromQuestion } from '../services/question.service';
+// NOTE: AskScreen uses questionService.askStreaming() (via useQuestions) exclusively for Q&A.
+// The non-streaming ask() method is available as a fallback but is not invoked from this screen.
+// Session context is passed to askStreaming() for accurate follow-up filtering (see generateAiReply).
+import { questionService } from '../services/question.service';
+import { postContextQaService } from '../services/post-context-qa.service';
+import { chatCompletion } from '../providers/llm';
+import { mockSettingsService } from '../services/mock/settings.mock';
 import { toast } from '../lib/toast';
+import { Header, HEADER_HEIGHT } from '../components/ui/Header';
 
 const SUGGESTED_PROMPTS = [
   'What is spaced repetition and why does it work?',
@@ -24,16 +31,60 @@ interface StreamingOverlay {
   content: string;
 }
 
-function startNewSession(current: ChatSession): ChatSession {
-  // Fire-and-forget flashcard processing if session has user messages and hasn't been processed
-  if (!current.processed && current.messages.some((m) => m.type === 'user')) {
-    void flashcardService.processSession(current).then(() => {
-      const refreshed = sessionService.getById(current.id);
+// Bug #6: Module-level counter ensures unique IDs even when two calls happen in the same ms
+let msgIdCounter = 0;
+function newMsgId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${++msgIdCounter}`;
+}
+
+/** Ask the LLM for a short conversation title based on the first Q&A exchange. */
+async function generateSessionTitle(userMessage: string, aiReply: string): Promise<string> {
+  try {
+    const settings = mockSettingsService.getSync();
+    if (!settings.preferences.aiConsentGiven || !settings.llm.isConfigured) {
+      return '';
+    }
+    const raw = await chatCompletion(
+      [
+        {
+          role: 'system',
+          content: 'Generate a short (3-6 word) conversation title from the user question and AI reply below. Return ONLY the title text, nothing else. No quotes, no punctuation at the end.',
+        },
+        { role: 'user', content: `Question: ${userMessage}\n\nReply: ${aiReply.slice(0, 400)}` },
+      ],
+      settings.llm,
+    );
+    const title = raw.trim().replace(/^["']|["']$/g, '').slice(0, 60);
+    return title || '';
+  } catch {
+    return '';
+  }
+}
+
+// Bug #2: Guard against concurrent processSession calls for the same session
+const processingSessionIds = new Set<string>();
+
+/** Fire-and-forget flashcard extraction for a session that is becoming inactive. */
+function processSessionIfNeeded(session: ChatSession): void {
+  if (
+    !session.processed &&
+    session.messages.some((m) => m.type === 'user') &&
+    !processingSessionIds.has(session.id)
+  ) {
+    processingSessionIds.add(session.id);
+    void flashcardService.processSession(session).then(() => {
+      const refreshed = sessionService.getById(session.id);
       if (refreshed) {
         sessionService.save({ ...refreshed, processed: true });
       }
+    }).finally(() => {
+      processingSessionIds.delete(session.id);
     });
   }
+}
+
+function startNewSession(current: ChatSession): ChatSession {
+  processSessionIfNeeded(current);
   return sessionService.createNew();
 }
 
@@ -50,12 +101,29 @@ export function AskScreen() {
   const [confirmFlagId, setConfirmFlagId] = useState<string | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState('');
+  const [historySearch, setHistorySearch] = useState('');
 
   // Keep session ref in sync for use in callbacks without stale closure
   const sessionRef = useRef(session);
   useEffect(() => {
     sessionRef.current = session;
   }, [session]);
+
+  // Process the current session for flashcard extraction when the screen unmounts
+  // (e.g. user navigates away via BottomNavigation or closes the app)
+  useEffect(() => {
+    return () => {
+      processSessionIfNeeded(sessionRef.current);
+    };
+  }, []);
+
+  // Guard against concurrent generateAiReply calls (race condition)
+  const generatingRef = useRef(false);
+  // Abort in-flight AI streams on unmount to prevent stale state updates
+  const abortRef = useRef<AbortController | null>(null);
+  useEffect(() => {
+    return () => { abortRef.current?.abort(); };
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -77,57 +145,126 @@ export function AskScreen() {
     : session.messages.map((m) => ({ ...m, isStreaming: false }));
 
   // Core AI reply generator — used by handleSend, handleEditSubmit, handleRegenerateResponse
+  // Persists directly to sessionService (not inside setSession updater) so the AI
+  // response is saved even if the component unmounts during streaming.
   const generateAiReply = useCallback(
     async (userContent: string, placeholderId: string) => {
-      setStreaming({ placeholderId, content: '' });
+      // Prevent concurrent AI calls — drop if one is already in flight
+      if (generatingRef.current) return;
+      generatingRef.current = true;
 
-      const question = await askStreaming(userContent, (accumulated) => {
-        setStreaming({ placeholderId, content: accumulated });
-      });
+      // Abort any previous in-flight stream; create a fresh controller
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
 
-      const aiContent = question
-        ? question.answer
-        : 'Something went wrong. Please try again.';
+      try {
+        setStreaming({ placeholderId, content: '' });
 
-      const related = question
-        ? questions.filter((q) => question.relatedQuestionIds.includes(q.id)).map((q) => q.summary)
-        : [];
+        const current = sessionRef.current;
+        const isPostSession = current.origin?.type === 'post';
+        const postOrigin = isPostSession ? current.origin : null;
+        let lastContent = '';
+        let question = null;
 
-      const aiMsg: SessionMessage = {
-        id: placeholderId,
-        type: 'ai',
-        content: aiContent,
-        relatedKnowledge: related,
-        questionId: question?.id,
-      };
+        if (postOrigin) {
+          for await (const token of postContextQaService.askStreaming(postOrigin.context, userContent)) {
+            if (controller.signal.aborted) return;
+            lastContent += token;
+            setStreaming({ placeholderId, content: lastContent });
+          }
+          // Promote post-context Q&A into the knowledge graph so insights
+          // feed into Mind Map, Review, and Podcast surfaces.
+          if (lastContent) {
+            question = questionService.buildAndSave(userContent, lastContent);
+          }
+        } else {
+          // Extract the immediate prior Q&A pair for follow-up context (avoids false-positive flagging)
+          const msgs = current.messages;
+          const lastAiIdx = msgs.map((m, i) => ({ m, i })).filter(({ m }) => m.type === 'ai').pop()?.i ?? -1;
+          const sessionContext = lastAiIdx > 0 && msgs[lastAiIdx - 1]?.type === 'user'
+            ? { priorQuestion: msgs[lastAiIdx - 1].content, priorAnswer: msgs[lastAiIdx].content }
+            : undefined;
 
-      setSession((prev) => {
-        const updated: ChatSession = { ...prev, messages: [...prev.messages, aiMsg] };
+          question = await askStreaming(userContent, (accumulated) => {
+            lastContent = accumulated;
+            if (!controller.signal.aborted) {
+              setStreaming({ placeholderId, content: accumulated });
+            }
+          }, sessionContext);
+        }
+
+        if (controller.signal.aborted) return;
+
+        const aiContent = question
+          ? question.answer
+          : lastContent || 'Something went wrong. Please try again.';
+
+        const related = question
+          ? questions.filter((q) => question.relatedQuestionIds.includes(q.id)).map((q) => q.summary)
+          : [];
+
+        const aiMsg: SessionMessage = {
+          id: placeholderId,
+          type: 'ai',
+          content: aiContent,
+          relatedKnowledge: isPostSession ? undefined : related,
+          questionId: question?.id,
+        };
+
+        // Re-read sessionRef here (after all awaits) so we have the latest version,
+        // which now includes the user message that handleSend persisted before calling us.
+        // Reading sessionRef.current at the top of this function (before the first await)
+        // captured a stale snapshot that predated the React state flush.
+        const latest = sessionRef.current;
+        // Persist to localStorage first — survives component unmount
+        const updated: ChatSession = { ...latest, messages: [...latest.messages, aiMsg] };
         sessionService.save(updated);
-        return updated;
-      });
-      setStreaming(null);
+
+        // Update React state — skip if aborted (component likely unmounted)
+        if (!controller.signal.aborted) {
+          setSession(updated);
+          setStreaming(null);
+        }
+
+        // Generate an LLM title after the first exchange (fire-and-forget)
+        if (!updated.title && !updated.origin) {
+          void generateSessionTitle(userContent, aiContent).then((title) => {
+            if (!title) return;
+            const refreshed = sessionService.getById(updated.id);
+            if (refreshed && !refreshed.title) {
+              const titled = { ...refreshed, title };
+              sessionService.save(titled);
+              // Update state only if still on this session
+              if (sessionRef.current.id === titled.id) {
+                setSession(titled);
+              }
+            }
+          });
+        }
+      } catch (error) {
+        setStreaming(null);
+        toast(error instanceof Error ? error.message : 'Failed to continue this conversation.', 'error');
+      } finally {
+        generatingRef.current = false;
+      }
     },
     [askStreaming, questions],
   );
 
   const handleSend = useCallback(
     async (content: string) => {
-      const userMsg: SessionMessage = { id: `u-${Date.now()}`, type: 'user', content };
-      const placeholderId = `ai-${Date.now() + 1}`;
+      const userMsg: SessionMessage = { id: newMsgId('u'), type: 'user', content };
+      const placeholderId = newMsgId('ai');
 
-      // Set the derived title immediately — don't wait for the AI round-trip.
-      // This ensures the title is always the cleaned-up question text, even if
-      // the AI call fails or question?.title is null for any reason.
-      setSession((prev) => {
-        const updated: ChatSession = {
-          ...prev,
-          title: prev.title || deriveTitleFromQuestion(content),
-          messages: [...prev.messages, userMsg],
-        };
-        sessionService.save(updated);
-        return updated;
-      });
+      // Persist user message immediately so it survives navigation away
+      const current = sessionRef.current;
+      const updated: ChatSession = {
+        ...current,
+        messages: [...current.messages, userMsg],
+      };
+      sessionService.save(updated);
+      setSession(updated);
 
       await generateAiReply(content, placeholderId);
     },
@@ -155,18 +292,17 @@ export function AskScreen() {
   const handleEditSubmit = useCallback(async () => {
     if (!editingMessageId || !editingContent.trim()) return;
     const newContent = editingContent.trim();
-    const placeholderId = `ai-${Date.now()}`;
+    const placeholderId = newMsgId('ai');
 
     // Truncate messages at the edited user message (inclusive) and replace it
-    setSession((prev) => {
-      const idx = prev.messages.findIndex((m) => m.id === editingMessageId);
-      if (idx === -1) return prev;
-      const truncated = prev.messages.slice(0, idx);
-      const editedMsg: SessionMessage = { id: `u-${Date.now()}`, type: 'user', content: newContent };
-      const updated: ChatSession = { ...prev, messages: [...truncated, editedMsg] };
-      sessionService.save(updated);
-      return updated;
-    });
+    const current = sessionRef.current;
+    const idx = current.messages.findIndex((m) => m.id === editingMessageId);
+    if (idx === -1) return;
+    const truncated = current.messages.slice(0, idx);
+    const editedMsg: SessionMessage = { id: newMsgId('u'), type: 'user', content: newContent };
+    const updated: ChatSession = { ...current, messages: [...truncated, editedMsg] };
+    sessionService.save(updated);
+    setSession(updated);
 
     setEditingMessageId(null);
     setEditingContent('');
@@ -176,36 +312,33 @@ export function AskScreen() {
 
   const handleRegenerateResponse = useCallback(async (aiMessageId: string) => {
     // Find the preceding user message content, remove the AI message, regenerate
-    const msgs = sessionRef.current.messages;
-    const aiIdx = msgs.findIndex((m) => m.id === aiMessageId);
+    const current = sessionRef.current;
+    const aiIdx = current.messages.findIndex((m) => m.id === aiMessageId);
     if (aiIdx === -1) return;
-    const userMsg = aiIdx > 0 ? msgs[aiIdx - 1] : null;
+    const userMsg = aiIdx > 0 ? current.messages[aiIdx - 1] : null;
     if (!userMsg || userMsg.type !== 'user') return;
 
     const userContent = userMsg.content;
-    const placeholderId = `ai-${Date.now()}`;
+    const placeholderId = newMsgId('ai');
 
-    setSession((prev) => {
-      const updated: ChatSession = {
-        ...prev,
-        messages: prev.messages.filter((m) => m.id !== aiMessageId),
-      };
-      sessionService.save(updated);
-      return updated;
-    });
+    const updated: ChatSession = {
+      ...current,
+      messages: current.messages.filter((m) => m.id !== aiMessageId),
+    };
+    sessionService.save(updated);
+    setSession(updated);
 
     await generateAiReply(userContent, placeholderId);
   }, [generateAiReply]);
 
   const handleDeleteResponse = useCallback((aiMessageId: string) => {
-    setSession((prev) => {
-      const updated: ChatSession = {
-        ...prev,
-        messages: prev.messages.filter((m) => m.id !== aiMessageId),
-      };
-      sessionService.save(updated);
-      return updated;
-    });
+    const current = sessionRef.current;
+    const updated: ChatSession = {
+      ...current,
+      messages: current.messages.filter((m) => m.id !== aiMessageId),
+    };
+    sessionService.save(updated);
+    setSession(updated);
     toast('Response deleted.', 'success');
   }, []);
 
@@ -217,6 +350,8 @@ export function AskScreen() {
   }, []);
 
   const handleSelectSession = useCallback((id: string) => {
+    // Process the outgoing session before switching
+    processSessionIfNeeded(sessionRef.current);
     sessionService.setActiveId(id);
     const loaded = sessionService.getById(id);
     if (loaded) {
@@ -227,26 +362,37 @@ export function AskScreen() {
   }, []);
 
   const handleFlagConfirm = useCallback((messageId: string) => {
-    setSession((prev) => {
-      const msgs = prev.messages;
-      const idx = msgs.findIndex((m) => m.id === messageId);
-      const aiMsg = msgs[idx];
-      const toRemove = new Set([messageId]);
-      if (idx > 0 && msgs[idx - 1].type === 'user') {
-        toRemove.add(msgs[idx - 1].id);
-      }
-      if (aiMsg?.questionId) {
-        void questionService.delete(aiMsg.questionId);
-      }
-      const updated: ChatSession = {
-        ...prev,
-        messages: msgs.filter((m) => !toRemove.has(m.id)),
-      };
-      sessionService.save(updated);
-      return updated;
-    });
+    const current = sessionRef.current;
+    const aiMsg = current.messages.find((m) => m.id === messageId);
+    const questionId = aiMsg?.questionId;
+
+    const msgs = current.messages;
+    const idx = msgs.findIndex((m) => m.id === messageId);
+    const toRemove = new Set([messageId]);
+    if (idx > 0 && msgs[idx - 1].type === 'user') {
+      toRemove.add(msgs[idx - 1].id);
+    }
+    const updated: ChatSession = {
+      ...current,
+      messages: msgs.filter((m) => !toRemove.has(m.id)),
+    };
+    sessionService.save(updated);
+    setSession(updated);
+
+    if (questionId) {
+      void questionService.delete(questionId);
+    }
     setConfirmFlagId(null);
     toast('Response removed from your data.', 'success');
+  }, []);
+
+  const handleQuestionOverride = useCallback((questionId: string, shouldSave: boolean) => {
+    if (shouldSave) {
+      // Remove the flag so the question becomes eligible for knowledge graph ingestion
+      questionService.patchQuestion(questionId, { flagged: false });
+      toast('Question saved to knowledge base', 'success');
+    }
+    // If not saving, keep as-is (flagged=true) — question won't ingest to knowledge graph
   }, []);
 
   const handleDeleteSession = useCallback((id: string, e: React.MouseEvent) => {
@@ -262,63 +408,81 @@ export function AskScreen() {
   }, []);
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', maxWidth: '448px', margin: '0 auto', position: 'relative' }}>
-      {/* Header */}
-      <div style={{ padding: '24px 16px 16px', backgroundColor: 'var(--surface)' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-          <div>
-            <h1 style={{ marginBottom: '2px' }}>Ask</h1>
-            <p style={{ color: 'var(--muted-foreground)', fontSize: '0.875rem' }}>Your AI learning companion</p>
-          </div>
-          <div style={{ display: 'flex', gap: '8px', paddingTop: '4px' }}>
-            <button
-              onClick={() => setShowHistory(true)}
-              title="History"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '6px 10px',
-                borderRadius: 'var(--radius-xl)',
-                backgroundColor: 'var(--surface-variant)',
-                color: 'var(--muted-foreground)',
-                fontSize: '0.8rem',
-                border: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              <History size={15} />
-              History
-            </button>
-            <button
-              onClick={handleNewChat}
-              title="New Chat"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '6px 10px',
-                borderRadius: 'var(--radius-xl)',
-                backgroundColor: 'var(--primary-40)',
-                color: '#fff',
-                fontSize: '0.8rem',
-                border: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              <SquarePen size={15} />
-              New Chat
-            </button>
-          </div>
-        </div>
-      </div>
+    <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', maxWidth: '448px', margin: '0 auto', position: 'relative' }}>
+      {/* Fixed Header */}
+      <Header
+        title={session.title || 'Ask'}
+        centered
+        left={
+          <button
+            onClick={() => { setShowHistory(true); setHistorySearch(''); }}
+            title="History"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '36px',
+              height: '36px',
+              borderRadius: '50%',
+              backgroundColor: 'transparent',
+              color: 'var(--foreground)',
+              border: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            <Menu size={22} />
+          </button>
+        }
+        right={
+          <button
+            onClick={handleNewChat}
+            title="New Chat"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '36px',
+              height: '36px',
+              borderRadius: '50%',
+              backgroundColor: 'transparent',
+              color: 'var(--primary-40)',
+              border: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            <SquarePen size={20} />
+          </button>
+        }
+      />
+      {/* Spacer for fixed header */}
+      <div style={{ height: `${HEADER_HEIGHT}px`, flexShrink: 0 }} />
 
       {/* Messages */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', paddingBottom: '140px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', paddingBottom: 'calc(140px + var(--safe-area-bottom))' }}>
+        {session.origin?.type === 'post' && (
+          <div
+            style={{
+              marginBottom: '14px',
+              padding: '12px 14px',
+              borderRadius: '18px',
+              border: '1px solid var(--border)',
+              backgroundColor: 'var(--surface-variant)',
+            }}
+          >
+            <p style={{ fontSize: '0.72rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted-foreground)', marginBottom: '4px' }}>
+              Post thread
+            </p>
+            <p style={{ fontWeight: 700, marginBottom: '4px' }}>{session.origin.postTitle}</p>
+            <p style={{ color: 'var(--muted-foreground)', fontSize: '0.85rem' }}>
+              Continuing from a post-origin Q&A thread.
+            </p>
+          </div>
+        )}
         {/* Welcome message + suggested prompts when session is empty */}
         {displayMessages.length === 0 && (
           <>
             <ChatMessage
+              messageId="welcome"
               type="ai"
               content="Hi! I'm your AI learning companion. Ask me anything to build your knowledge base."
               relatedKnowledge={[]}
@@ -345,11 +509,11 @@ export function AskScreen() {
                       lineHeight: 1.4,
                       transition: 'border-color 0.15s, background-color 0.15s',
                     }}
-                    onMouseEnter={(e) => {
+                    onPointerEnter={(e) => {
                       e.currentTarget.style.borderColor = 'var(--primary-40)';
                       e.currentTarget.style.backgroundColor = 'var(--primary-90)';
                     }}
-                    onMouseLeave={(e) => {
+                    onPointerLeave={(e) => {
                       e.currentTarget.style.borderColor = 'var(--border)';
                       e.currentTarget.style.backgroundColor = 'var(--card)';
                     }}
@@ -384,11 +548,11 @@ export function AskScreen() {
                           justifyContent: 'space-between',
                           alignItems: 'center',
                         }}
-                        onMouseEnter={(e) => {
+                        onPointerEnter={(e) => {
                           e.currentTarget.style.borderColor = 'var(--primary-40)';
                           e.currentTarget.style.backgroundColor = 'var(--surface-container-high)';
                         }}
-                        onMouseLeave={(e) => {
+                        onPointerLeave={(e) => {
                           e.currentTarget.style.borderColor = 'var(--border)';
                           e.currentTarget.style.backgroundColor = 'var(--card)';
                         }}
@@ -422,6 +586,9 @@ export function AskScreen() {
               onEdit={!message.isStreaming ? () => { setEditingMessageId(message.id); setEditingContent(message.content); } : undefined}
               onRegenerate={!message.isStreaming ? () => void handleRegenerateResponse(message.id) : undefined}
               onDelete={!message.isStreaming ? () => handleDeleteResponse(message.id) : undefined}
+              questionId={message.questionId}
+              flagged={message.type === 'ai' ? questions.find((q) => q.id === message.questionId)?.flagged : undefined}
+              onQuestionOverride={handleQuestionOverride}
             />
             {message.isStreaming && !message.content && (
               <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '16px' }}>
@@ -494,7 +661,7 @@ export function AskScreen() {
         disabled={!!streaming || editingMessageId !== null}
       />
 
-      {/* History panel */}
+      {/* History drawer — slides in from left */}
       {showHistory && (
         <>
           {/* Backdrop */}
@@ -505,115 +672,183 @@ export function AskScreen() {
               inset: 0,
               backgroundColor: 'rgba(0,0,0,0.4)',
               zIndex: 40,
+              animation: 'fade-in 0.2s ease',
             }}
           />
-          {/* Panel */}
+          {/* Drawer */}
           <div
             style={{
               position: 'fixed',
               top: 0,
-              right: 0,
+              left: 0,
               width: '80%',
-              maxWidth: '360px',
+              maxWidth: '320px',
               height: '100%',
               backgroundColor: 'var(--surface)',
               boxShadow: 'var(--shadow-3)',
               zIndex: 50,
               display: 'flex',
               flexDirection: 'column',
+              animation: 'slide-in-left 0.25s ease',
             }}
           >
+            {/* Drawer header */}
             <div
               style={{
-                padding: '24px 16px 16px',
-                borderBottom: '1px solid var(--surface-variant)',
+                padding: 'calc(var(--safe-area-top) + 16px) 16px 12px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
               }}
             >
-              <h2 style={{ fontSize: '1.1rem' }}>Chat History</h2>
+              <h2 style={{ fontSize: '1.1rem', fontWeight: 700 }}>History</h2>
               <button
-                onClick={handleNewChat}
+                onClick={() => setShowHistory(false)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '4px',
-                  padding: '6px 10px',
-                  borderRadius: 'var(--radius-xl)',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--muted-foreground)',
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Search bar */}
+            <div style={{ padding: '0 16px 8px' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 12px',
+                  borderRadius: '12px',
+                  backgroundColor: 'var(--surface-variant)',
+                  border: '1px solid var(--border)',
+                }}
+              >
+                <Search size={16} style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
+                <input
+                  type="text"
+                  placeholder="Search chats..."
+                  value={historySearch}
+                  onChange={(e) => setHistorySearch(e.target.value)}
+                  style={{
+                    flex: 1,
+                    border: 'none',
+                    background: 'none',
+                    outline: 'none',
+                    fontSize: '0.875rem',
+                    color: 'var(--foreground)',
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* New Chat button */}
+            <div style={{ padding: '4px 16px 8px' }}>
+              <button
+                onClick={handleNewChat}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  padding: '10px',
+                  borderRadius: '12px',
                   backgroundColor: 'var(--primary-40)',
                   color: '#fff',
-                  fontSize: '0.8rem',
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
                   border: 'none',
                   cursor: 'pointer',
                 }}
               >
-                <SquarePen size={14} />
+                <SquarePen size={16} />
                 New Chat
               </button>
             </div>
 
-            <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+            {/* Session list */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
               {historySessions.length === 0 ? (
                 <p style={{ padding: '16px', color: 'var(--muted-foreground)', fontSize: '0.875rem', textAlign: 'center' }}>
                   No chat history yet.
                 </p>
               ) : (
-                historySessions.map((s) => (
-                  <div
-                    key={s.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      borderBottom: '1px solid var(--surface-variant)',
-                      backgroundColor: s.id === session.id ? 'var(--surface-variant)' : 'transparent',
-                    }}
-                  >
-                    <button
-                      onClick={() => handleSelectSession(s.id)}
+                historySessions
+                  .filter((s) => {
+                    if (!historySearch.trim()) return true;
+                    const q = historySearch.toLowerCase();
+                    return (
+                      (s.title?.toLowerCase().includes(q)) ||
+                      s.messages.some((m) => m.content.toLowerCase().includes(q))
+                    );
+                  })
+                  .map((s) => (
+                    <div
+                      key={s.id}
                       style={{
-                        flex: 1,
-                        textAlign: 'left',
-                        padding: '12px 16px',
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        minWidth: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        borderBottom: '1px solid var(--surface-variant)',
+                        backgroundColor: s.id === session.id ? 'var(--surface-variant)' : 'transparent',
                       }}
                     >
-                      <p
+                      <button
+                        onClick={() => handleSelectSession(s.id)}
                         style={{
-                          fontSize: '0.875rem',
-                          fontWeight: 500,
-                          marginBottom: '4px',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
+                          flex: 1,
+                          textAlign: 'left',
+                          padding: '12px 16px',
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          minWidth: 0,
                         }}
                       >
-                        {s.title || 'New conversation'}
-                      </p>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)' }}>
-                        {formatDate(s.updatedAt)} · {s.messages.length} message{s.messages.length !== 1 ? 's' : ''}
-                      </p>
-                    </button>
-                    <button
-                      onClick={(e) => handleDeleteSession(s.id, e)}
-                      title="Delete conversation"
-                      style={{
-                        flexShrink: 0,
-                        padding: '12px',
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        color: 'var(--muted-foreground)',
-                        opacity: 0.6,
-                      }}
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                ))
+                        <p
+                          style={{
+                            fontSize: '0.875rem',
+                            fontWeight: 500,
+                            marginBottom: '4px',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {s.title || 'New conversation'}
+                        </p>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)' }}>
+                          {formatDate(s.updatedAt)} · {s.messages.length} message{s.messages.length !== 1 ? 's' : ''}
+                          {s.origin?.type === 'post' ? ' · post thread' : ''}
+                        </p>
+                      </button>
+                      <button
+                        onClick={(e) => handleDeleteSession(s.id, e)}
+                        title="Delete conversation"
+                        style={{
+                          flexShrink: 0,
+                          padding: '12px',
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: 'var(--muted-foreground)',
+                          opacity: 0.6,
+                        }}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  ))
               )}
             </div>
           </div>

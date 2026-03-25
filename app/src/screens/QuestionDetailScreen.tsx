@@ -128,8 +128,8 @@ export function QuestionDetailScreen() {
                 key={q.id}
                 onClick={() => navigate(`/ask/${q.id}`)}
                 style={{ cursor: 'pointer', transition: 'transform 0.2s' }}
-                onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.01)')}
-                onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                onPointerEnter={(e) => (e.currentTarget.style.transform = 'scale(1.01)')}
+                onPointerLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
               >
                 <p style={{ fontWeight: 500, marginBottom: '4px' }}>{q.title ?? q.content}</p>
                 <p style={{ fontSize: '0.875rem', color: 'var(--muted-foreground)' }}>{q.summary}</p>

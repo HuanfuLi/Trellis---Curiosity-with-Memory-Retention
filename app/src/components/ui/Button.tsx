@@ -75,6 +75,7 @@ export function Button({
     <button
       {...props}
       disabled={isDisabled}
+      className="active-squish"
       style={{
         display: 'inline-flex',
         alignItems: 'center',

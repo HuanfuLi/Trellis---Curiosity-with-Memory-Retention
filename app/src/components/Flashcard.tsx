@@ -1,5 +1,8 @@
 import { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Pin } from 'lucide-react';
+import { hapticImpactLight } from '../lib/haptics';
 
 interface FlashcardProps {
   front: string;
@@ -21,6 +24,7 @@ export function Flashcard({ front, back, onRate, pinned, onTogglePin }: Flashcar
   const [isFlipped, setIsFlipped] = useState(false);
 
   const handleRate = (rating: number) => {
+    void hapticImpactLight();
     onRate?.(rating);
     setIsFlipped(false);
   };
@@ -68,7 +72,7 @@ export function Flashcard({ front, back, onRate, pinned, onTogglePin }: Flashcar
           </button>
         )}
 
-        <div style={{ textAlign: 'center', width: '100%' }}>
+        <div style={{ width: '100%' }}>
           {!isFlipped ? (
             <div>
               <p
@@ -78,11 +82,14 @@ export function Flashcard({ front, back, onRate, pinned, onTogglePin }: Flashcar
                   marginBottom: '12px',
                   textTransform: 'uppercase',
                   letterSpacing: '0.05em',
+                  textAlign: 'center',
                 }}
               >
                 Question
               </p>
-              <h2 style={{ fontSize: '1.5rem', lineHeight: 1.5 }}>{front}</h2>
+              <div className="md-prose" style={{ fontSize: '1.25rem', lineHeight: 1.6 }}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{front}</ReactMarkdown>
+              </div>
             </div>
           ) : (
             <div>
@@ -93,11 +100,14 @@ export function Flashcard({ front, back, onRate, pinned, onTogglePin }: Flashcar
                   marginBottom: '12px',
                   textTransform: 'uppercase',
                   letterSpacing: '0.05em',
+                  textAlign: 'center',
                 }}
               >
                 Answer
               </p>
-              <p style={{ fontSize: '1.25rem', lineHeight: 1.6 }}>{back}</p>
+              <div className="md-prose" style={{ fontSize: '1.1rem', lineHeight: 1.7 }}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{back}</ReactMarkdown>
+              </div>
             </div>
           )}
         </div>
@@ -116,8 +126,8 @@ export function Flashcard({ front, back, onRate, pinned, onTogglePin }: Flashcar
             fontWeight: 500,
             transition: 'transform 0.2s',
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.02)')}
-          onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+          onPointerEnter={(e) => (e.currentTarget.style.transform = 'scale(1.02)')}
+          onPointerLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
         >
           Show Answer
         </button>
@@ -150,8 +160,8 @@ export function Flashcard({ front, back, onRate, pinned, onTogglePin }: Flashcar
                     boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
                     transition: 'transform 0.2s',
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.1)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                  onPointerEnter={(e) => (e.currentTarget.style.transform = 'scale(1.1)')}
+                  onPointerLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
                 >
                   {rating.label}
                 </button>

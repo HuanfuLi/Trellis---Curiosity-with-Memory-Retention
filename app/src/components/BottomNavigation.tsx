@@ -1,5 +1,7 @@
-import { NavLink } from 'react-router-dom';
-import { Home, MessageSquare, Calendar, Settings } from 'lucide-react';
+import { useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Home, GitBranch, Mic, Calendar, Settings } from 'lucide-react';
+import { hapticImpactLight } from '../lib/haptics';
 
 interface NavItem {
   to: string;
@@ -7,14 +9,61 @@ interface NavItem {
   label: string;
 }
 
-const navItems: NavItem[] = [
-  { to: '/home', icon: <Home size={24} />, label: 'Home' },
-  { to: '/ask', icon: <MessageSquare size={24} />, label: 'Ask' },
-  { to: '/calendar', icon: <Calendar size={24} />, label: 'Calendar' },
-  { to: '/settings', icon: <Settings size={24} />, label: 'Settings' },
+const leftItems: NavItem[] = [
+  { to: '/home', icon: <Home size={22} />, label: 'Home' },
+  { to: '/planner', icon: <Calendar size={22} />, label: 'Planner' },
 ];
 
-export function BottomNavigation() {
+const rightItems: NavItem[] = [
+  { to: '/graph', icon: <GitBranch size={22} />, label: 'Graph' },
+  { to: '/settings', icon: <Settings size={22} />, label: 'Settings' },
+];
+
+// Shared style to suppress all native mobile long-press / callout behaviors
+const noCallout: React.CSSProperties = {
+  WebkitTouchCallout: 'none',
+  WebkitUserSelect: 'none',
+  userSelect: 'none',
+};
+
+interface BottomNavigationProps {
+  onAskLongPress?: () => void;
+  onAskLongPressRelease?: () => void;
+}
+
+export function BottomNavigation({ onAskLongPress, onAskLongPressRelease }: BottomNavigationProps) {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFired = useRef(false);
+
+  const handleAskPointerDown = () => {
+    longPressFired.current = false;
+    longPressTimer.current = setTimeout(() => {
+      longPressFired.current = true;
+      longPressTimer.current = null;
+      void hapticImpactLight();
+      onAskLongPress?.();
+    }, 500);
+  };
+
+  const handleAskPointerRelease = () => {
+    if (longPressTimer.current !== null) {
+      // Timer still pending — quick tap, cancel long-press
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    } else if (longPressFired.current) {
+      // Long-press confirmed and now released — signal stop
+      longPressFired.current = false;
+      onAskLongPressRelease?.();
+    }
+  };
+
+  const handleAskClick = () => {
+    // Only navigate on a clean tap (long-press resets longPressFired in handleAskPointerRelease)
+    if (!longPressFired.current) navigate('/ask');
+  };
+
   return (
     <nav
       style={{
@@ -25,6 +74,7 @@ export function BottomNavigation() {
         backgroundColor: 'var(--surface-container)',
         borderTop: '1px solid var(--border)',
         padding: '8px',
+        paddingBottom: 'calc(8px + var(--safe-area-bottom))',
         boxShadow: '0 -2px 8px rgba(0,0,0,0.06)',
         zIndex: 100,
       }}
@@ -36,34 +86,117 @@ export function BottomNavigation() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-around',
-          gap: '8px',
+          gap: '4px',
           height: '64px',
         }}
       >
-        {navItems.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            style={({ isActive }) => ({
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '4px',
-              padding: '8px 24px',
-              borderRadius: 'var(--radius-pill)',
-              transition: 'all 0.2s',
-              minWidth: '64px',
-              height: '56px',
-              textDecoration: 'none',
-              backgroundColor: isActive ? 'var(--secondary-container)' : 'transparent',
-              color: isActive ? 'var(--primary-40)' : 'var(--muted-foreground)',
-            })}
-          >
-            {item.icon}
-            <span style={{ fontSize: '0.75rem', fontWeight: 500 }}>{item.label}</span>
-          </NavLink>
-        ))}
+        {/* Left items */}
+        {leftItems.map((item) => {
+          const isActive = pathname.startsWith(item.to);
+          return (
+            <button
+              key={item.to}
+              onClick={() => navigate(item.to)}
+              onContextMenu={(e) => e.preventDefault()}
+              className="active-squish"
+              style={{
+                ...noCallout,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+                padding: '8px 16px',
+                borderRadius: 'var(--radius-pill)',
+                transition: 'all 0.2s',
+                minWidth: '56px',
+                height: '56px',
+                border: 'none',
+                cursor: 'pointer',
+                backgroundColor: isActive ? 'var(--secondary-container)' : 'transparent',
+                color: isActive ? 'var(--primary-40)' : 'var(--muted-foreground)',
+                flex: 1,
+              }}
+            >
+              {item.icon}
+              <span style={{ fontSize: '0.7rem', fontWeight: 500 }}>{item.label}</span>
+            </button>
+          );
+        })}
+
+        {/* Center FAB — Ask */}
+        {(() => {
+          const isActive = pathname.startsWith('/ask');
+          return (
+            <button
+              onClick={handleAskClick}
+              onPointerDown={handleAskPointerDown}
+              onPointerUp={handleAskPointerRelease}
+              onPointerLeave={handleAskPointerRelease}
+              onPointerCancel={handleAskPointerRelease}
+              onContextMenu={(e) => e.preventDefault()}
+              className="active-squish"
+              style={{
+                ...noCallout,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+                width: '60px',
+                height: '60px',
+                borderRadius: '20px',
+                border: 'none',
+                cursor: 'pointer',
+                backgroundColor: isActive ? 'var(--primary-30)' : 'var(--primary-40)',
+                color: 'white',
+                boxShadow: isActive
+                  ? '0 0 0 4px color-mix(in srgb, var(--primary-40) 25%, transparent), 0 4px 14px rgba(0,0,0,0.25)'
+                  : '0 4px 14px rgba(0,0,0,0.2)',
+                flexShrink: 0,
+                transform: isActive ? 'scale(1.08)' : 'scale(1)',
+                transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)',
+              }}
+            >
+              <Mic size={24} />
+              <span style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.02em' }}>Ask</span>
+            </button>
+          );
+        })()}
+
+        {/* Right items */}
+        {rightItems.map((item) => {
+          const isActive = pathname.startsWith(item.to);
+          return (
+            <button
+              key={item.to}
+              onClick={() => navigate(item.to)}
+              onContextMenu={(e) => e.preventDefault()}
+              className="active-squish"
+              style={{
+                ...noCallout,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+                padding: '8px 16px',
+                borderRadius: 'var(--radius-pill)',
+                transition: 'all 0.2s',
+                minWidth: '56px',
+                height: '56px',
+                border: 'none',
+                cursor: 'pointer',
+                backgroundColor: isActive ? 'var(--secondary-container)' : 'transparent',
+                color: isActive ? 'var(--primary-40)' : 'var(--muted-foreground)',
+                flex: 1,
+              }}
+            >
+              {item.icon}
+              <span style={{ fontSize: '0.7rem', fontWeight: 500 }}>{item.label}</span>
+            </button>
+          );
+        })}
       </div>
     </nav>
   );

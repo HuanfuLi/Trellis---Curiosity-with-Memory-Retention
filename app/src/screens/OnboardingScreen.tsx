@@ -143,7 +143,7 @@ export function OnboardingScreen() {
               {[
                 {
                   icon: <Smartphone size={18} color="var(--primary-40)" />,
-                  text: 'All notes, flashcards, and calendar data are stored locally on your device only.',
+                  text: 'All notes, flashcards, and planner data are stored locally on your device only.',
                 },
                 {
                   icon: <Cloud size={18} color="var(--primary-40)" />,

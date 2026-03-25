@@ -35,33 +35,38 @@ export function ToastContainer() {
     <div
       style={{
         position: 'fixed',
-        top: '16px',
-        right: '16px',
+        bottom: 'calc(96px + var(--safe-area-bottom))',
+        left: '50%',
+        transform: 'translateX(-50%)',
         zIndex: 9999,
         display: 'flex',
         flexDirection: 'column',
+        alignItems: 'center',
         gap: '8px',
-        maxWidth: '320px',
+        width: 'max-content',
+        maxWidth: 'min(320px, 90vw)',
+        pointerEvents: 'none',
       }}
     >
       {toasts.map((t) => (
         <div
           key={t.id}
           style={{
-            padding: '12px 16px',
+            padding: '12px 20px',
             backgroundColor: typeColors[t.type],
             color: 'white',
-            borderRadius: 'var(--radius)',
+            borderRadius: '24px',
             boxShadow: 'var(--shadow-3)',
             fontSize: '0.875rem',
             fontWeight: 500,
+            textAlign: 'center',
             animation: 'toast-in 0.2s ease',
           }}
         >
           {t.message}
         </div>
       ))}
-      <style>{`@keyframes toast-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+      <style>{`@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
     </div>
   );
 }

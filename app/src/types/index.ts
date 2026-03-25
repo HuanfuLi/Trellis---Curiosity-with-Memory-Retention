@@ -10,12 +10,35 @@ export interface Question {
   answer: string;
   summary: string;
   title?: string;          // short AI-derived title (4-7 words), used in listings
+  storyHook?: string;      // intriguing one-liner to spark curiosity, shown in Info Flow
+  parentId?: string;       // parent node ID for hierarchical graph organisation
   keywords: string[];
   relatedQuestionIds: string[];
   categoryIds: string[];
-  embedding?: number[];
   reviewSchedule: ReviewSchedule;
   createdAt: number;
+  aliases?: string[];
+  sourcePrompts?: string[];
+  sourceQuestionIds?: string[];
+  rootLabel?: string;
+  branchLabel?: string;
+  clusterLabel?: string;
+  nodeSummary?: string;
+  placementReason?: string;
+  lastReviewedAt?: number;
+  pinned?: boolean;
+  coCreationSignals?: Partial<Record<StructuralSignalType, number>> & { lastSignalAt?: number };
+  embeddingVector?: number[];
+  flagged?: boolean;  // true if detected as off-topic/meta-question; user can override
+}
+
+/** A milestone or trivia card injected into the Info Flow every ~5 items. */
+export interface BlindboxItem {
+  id: string;
+  type: 'milestone' | 'trivia';
+  emoji: string;
+  headline: string;
+  body: string;
 }
 
 export interface ReviewSchedule {
@@ -32,39 +55,84 @@ export interface Category {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// CALENDAR & TODO DOMAIN
+// PLANNER DOMAIN
 // ═══════════════════════════════════════════════════════════════════════════
 
-export interface DaySchedule {
-  date: string;
-  blocks: TimeBlock[];
-  reviewItemCount: number;
-}
+/** Learning action types that a chunk can represent. */
+export type ChunkType = 'retrieve' | 'repair' | 'connect' | 'create';
 
-export interface TimeBlock {
-  id: string;
-  date: string;
-  startTime: string;
-  endTime: string;
-  label: string;
-  todos: TodoItem[];
-  sortOrder: number;
-  pinned?: boolean;     // if true, block appears on every day
-  templateId?: string;  // present on injected copies; equals the original pinned block's id
-}
+/** Soft lifecycle states for a planner chunk — no overdue/failure framing. */
+export type ChunkStatus = 'suggested' | 'in_progress' | 'saved_for_later' | 'done';
 
-export interface TodoItem {
+/** A lightweight learning action card in the Planner. */
+export interface PlannerChunk {
   id: string;
-  blockId: string;
-  content: string;
-  status: TodoStatus;
+  type: ChunkType;
+  /** Short learning goal or action label (e.g. "Compare X vs Y"). */
+  goal: string;
+  /** Optional longer description or context. */
+  description?: string;
+  /** IDs of related knowledge questions/nodes. */
+  linkedConceptIds: string[];
+  /** Thread this chunk was spawned from, if any. */
+  threadId?: string;
+  status: ChunkStatus;
   createdAt: number;
-  completedAt?: number;
-  postponedFrom?: string;
-  pinned?: boolean;  // if true, todo appears in its block every day
+  updatedAt: number;
 }
 
-export type TodoStatus = 'pending' | 'completed' | 'postponed';
+/** A persistent learning topic or unresolved area the user may return to. */
+export interface PlannerThread {
+  id: string;
+  /** Short topic label (e.g. "TCP vs UDP differences"). */
+  title: string;
+  /** Optional longer description of the thread. */
+  description?: string;
+  /** Keywords for matching check-in signals to existing threads. */
+  keywords: string[];
+  /** IDs of related knowledge questions/nodes. */
+  linkedConceptIds: string[];
+  /** Whether the user explicitly saved this thread. */
+  saved: boolean;
+  /** Last time this thread was created or updated by a check-in. */
+  lastActivityAt: number;
+  createdAt: number;
+}
+
+/** Structured signals extracted from a single Learning Check-In. */
+export interface CheckInSignals {
+  /** Concepts the user feels confident about. */
+  confidence: string[];
+  /** Concepts or areas that feel fuzzy or unresolved. */
+  confusion: string[];
+  /** Connections the user noticed or wants to explore. */
+  connections: string[];
+  /** Topics the user is curious about. */
+  curiosity: string[];
+  /** Specific items the user wants to revisit. */
+  revisitIntent: string[];
+}
+
+/** A single Learning Check-In entry. */
+export interface LearningCheckIn {
+  id: string;
+  /** Raw freeform text from the user (typed or transcribed). */
+  content: string;
+  /** Extracted structured signals. */
+  signals: CheckInSignals;
+  /** IDs of threads created or updated as a result. */
+  affectedThreadIds: string[];
+  /** IDs of chunks suggested as a result. */
+  generatedChunkIds: string[];
+  createdAt: number;
+}
+
+/** Top-level planner data shape for persistence and state hooks. */
+export interface PlannerData {
+  chunks: PlannerChunk[];
+  threads: PlannerThread[];
+  checkIns: LearningCheckIn[];
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PODCAST DOMAIN
@@ -76,6 +144,8 @@ export interface DailyPodcast {
   questionIds: string[];
   script: string;
   audioPath?: string;
+  /** Base64 data URI of the synthesized audio — survives page reloads unlike blob URLs. */
+  audioDataUri?: string;
   duration?: number;
   status: PodcastStatus;
   progress?: number;
@@ -92,10 +162,26 @@ export type PodcastStatus = 'pending' | 'generating' | 'ready' | 'failed';
 export interface AppSettings {
   llm: LLMConfig;
   tts: TTSConfig;
+  embedding: EmbeddingConfig;
+  embeddingDebug: EmbeddingDebugConfig;
   zerotier: ZeroTierConfig;
   podcast: PodcastSettings;
   review: ReviewSettings;
   preferences: AppPreferences;
+}
+
+export interface EmbeddingConfig {
+  provider: 'openai' | 'google' | 'local';
+  apiKey?: string;
+  model: string;
+  baseUrl?: string;
+  dimensions?: number;
+  isConfigured: boolean;
+}
+
+export interface EmbeddingDebugConfig {
+  similarityThreshold: number;
+  showScores: boolean;
 }
 
 export interface LLMConfig {
@@ -161,6 +247,7 @@ export interface ChatSession {
   updatedAt: number;
   messages: SessionMessage[];
   processed: boolean;  // true once flashcard post-processing has run
+  origin?: SessionOrigin;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -175,6 +262,151 @@ export interface FlashCard {
   createdAt: number;
   pinned?: boolean;         // if true, appears in review queue every day
   reviewSchedule: ReviewSchedule;
+  nodeId?: string;
+  nodeTitle?: string;
+  rootLabel?: string;
+  branchLabel?: string;
+  clusterLabel?: string;
+  placementReason?: string;
+  sourceType?: 'canonical' | 'legacy';
+}
+
+export type StructuralSignalType = 'sameIdea' | 'connect' | 'refine';
+
+export interface KnowledgeNode {
+  id: string;
+  title: string;
+  content: string;
+  answer: string;
+  summary: string;
+  storyHook?: string;
+  keywords: string[];
+  relatedQuestionIds: string[];
+  parentId?: string;
+  aliases: string[];
+  sourcePrompts: string[];
+  sourceQuestionIds: string[];
+  rootLabel: string;
+  branchLabel: string;
+  clusterLabel: string;
+  nodeSummary: string;
+  placementReason: string;
+  reviewSchedule: ReviewSchedule;
+  createdAt: number;
+  date: string;
+  timestamp: number;
+  lastReviewedAt?: number;
+  pinned?: boolean;
+  coCreationSignals?: Partial<Record<StructuralSignalType, number>> & { lastSignalAt?: number };
+}
+
+export interface HierarchySummary {
+  id: string;
+  label: string;
+  summary: string;
+  representativeKeywords: string[];
+  representativeNodeIds: string[];
+  nodeCount: number;
+}
+
+export interface CandidateContextPack {
+  roots: HierarchySummary[];
+  branches: HierarchySummary[];
+  clusters: HierarchySummary[];
+  candidates: KnowledgeNode[];
+}
+
+export interface IngestionDecision {
+  outcome: 'merge' | 'refine' | 'new';
+  targetNodeId?: string;
+  rootLabel?: string;
+  branchLabel?: string;
+  clusterLabel?: string;
+  placementReason?: string;
+}
+
+export interface ReviewMapLeaf {
+  nodeId: string;
+  label: string;
+  state: 'hidden' | 'revealed' | 'active';
+}
+
+export interface ReviewMapCluster {
+  id: string;
+  label: string;
+  leaves: ReviewMapLeaf[];
+}
+
+export interface ReviewMapBranch {
+  id: string;
+  label: string;
+  clusters: ReviewMapCluster[];
+}
+
+export interface ReviewMapRoot {
+  id: string;
+  label: string;
+  branches: ReviewMapBranch[];
+}
+
+export interface DailyReviewMap {
+  roots: ReviewMapRoot[];
+  totalDue: number;
+  revealedCount: number;
+}
+
+export type PostNarrativeMode =
+  | 'example-first'
+  | 'historical-story'
+  | 'contrast'
+  | 'analogy'
+  | 'false-intuition'
+  | 'mnemonic'
+  | 'mechanism-breakdown'
+  | 'starter';
+
+export interface FeedTeaser {
+  hook: string;
+  preview: string;
+}
+
+export interface PostSnapshot {
+  id: string;
+  date: string;
+  title: string;
+  teaser: FeedTeaser;
+  bodyMarkdown: string;
+  whyCare: string;
+  takeaway: string;
+  quickAskPrompts: string[];
+  narrativeMode: PostNarrativeMode;
+  contextLabel: string;
+  sourceType: 'recent' | 'related' | 'resurfaced' | 'starter' | 'mixed' | 'connection';
+  sourceQuestionIds: string[];
+  sourceQuestionTitles: string[];
+  keywords: string[];
+}
+
+export interface DailyPost extends PostSnapshot {
+  generatedAt: number;
+  origin: 'ai' | 'fallback';
+}
+
+export interface PostOriginContext {
+  post: PostSnapshot;
+  sourceQuestions: Array<{
+    id: string;
+    title: string;
+    content: string;
+    summary: string;
+  }>;
+}
+
+export interface SessionOrigin {
+  type: 'post';
+  postId: string;
+  postTitle: string;
+  context: PostOriginContext;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -220,10 +452,7 @@ export type AppEvent =
   | { type: 'CATEGORY_CREATED'; payload: Category }
   | { type: 'REVIEW_SUBMITTED'; payload: { questionId: string; rating: number } }
   | { type: 'REVIEW_DUE_COUNT_CHANGED'; payload: { count: number } }
-  | { type: 'TODO_CREATED'; payload: TodoItem }
-  | { type: 'TODO_STATUS_CHANGED'; payload: TodoItem }
-  | { type: 'BLOCK_CREATED'; payload: TimeBlock }
-  | { type: 'BLOCK_UPDATED'; payload: TimeBlock }
+  | { type: 'PLANNER_UPDATED'; payload: { reason: 'chunk' | 'thread' | 'checkin' } }
   | { type: 'PODCAST_GENERATION_STARTED'; payload: { podcastId: string; date: string } }
   | { type: 'PODCAST_GENERATION_PROGRESS'; payload: { podcastId: string; progress: number } }
   | { type: 'PODCAST_GENERATION_COMPLETED'; payload: DailyPodcast }

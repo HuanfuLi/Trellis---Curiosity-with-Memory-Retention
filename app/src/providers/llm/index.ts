@@ -1,9 +1,25 @@
+import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import type { LLMConfig } from '../../types';
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
 }
+
+// ─── Timeout helper ────────────────────────────────────────────────────────────
+//
+// Returns an AbortSignal that fires after `ms` milliseconds.
+// Used to prevent fetch() calls from hanging indefinitely on slow mobile networks.
+
+function timeoutSignal(ms: number): AbortSignal {
+  const ac = new AbortController();
+  const id = setTimeout(() => ac.abort(new DOMException(`Request timed out after ${ms / 1000}s`, 'TimeoutError')), ms);
+  ac.signal.addEventListener('abort', () => clearTimeout(id), { once: true });
+  return ac.signal;
+}
+
+const COMPLETION_TIMEOUT_MS = 60_000; // 60 s for non-streaming completions
+const STREAM_TIMEOUT_MS = 120_000;    // 120 s for full streaming response
 
 // ─── Routing ──────────────────────────────────────────────────────────────────
 
@@ -26,36 +42,73 @@ export async function* chatStream(messages: ChatMessage[], config: LLMConfig): A
 // ─── OpenAI / Local / LM Studio (OpenAI-compatible) ─────────────────────────
 
 function openAIBaseUrl(config: LLMConfig): string {
-  if (config.baseUrl) return config.baseUrl.replace(/\/$/, '');
+  if (config.baseUrl) {
+    return config.baseUrl.replace(/\/+$/, '').replace(/\/v1$/, '');
+  }
   if (config.provider === 'lmstudio') return 'http://localhost:1234';
   return 'https://api.openai.com';
 }
 
+function openAIHeaders(config: LLMConfig): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (config.apiKey) headers['Authorization'] = `Bearer ${config.apiKey}`;
+  return headers;
+}
+
+async function localPost(
+  url: string,
+  body: object,
+): Promise<{ ok: boolean; status: number; text(): Promise<string>; json(): Promise<unknown> }> {
+  const headers = { 'Content-Type': 'application/json' };
+
+  if (Capacitor.isNativePlatform()) {
+    const res = await CapacitorHttp.post({ url, headers, data: body });
+    const raw = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+    return {
+      ok: res.status >= 200 && res.status < 300,
+      status: res.status,
+      text: async () => raw,
+      json: async () => (typeof res.data === 'string' ? (JSON.parse(res.data) as unknown) : res.data),
+    };
+  }
+
+  return fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: timeoutSignal(COMPLETION_TIMEOUT_MS) });
+}
+
 async function openAICompletion(messages: ChatMessage[], config: LLMConfig): Promise<string> {
-  const response = await fetch(`${openAIBaseUrl(config)}/v1/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${config.apiKey ?? 'none'}`,
-    },
-    body: JSON.stringify({ model: config.model, messages }),
-  });
+  const isLocal = config.provider === 'local' || config.provider === 'lmstudio';
+  const url = `${openAIBaseUrl(config)}/v1/chat/completions`;
+  const body = { model: config.model, messages, max_tokens: 4096, stream: false };
+
+  const response = isLocal
+    ? await localPost(url, body)
+    : await fetch(url, { method: 'POST', headers: openAIHeaders(config), body: JSON.stringify(body), signal: timeoutSignal(COMPLETION_TIMEOUT_MS) });
+
   if (!response.ok) {
     const err = await response.text();
     throw new Error(`${config.provider} API error ${response.status}: ${err}`);
   }
-  const data = await response.json();
+  const data = await response.json() as { choices: { message: { content: string } }[] };
   return data.choices[0].message.content;
 }
 
 async function* openAIStream(messages: ChatMessage[], config: LLMConfig): AsyncGenerator<string> {
-  const response = await fetch(`${openAIBaseUrl(config)}/v1/chat/completions`, {
+  const isLocal = config.provider === 'local' || config.provider === 'lmstudio';
+  const url = `${openAIBaseUrl(config)}/v1/chat/completions`;
+
+  // CapacitorHttp (used for local/lmstudio) does not support SSE — fall back on native.
+  // Cloud OpenAI uses window.fetch which supports streaming in the Android WebView.
+  if (Capacitor.isNativePlatform() && isLocal) {
+    const text = await openAICompletion(messages, config);
+    yield text;
+    return;
+  }
+
+  const response = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${config.apiKey ?? 'none'}`,
-    },
-    body: JSON.stringify({ model: config.model, messages, stream: true }),
+    headers: isLocal ? { 'Content-Type': 'application/json' } : openAIHeaders(config),
+    body: JSON.stringify({ model: config.model, messages, max_tokens: 4096, stream: true }),
+    signal: timeoutSignal(STREAM_TIMEOUT_MS),
   });
   if (!response.ok) {
     const err = await response.text();
@@ -81,6 +134,7 @@ async function claudeCompletion(messages: ChatMessage[], config: LLMConfig): Pro
       'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify({ model: config.model, max_tokens: 4096, system, messages: userMessages }),
+    signal: timeoutSignal(COMPLETION_TIMEOUT_MS),
   });
   if (!response.ok) {
     const err = await response.text();
@@ -91,6 +145,7 @@ async function claudeCompletion(messages: ChatMessage[], config: LLMConfig): Pro
 }
 
 async function* claudeStream(messages: ChatMessage[], config: LLMConfig): AsyncGenerator<string> {
+  // Claude uses window.fetch (not CapacitorHttp), so SSE streaming works on Android WebView.
   const system = messages.find((m) => m.role === 'system')?.content;
   const userMessages = messages
     .filter((m) => m.role !== 'system')
@@ -104,13 +159,8 @@ async function* claudeStream(messages: ChatMessage[], config: LLMConfig): AsyncG
       'anthropic-version': '2023-06-01',
       'anthropic-dangerous-direct-browser-access': 'true',
     },
-    body: JSON.stringify({
-      model: config.model,
-      max_tokens: 4096,
-      stream: true,
-      system,
-      messages: userMessages,
-    }),
+    body: JSON.stringify({ model: config.model, max_tokens: 4096, stream: true, system, messages: userMessages }),
+    signal: timeoutSignal(STREAM_TIMEOUT_MS),
   });
   if (!response.ok) {
     const err = await response.text();
@@ -118,8 +168,7 @@ async function* claudeStream(messages: ChatMessage[], config: LLMConfig): AsyncG
   }
   yield* parseSseStream(
     response,
-    (p) =>
-      p.type === 'content_block_delta' && p.delta?.type === 'text_delta' ? p.delta.text : '',
+    (p) => p.type === 'content_block_delta' && p.delta?.type === 'text_delta' ? p.delta.text : '',
   );
 }
 
@@ -127,7 +176,6 @@ async function* claudeStream(messages: ChatMessage[], config: LLMConfig): AsyncG
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
-/** Convert OpenAI-style messages to Gemini contents + systemInstruction. */
 function toGeminiPayload(messages: ChatMessage[]) {
   const system = messages.find((m) => m.role === 'system')?.content;
   const contents = messages
@@ -149,6 +197,7 @@ async function geminiCompletion(messages: ChatMessage[], config: LLMConfig): Pro
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(toGeminiPayload(messages)),
+    signal: timeoutSignal(COMPLETION_TIMEOUT_MS),
   });
   if (!response.ok) {
     const err = await response.text();
@@ -159,20 +208,19 @@ async function geminiCompletion(messages: ChatMessage[], config: LLMConfig): Pro
 }
 
 async function* geminiStream(messages: ChatMessage[], config: LLMConfig): AsyncGenerator<string> {
+  // Gemini uses window.fetch (not CapacitorHttp), so SSE streaming works on Android WebView.
   const url = `${GEMINI_BASE}/models/${config.model}:streamGenerateContent?alt=sse&key=${config.apiKey ?? ''}`;
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(toGeminiPayload(messages)),
+    signal: timeoutSignal(STREAM_TIMEOUT_MS),
   });
   if (!response.ok) {
     const err = await response.text();
     throw new Error(`Gemini API error ${response.status}: ${err}`);
   }
-  yield* parseSseStream(
-    response,
-    (p) => p.candidates?.[0]?.content?.parts?.[0]?.text ?? '',
-  );
+  yield* parseSseStream(response, (p) => p.candidates?.[0]?.content?.parts?.[0]?.text ?? '');
 }
 
 // ─── Shared SSE parser ────────────────────────────────────────────────────────

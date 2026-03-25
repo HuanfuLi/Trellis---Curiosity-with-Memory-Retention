@@ -2,6 +2,7 @@ import type { FlashCard, ReviewSchedule, ServiceResult } from '../types';
 import { today, addDays } from '../lib/date';
 import { flashcardService } from './flashcard.service';
 import { eventBus } from '../lib/event-bus';
+import { questionService } from './question.service';
 
 const SM2_INTERVALS = [1, 2, 4, 7, 15, 30];
 
@@ -58,7 +59,10 @@ export const reviewService = {
     };
 
     flashcardService.updateReviewSchedule(cardId, newSchedule);
-    eventBus.emit({ type: 'REVIEW_SUBMITTED', payload: { questionId: cardId, rating } });
+    if (card.nodeId) {
+      questionService.patchQuestion(card.nodeId, { lastReviewedAt: Date.now() });
+    }
+    eventBus.emit({ type: 'REVIEW_SUBMITTED', payload: { questionId: card.nodeId ?? cardId, rating } });
     return { success: true, data: newSchedule };
   },
 
@@ -76,6 +80,9 @@ export const reviewService = {
       ...card.reviewSchedule,
       nextReviewDate: addDays(today(), 1),
     });
+    if (card.nodeId) {
+      questionService.patchQuestion(card.nodeId, { lastReviewedAt: Date.now() });
+    }
     return { success: true };
   },
 };

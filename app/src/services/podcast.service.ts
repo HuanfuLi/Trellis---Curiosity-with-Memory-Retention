@@ -1,5 +1,6 @@
 import type { DailyPodcast, ServiceResult } from '../types';
 import { eventBus } from '../lib/event-bus';
+import { toast } from '../lib/toast';
 import { mockSettingsService } from './mock/settings.mock';
 import { questionService } from './question.service';
 import { chatCompletion } from '../providers/llm';
@@ -13,6 +14,80 @@ function newPodcastId(): string {
   return `pod-${++podcastIdCounter}`;
 }
 
+// ─── IndexedDB audio storage ─────────────────────────────────────────────────
+// Audio blobs are stored in IndexedDB instead of localStorage to avoid the
+// ~5 MB localStorage quota. IndexedDB allows hundreds of MB.
+
+const IDB_NAME = 'echolearn_audio';
+const IDB_STORE = 'blobs';
+const IDB_VERSION = 1;
+
+function openAudioDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function saveAudioBlob(podcastId: string, blobUrl: string): Promise<void> {
+  try {
+    const resp = await fetch(blobUrl);
+    const blob = await resp.blob();
+    const db = await openAudioDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(blob, podcastId);
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    });
+  } catch {
+    // Non-fatal — audio works this session but not after reload
+  }
+}
+
+async function loadAudioBlob(podcastId: string): Promise<string | null> {
+  try {
+    const db = await openAudioDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get(podcastId);
+      req.onsuccess = () => {
+        db.close();
+        const blob = req.result as Blob | undefined;
+        if (blob) {
+          resolve(URL.createObjectURL(blob));
+        } else {
+          resolve(null);
+        }
+      };
+      req.onerror = () => { db.close(); reject(req.error); };
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function deleteAudioBlob(podcastId: string): Promise<void> {
+  try {
+    const db = await openAudioDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).delete(podcastId);
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    });
+  } catch {
+    // Non-fatal
+  }
+}
+
 function loadStore(): DailyPodcast[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -23,17 +98,34 @@ function loadStore(): DailyPodcast[] {
   }
 }
 
+/** Restore in-memory blob URLs from IndexedDB for all podcasts that have audio persisted. */
+async function hydrateAudioBlobUrls(): Promise<void> {
+  const podcasts = loadStore();
+  for (const p of podcasts) {
+    if (p.status === 'ready' && !audioBlobUrls.has(p.id)) {
+      const blobUrl = await loadAudioBlob(p.id);
+      if (blobUrl) audioBlobUrls.set(p.id, blobUrl);
+    }
+  }
+}
+
+// Kick off hydration on module load (fire-and-forget)
+void hydrateAudioBlobUrls();
+
 function saveStore(podcasts: DailyPodcast[]): void {
   try {
-    // Strip audioPath before saving — blob URLs don't survive page reload
+    // Strip transient fields — audio is persisted in IndexedDB, not localStorage.
     const toSave = podcasts.map((p) => {
       const copy = { ...p };
       delete copy.audioPath;
+      delete copy.audioDataUri;
       return copy;
     });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
-  } catch {
-    // ignore
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+      toast('Storage full — podcast data may not be saved.', 'error');
+    }
   }
 }
 
@@ -58,9 +150,7 @@ export const podcastService = {
   async generatePodcast(date: string): Promise<ServiceResult<DailyPodcast>> {
     const existing = loadStore().find((p) => p.date === date);
 
-    // Only skip if podcast is ready AND audio blob is still in memory.
-    // Blob URLs are lost on page reload, so a 'ready' podcast without a blob
-    // still needs to re-synthesize audio.
+    // Only skip if podcast is ready AND audio blob is available (in-memory or restored from dataUri)
     if (existing?.status === 'ready' && audioBlobUrls.has(existing.id)) {
       return { success: true, data: existing };
     }
@@ -80,7 +170,7 @@ export const podcastService = {
       id,
       date,
       questionIds: questions.map((q) => q.id),
-      script: existing?.script ?? '',   // preserve existing script if re-generating audio
+      script: existing?.script ?? '',
       status: 'generating',
       progress: 0,
       createdAt: existing?.createdAt ?? Date.now(),
@@ -90,37 +180,23 @@ export const podcastService = {
     saveStore([pod, ...store.filter((p) => p.date !== date)]);
     eventBus.emit({ type: 'PODCAST_GENERATION_STARTED', payload: { podcastId: id, date } });
 
-    // Run generation asynchronously so caller gets the pending pod immediately
     void (async () => {
       try {
         // Step 1: generate script (30%) — skip LLM if script already exists
         patchPodcast(id, { progress: 30 });
-        eventBus.emit({
-          type: 'PODCAST_GENERATION_PROGRESS',
-          payload: { podcastId: id, progress: 30 },
-        });
+        eventBus.emit({ type: 'PODCAST_GENERATION_PROGRESS', payload: { podcastId: id, progress: 30 } });
 
         let script: string;
         if (existing?.script) {
-          // Reuse existing script — only audio synthesis is needed
           script = existing.script;
         } else if (!settings.llm.isConfigured || questions.length === 0) {
           script = `Welcome to your daily EchoLearn podcast for ${date}! You reviewed ${questions.length} topic(s) today. Keep learning!`;
         } else {
-          const questionLines = questions
-            .map((q) => `- ${q.content}: ${q.summary}`)
-            .join('\n');
+          const questionLines = questions.map((q) => `- ${q.content}: ${q.summary}`).join('\n');
           script = await chatCompletion(
             [
-              {
-                role: 'system',
-                content:
-                  'Write a 90-second spoken podcast recap. Conversational radio style. No stage directions, no music cues. Just the words to be spoken.',
-              },
-              {
-                role: 'user',
-                content: `Create a daily learning recap for:\n${questionLines}`,
-              },
+              { role: 'system', content: 'Write a 90-second spoken podcast recap. Conversational radio style. No stage directions, no music cues. Just the words to be spoken.' },
+              { role: 'user', content: `Create a daily learning recap for:\n${questionLines}` },
             ],
             settings.llm,
           );
@@ -128,19 +204,38 @@ export const podcastService = {
 
         // Step 2: synthesize audio (80%)
         patchPodcast(id, { progress: 80, script });
-        eventBus.emit({
-          type: 'PODCAST_GENERATION_PROGRESS',
-          payload: { podcastId: id, progress: 80 },
-        });
+        eventBus.emit({ type: 'PODCAST_GENERATION_PROGRESS', payload: { podcastId: id, progress: 80 } });
+
+        // When TTS provider is OpenAI and no dedicated TTS key was entered,
+        // fall back to the LLM API key — they share the same OpenAI credentials.
+        const effectiveTtsKey =
+          settings.tts.apiKey ||
+          (settings.tts.provider === 'openai' ? (settings.llm.apiKey ?? '') : '');
+        const ttsReady =
+          settings.tts.provider === 'openai'
+            ? !!effectiveTtsKey
+            : settings.tts.isConfigured;
+        const ttsConfig = { ...settings.tts, apiKey: effectiveTtsKey };
 
         let duration: number | undefined;
-        if (settings.tts.isConfigured) {
+        if (ttsReady) {
           try {
-            const blobUrl = await synthesize(script, settings.tts);
+            const blobUrl = await synthesize(script, ttsConfig);
             audioBlobUrls.set(id, blobUrl);
-            duration = Math.round(script.length / 15); // rough estimate: ~15 chars/second
-          } catch {
-            // TTS failure is non-fatal — podcast is still ready without audio
+            duration = Math.round(script.length / 15);
+
+            // Persist audio blob to IndexedDB so it survives page reloads
+            // without consuming the limited localStorage quota.
+            await saveAudioBlob(id, blobUrl);
+          } catch (ttsErr) {
+            // TTS failure is non-fatal — podcast is still ready, but inform the user
+            const msg = ttsErr instanceof Error ? ttsErr.message : String(ttsErr);
+            toast(
+              msg.includes('401') || msg.includes('Unauthorized') || msg.includes('API key')
+                ? 'TTS: Invalid API key — check Settings.'
+                : `TTS audio failed: ${msg.slice(0, 80)}`,
+              'error',
+            );
           }
         }
 
@@ -156,18 +251,12 @@ export const podcastService = {
         };
 
         patchPodcast(id, completed);
-        eventBus.emit({
-          type: 'PODCAST_GENERATION_PROGRESS',
-          payload: { podcastId: id, progress: 100 },
-        });
+        eventBus.emit({ type: 'PODCAST_GENERATION_PROGRESS', payload: { podcastId: id, progress: 100 } });
         eventBus.emit({ type: 'PODCAST_GENERATION_COMPLETED', payload: completed });
       } catch (e) {
         const error = e instanceof Error ? e.message : String(e);
         patchPodcast(id, { status: 'failed', error });
-        eventBus.emit({
-          type: 'PODCAST_GENERATION_FAILED',
-          payload: { podcastId: id, error },
-        });
+        eventBus.emit({ type: 'PODCAST_GENERATION_FAILED', payload: { podcastId: id, error } });
       }
     })();
 
@@ -177,10 +266,7 @@ export const podcastService = {
   async retryGeneration(podcastId: string): Promise<ServiceResult<DailyPodcast>> {
     const pod = loadStore().find((p) => p.id === podcastId);
     if (!pod) {
-      return {
-        success: false,
-        error: { code: 'NOT_FOUND', message: 'Podcast not found', retryable: false },
-      };
+      return { success: false, error: { code: 'NOT_FOUND', message: 'Podcast not found', retryable: false } };
     }
     return this.generatePodcast(pod.date);
   },
@@ -190,11 +276,7 @@ export const podcastService = {
     if (!blobUrl) {
       return {
         success: false,
-        error: {
-          code: 'NOT_FOUND',
-          message: 'No audio available. Regenerate to get audio.',
-          retryable: true,
-        },
+        error: { code: 'NOT_FOUND', message: 'No audio available. Regenerate to get audio.', retryable: true },
       };
     }
     return { success: true, data: blobUrl };
@@ -206,6 +288,7 @@ export const podcastService = {
       URL.revokeObjectURL(blobUrl);
       audioBlobUrls.delete(podcastId);
     }
+    await deleteAudioBlob(podcastId);
     saveStore(loadStore().filter((p) => p.id !== podcastId));
     return { success: true };
   },

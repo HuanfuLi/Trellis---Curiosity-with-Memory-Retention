@@ -1,8 +1,15 @@
 import type { TTSConfig } from '../../types';
 
+function timeoutSignal(ms: number): AbortSignal {
+  const ac = new AbortController();
+  const id = setTimeout(() => ac.abort(new DOMException(`Request timed out after ${ms / 1000}s`, 'TimeoutError')), ms);
+  ac.signal.addEventListener('abort', () => clearTimeout(id), { once: true });
+  return ac.signal;
+}
+
 export async function synthesize(text: string, config: TTSConfig): Promise<string> {
   const baseUrl = config.baseUrl?.replace(/\/$/, '') || 'https://api.openai.com';
-  const response = await fetch(`${baseUrl}/v1/audio/speech`, {
+  const response = await window.fetch(`${baseUrl}/v1/audio/speech`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -14,6 +21,7 @@ export async function synthesize(text: string, config: TTSConfig): Promise<strin
       voice: config.voice,
       speed: config.speed,
     }),
+    signal: timeoutSignal(60_000),
   });
   if (!response.ok) {
     const err = await response.text();

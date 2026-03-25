@@ -7,6 +7,7 @@ import { ProgressBar } from '../components/ui/ProgressBar';
 import { Button } from '../components/ui/Button';
 import { usePodcast } from '../state/usePodcast';
 import { today, formatDateLabel, isToday } from '../lib/date';
+import { toast } from '../lib/toast';
 import type { DailyPodcast } from '../types';
 
 export function PodcastScreen() {
@@ -54,11 +55,17 @@ export function PodcastScreen() {
       setIsPlaying(false);
       setPlaybackProgress(0);
     };
+    audio.onerror = () => {
+      toast('Audio unavailable — try regenerating.', 'error');
+      setIsPlaying(false);
+      audioRef.current = null;
+    };
 
     return () => {
       audio.pause();
       audio.ontimeupdate = null;
       audio.onended = null;
+      audio.onerror = null;
       audioRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -172,17 +179,15 @@ export function PodcastScreen() {
   return (
     <div style={{ padding: '24px 16px 96px', maxWidth: '448px', margin: '0 auto' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-        <button
-          onClick={() => navigate(-1)}
-          style={{ color: 'var(--primary-40)', background: 'none', display: 'flex', alignItems: 'center', padding: 0 }}
-        >
-          <ArrowLeft size={20} />
-        </button>
-        <div>
-          <h1 style={{ marginBottom: '2px' }}>Podcasts</h1>
-          <p style={{ color: 'var(--muted-foreground)', fontSize: '0.875rem' }}>Your daily learning summaries</p>
-        </div>
+      <button
+        onClick={() => navigate(-1)}
+        style={{ color: 'var(--primary-40)', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '8px', padding: 0, marginBottom: '24px', cursor: 'pointer' }}
+      >
+        <ArrowLeft size={20} /> Back
+      </button>
+      <div style={{ marginBottom: '24px' }}>
+        <h1 style={{ marginBottom: '2px' }}>Podcasts</h1>
+        <p style={{ color: 'var(--muted-foreground)', fontSize: '0.875rem' }}>Your daily learning summaries</p>
       </div>
 
       {/* Selected Podcast Player */}
@@ -359,8 +364,8 @@ export function PodcastScreen() {
                 border: selected?.id === pod.id ? '2px solid var(--primary-40)' : '2px solid transparent',
                 transition: 'transform 0.2s',
               }}
-              onMouseEnter={(e) => { if (pod.status === 'ready') e.currentTarget.style.transform = 'scale(1.01)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+              onPointerEnter={(e) => { if (pod.status === 'ready') e.currentTarget.style.transform = 'scale(1.01)'; }}
+              onPointerLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
