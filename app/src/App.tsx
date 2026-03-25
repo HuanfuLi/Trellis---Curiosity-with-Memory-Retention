@@ -1,7 +1,8 @@
-import { useEffect } from 'react';
-import { createBrowserRouter, RouterProvider, Navigate, Outlet, ScrollRestoration } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { createBrowserRouter, RouterProvider, Navigate, Outlet, ScrollRestoration, useNavigate } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
+import { Loader2 } from 'lucide-react';
 import { BottomNavigation } from './components/BottomNavigation';
 import { ToastContainer } from './components/ui/Toast';
 import { OnboardingScreen } from './screens/OnboardingScreen';
@@ -19,8 +20,64 @@ import { hydrateFromSQLite } from './services/question.service';
 import { hydratePlannerFromSQLite } from './services/planner.service';
 import { applyTheme } from './lib/theme';
 import { PageTransition } from './components/PageTransition';
+import { startVoiceRecording, stopVoiceRecording, MicPermissionDeniedError } from './lib/voice-recorder';
+import { transcribeAudio } from './providers/stt';
+import { toast } from './lib/toast';
 
 function RootLayout() {
+  const navigate = useNavigate();
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  // Guard against starting a new recording while one is already active
+  const recordingActiveRef = useRef(false);
+
+  const handleAskLongPress = async () => {
+    if (recordingActiveRef.current) return;
+    try {
+      await startVoiceRecording();
+      recordingActiveRef.current = true;
+      setIsRecording(true);
+    } catch (err) {
+      console.error('[VoiceAsk] start failed:', err);
+      if (err instanceof MicPermissionDeniedError) {
+        toast('Microphone permission denied. Check app settings.', 'error');
+      } else {
+        const code = err instanceof Error ? err.message : String(err);
+        if (code.includes('MICROPHONE_BEING_USED')) {
+          toast('Microphone is in use by another app.', 'error');
+        } else if (code.includes('DEVICE_CANNOT_VOICE_RECORD')) {
+          toast('Recording not supported on this device.', 'error');
+        } else {
+          toast(`Could not start recording: ${code}`, 'error');
+        }
+      }
+    }
+  };
+
+  const handleAskLongPressRelease = async () => {
+    if (!recordingActiveRef.current) return;
+    recordingActiveRef.current = false;
+    setIsRecording(false);
+    setIsTranscribing(true);
+    try {
+      const blob = await stopVoiceRecording();
+      const settings = mockSettingsService.getSync();
+      const text = await transcribeAudio(blob, settings.tts);
+      navigate('/ask', { state: { prompt: text?.trim() || '' } });
+    } catch (err) {
+      console.error('[VoiceAsk] stop/transcribe failed:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast(
+        msg.includes('API key') || msg.includes('No API')
+          ? 'Add your API key in Speech Recognition settings.'
+          : `Transcription failed: ${msg}`,
+        'error',
+      );
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
   return (
     <div style={{ minHeight: '100vh', backgroundColor: 'var(--surface)' }}>
       {/* Fixed shield that covers the status bar area so scrolled content never shows under it */}
@@ -43,7 +100,50 @@ function RootLayout() {
         <Outlet />
       </div>
       <ScrollRestoration />
-      <BottomNavigation />
+      <BottomNavigation
+        onAskLongPress={() => void handleAskLongPress()}
+        onAskLongPressRelease={() => void handleAskLongPressRelease()}
+      />
+      {/* Recording / transcribing indicator for the nav bar long-press flow */}
+      {(isRecording || isTranscribing) && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 'calc(88px + var(--safe-area-bottom))',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 18px',
+            backgroundColor: 'var(--surface-variant)',
+            borderRadius: '999px',
+            boxShadow: 'var(--shadow-2)',
+            zIndex: 101,
+            fontSize: '0.82rem',
+            color: 'var(--foreground)',
+            whiteSpace: 'nowrap',
+            animation: 'fade-in 0.15s ease',
+          }}
+        >
+          {isTranscribing ? (
+            <>
+              <Loader2 size={14} style={{ animation: 'spin 1s linear infinite', color: 'var(--primary-40)', flexShrink: 0 }} />
+              Transcribing…
+            </>
+          ) : (
+            <>
+              <span style={{
+                width: '8px', height: '8px', borderRadius: '50%',
+                backgroundColor: '#E53935', flexShrink: 0,
+                animation: 'mic-pulse 1.4s ease-in-out infinite',
+                display: 'inline-block',
+              }} />
+              Release to send
+            </>
+          )}
+        </div>
+      )}
       <ToastContainer />
     </div>
   );

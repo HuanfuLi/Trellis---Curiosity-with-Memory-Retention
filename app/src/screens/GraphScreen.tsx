@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import MindElixir from 'mind-elixir';
 import 'mind-elixir/style';
 import type { MindElixirData, MindElixirInstance, NodeObj } from 'mind-elixir';
-import { RefreshCw, GitBranch, Plus, X, ChevronRight } from 'lucide-react';
+import { ArrowLeft, RefreshCw, GitBranch, Plus, X, ChevronRight } from 'lucide-react';
 import type { Question } from '../types';
 import { graphService } from '../services/graph.service';
 import { toast } from '../lib/toast';
@@ -423,25 +423,26 @@ function CardStackInbox({ unlinked, allNodes, onLink, onCreateDomain, onClose }:
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+        <button
+          onClick={onClose}
+          style={{ color: 'var(--primary-40)', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '8px', padding: 0, cursor: 'pointer' }}
+        >
+          <ArrowLeft size={20} /> Back
+        </button>
+        <button onClick={refreshRecommendations} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '100px', border: '1px solid var(--border)', backgroundColor: 'var(--surface-variant)', color: 'var(--foreground)', fontSize: '0.8rem', cursor: 'pointer' }}>
+          <RefreshCw size={14} /> Shuffle
+        </button>
+      </div>
+      <div>
         <p style={{ fontWeight: 700, fontSize: '1rem' }}>Repair Structure</p>
-          {currentParentName ? (
-            <p style={{ fontSize: '0.8rem', color: 'var(--primary-40)', fontWeight: 600 }}>
-              Inside: {currentParentName}
-            </p>
-          ) : (
-              <p style={{ fontSize: '0.8rem', color: 'var(--muted-foreground)' }}>{remaining} nodes still need placement repair</p>
-          )}
-        </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={refreshRecommendations} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '100px', border: '1px solid var(--border)', backgroundColor: 'var(--surface-variant)', color: 'var(--foreground)', fontSize: '0.8rem', cursor: 'pointer' }}>
-            <RefreshCw size={14} /> Shuffle
-          </button>
-          <button onClick={onClose} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '50%', border: '1px solid var(--border)', backgroundColor: 'var(--surface-variant)', color: 'var(--foreground)', cursor: 'pointer' }}>
-            <X size={16} />
-          </button>
-        </div>
+        {currentParentName ? (
+          <p style={{ fontSize: '0.8rem', color: 'var(--primary-40)', fontWeight: 600 }}>
+            Inside: {currentParentName}
+          </p>
+        ) : (
+          <p style={{ fontSize: '0.8rem', color: 'var(--muted-foreground)' }}>{remaining} nodes still need placement repair</p>
+        )}
       </div>
 
       <div style={{ position: 'relative', zIndex: 10 }}>
@@ -597,8 +598,16 @@ export function GraphScreen() {
     [nodes, reload],
   );
 
+  // Scroll to top whenever the view switches so Repair doesn't inherit
+  // the map's scroll position and vice-versa.
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    containerRef.current?.scrollIntoView({ block: 'start' });
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [view]);
+
   return (
-    <div style={{ padding: `${HEADER_HEIGHT + 8}px 16px 16px`, maxWidth: '448px', margin: '0 auto', display: 'flex', flexDirection: 'column', minHeight: 'calc(100vh - 80px)', gap: '16px' }}>
+    <div ref={containerRef} style={{ padding: `${HEADER_HEIGHT + 8}px 16px 16px`, maxWidth: '448px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <Header
         title="Knowledge Graph"
         right={

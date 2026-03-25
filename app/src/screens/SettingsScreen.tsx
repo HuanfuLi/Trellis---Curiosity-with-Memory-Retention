@@ -105,7 +105,7 @@ function TextInput({ value, onChange, onBlur, type = 'text', placeholder }: { va
         backgroundColor: 'var(--surface-variant)',
         color: 'var(--foreground)',
         fontSize: '0.875rem',
-        width: '160px',
+        width: type === 'time' ? '120px' : '160px',
       }}
     />
   );
@@ -120,6 +120,7 @@ export function SettingsScreen() {
   const [embedding, setEmbedding] = useState<EmbeddingConfig>(() => mockSettingsService.getSync().embedding);
   const [embeddingDebug, setEmbeddingDebug] = useState<EmbeddingDebugConfig>(() => mockSettingsService.getSync().embeddingDebug);
   const [ztNetworkId, setZtNetworkId] = useState(() => mockSettingsService.getSync().zerotier.networkId ?? '');
+  const [podcastAutoGenerate, setPodcastAutoGenerate] = useState(() => mockSettingsService.getSync().podcast.autoGenerate);
   const [podcastSleepTime, setPodcastSleepTime] = useState(() => mockSettingsService.getSync().podcast.sleepTime);
   const [podcastAdvance, setPodcastAdvance] = useState(() => String(mockSettingsService.getSync().podcast.advanceMinutes));
   const [reviewLimit, setReviewLimit] = useState(() => String(mockSettingsService.getSync().review.dailyLimit));
@@ -265,6 +266,7 @@ export function SettingsScreen() {
       setEmbedding(s.embedding);
       setEmbeddingDebug(s.embeddingDebug);
       setZtNetworkId(s.zerotier.networkId ?? '');
+      setPodcastAutoGenerate(s.podcast.autoGenerate);
       setPodcastSleepTime(s.podcast.sleepTime);
       setPodcastAdvance(String(s.podcast.advanceMinutes));
       setReviewLimit(String(s.review.dailyLimit));
@@ -637,8 +639,14 @@ export function SettingsScreen() {
       {/* Podcast Settings */}
       <SectionHeader icon={<Radio size={20} />} title="Podcast" />
       <Card style={{ marginBottom: '8px' }}>
+        <SettingRow label="Auto-Generate" description="Generate podcast automatically at preset time">
+          <MaterialSwitch
+            checked={podcastAutoGenerate}
+            onChange={() => setPodcastAutoGenerate((v) => !v)}
+          />
+        </SettingRow>
         <SettingRow label="Sleep Time" description="When to generate daily podcast">
-          <TextInput value={podcastSleepTime} onChange={setPodcastSleepTime} placeholder="22:00" />
+          <TextInput type="time" value={podcastSleepTime} onChange={setPodcastSleepTime} placeholder="22:00" />
         </SettingRow>
         <SettingRow label="Advance Minutes" description="Minutes before sleep to generate">
           <TextInput value={podcastAdvance} onChange={setPodcastAdvance} placeholder="60" />
@@ -649,9 +657,9 @@ export function SettingsScreen() {
             variant="secondary"
             onClick={async () => {
               await mockSettingsService.set('podcast', {
+                autoGenerate: podcastAutoGenerate,
                 sleepTime: podcastSleepTime,
                 advanceMinutes: parseInt(podcastAdvance) || 60,
-                autoGenerate: mockSettingsService.getSync().podcast.autoGenerate,
               });
               toast('Podcast settings saved.', 'success');
             }}
@@ -675,7 +683,7 @@ export function SettingsScreen() {
         </SettingRow>
         {reviewNotif && (
           <SettingRow label="Reminder Time">
-            <TextInput value={reviewReminderTime} onChange={setReviewReminderTime} placeholder="09:00" />
+            <TextInput type="time" value={reviewReminderTime} onChange={setReviewReminderTime} placeholder="09:00" />
           </SettingRow>
         )}
         <div style={{ paddingTop: '12px' }}>

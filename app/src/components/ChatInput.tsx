@@ -54,11 +54,12 @@ export function ChatInput({ onSend, placeholder = 'Ask anything...', disabled }:
       const text = await transcribeAudio(blob, settings.tts);
       if (text) setMessage((prev) => (prev ? `${prev} ${text}` : text));
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '';
+      console.error('[ChatInput] transcription error:', err);
+      const msg = err instanceof Error ? err.message : String(err);
       toast(
         msg.includes('API key') || msg.includes('No API')
           ? 'Add your API key in Text-to-Speech & Speech Recognition settings.'
-          : 'Transcription failed. Check your TTS API settings.',
+          : `Transcription failed: ${msg}`,
         'error',
       );
     } finally {

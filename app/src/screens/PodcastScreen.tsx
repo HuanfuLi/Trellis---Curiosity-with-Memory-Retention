@@ -179,17 +179,15 @@ export function PodcastScreen() {
   return (
     <div style={{ padding: '24px 16px 96px', maxWidth: '448px', margin: '0 auto' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-        <button
-          onClick={() => navigate(-1)}
-          style={{ color: 'var(--primary-40)', background: 'none', display: 'flex', alignItems: 'center', padding: 0 }}
-        >
-          <ArrowLeft size={20} />
-        </button>
-        <div>
-          <h1 style={{ marginBottom: '2px' }}>Podcasts</h1>
-          <p style={{ color: 'var(--muted-foreground)', fontSize: '0.875rem' }}>Your daily learning summaries</p>
-        </div>
+      <button
+        onClick={() => navigate(-1)}
+        style={{ color: 'var(--primary-40)', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '8px', padding: 0, marginBottom: '24px', cursor: 'pointer' }}
+      >
+        <ArrowLeft size={20} /> Back
+      </button>
+      <div style={{ marginBottom: '24px' }}>
+        <h1 style={{ marginBottom: '2px' }}>Podcasts</h1>
+        <p style={{ color: 'var(--muted-foreground)', fontSize: '0.875rem' }}>Your daily learning summaries</p>
       </div>
 
       {/* Selected Podcast Player */}

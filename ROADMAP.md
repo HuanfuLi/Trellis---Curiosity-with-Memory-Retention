@@ -6,3 +6,4 @@
 - [x] Phase 3: Review & Spaced Repetition
 - [x] Phase 4: Planner & Learning Chunks
 - [ ] Phase 5: Fixed Banners & UI Polish
+- [ ] Phase 6: Question Quality Evaluation

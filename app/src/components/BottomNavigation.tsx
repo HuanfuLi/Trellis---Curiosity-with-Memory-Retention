@@ -28,9 +28,10 @@ const noCallout: React.CSSProperties = {
 
 interface BottomNavigationProps {
   onAskLongPress?: () => void;
+  onAskLongPressRelease?: () => void;
 }
 
-export function BottomNavigation({ onAskLongPress }: BottomNavigationProps) {
+export function BottomNavigation({ onAskLongPress, onAskLongPressRelease }: BottomNavigationProps) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -40,20 +41,26 @@ export function BottomNavigation({ onAskLongPress }: BottomNavigationProps) {
     longPressFired.current = false;
     longPressTimer.current = setTimeout(() => {
       longPressFired.current = true;
+      longPressTimer.current = null;
       void hapticImpactLight();
       onAskLongPress?.();
     }, 500);
   };
 
-  const cancelLongPress = () => {
+  const handleAskPointerRelease = () => {
     if (longPressTimer.current !== null) {
+      // Timer still pending — quick tap, cancel long-press
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
+    } else if (longPressFired.current) {
+      // Long-press confirmed and now released — signal stop
+      longPressFired.current = false;
+      onAskLongPressRelease?.();
     }
   };
 
   const handleAskClick = () => {
-    // If the long-press already fired, don't also navigate
+    // Only navigate on a clean tap (long-press resets longPressFired in handleAskPointerRelease)
     if (!longPressFired.current) navigate('/ask');
   };
 
@@ -124,9 +131,9 @@ export function BottomNavigation({ onAskLongPress }: BottomNavigationProps) {
             <button
               onClick={handleAskClick}
               onPointerDown={handleAskPointerDown}
-              onPointerUp={cancelLongPress}
-              onPointerLeave={cancelLongPress}
-              onPointerCancel={cancelLongPress}
+              onPointerUp={handleAskPointerRelease}
+              onPointerLeave={handleAskPointerRelease}
+              onPointerCancel={handleAskPointerRelease}
               onContextMenu={(e) => e.preventDefault()}
               className="active-squish"
               style={{
