@@ -56,7 +56,11 @@ function buildFallbackPlacement(question: Question): Pick<KnowledgeNode, 'rootLa
   };
 }
 
-export function projectQuestionToKnowledgeNode(question: Question): KnowledgeNode {
+export function projectQuestionToKnowledgeNode(question: Question): KnowledgeNode | null {
+  // Guard: skip flagged questions unless the user has overridden (flagged=false)
+  if (question.flagged === true) {
+    return null;
+  }
   const placement = buildFallbackPlacement(question);
   return {
     id: question.id,
@@ -87,7 +91,10 @@ export function projectQuestionToKnowledgeNode(question: Question): KnowledgeNod
 }
 
 export function projectQuestionsToKnowledgeNodes(questions: Question[]): KnowledgeNode[] {
-  return questions.map(projectQuestionToKnowledgeNode);
+  return questions
+    .filter((q) => q.flagged !== true)
+    .map(projectQuestionToKnowledgeNode)
+    .filter((node): node is KnowledgeNode => node !== null);
 }
 
 function keywordOverlapScore(a: string[], b: string[]): number {
