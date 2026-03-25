@@ -24,8 +24,8 @@ const PATTERN_LIBRARY: PatternEntry[] = [
   // Incomplete test messages
   { pattern: /^(test|asdf|xyz|lol|haha|lmao|xd)/i, confidence: 0.85 },
 
-  // Very short trivial acknowledgements (exact match only)
-  { pattern: /^(ok|okay|yeah|yes|no|sure|thanks|thank you|np|yep|nope)$/i, confidence: 0.8 },
+  // Trivial acknowledgements and backchannels (word boundary — also catches punctuation variants)
+  { pattern: /\b(ok|okay|alright|got it|i see|cool|right|yeah|yes|no|sure|thanks|thank you|np|yep|nope|uh huh|uh uh|mhm|mm|exactly|indeed|fine|whatever|absolutely|certainly|definitely|sounds good|for sure|totally|100)\b/i, confidence: 0.8 },
 ];
 
 // ─── Exported types ───────────────────────────────────────────────────────────
