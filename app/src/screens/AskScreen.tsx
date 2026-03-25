@@ -383,6 +383,15 @@ export function AskScreen() {
     toast('Response removed from your data.', 'success');
   }, []);
 
+  const handleQuestionOverride = useCallback((questionId: string, shouldSave: boolean) => {
+    if (shouldSave) {
+      // Remove the flag so the question becomes eligible for knowledge graph ingestion
+      questionService.patchQuestion(questionId, { flagged: false });
+      toast('Question saved to knowledge base', 'success');
+    }
+    // If not saving, keep as-is (flagged=true) — question won't ingest to knowledge graph
+  }, []);
+
   const handleDeleteSession = useCallback((id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     sessionService.delete(id);
@@ -574,6 +583,9 @@ export function AskScreen() {
               onEdit={!message.isStreaming ? () => { setEditingMessageId(message.id); setEditingContent(message.content); } : undefined}
               onRegenerate={!message.isStreaming ? () => void handleRegenerateResponse(message.id) : undefined}
               onDelete={!message.isStreaming ? () => handleDeleteResponse(message.id) : undefined}
+              questionId={message.questionId}
+              flagged={message.type === 'ai' ? questions.find((q) => q.id === message.questionId)?.flagged : undefined}
+              onQuestionOverride={handleQuestionOverride}
             />
             {message.isStreaming && !message.content && (
               <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '16px' }}>
