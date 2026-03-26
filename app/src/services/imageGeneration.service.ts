@@ -56,6 +56,7 @@ class ImageGenerationService {
   /**
    * Generate an image for the given post + style combo.
    * Checks the cache first; falls back through providers on miss.
+   * Logs generation time for performance monitoring.
    */
   async generateImage(
     postId: string,
@@ -70,12 +71,17 @@ class ImageGenerationService {
 
     // 2. Try each provider in order.
     let lastError = 'No providers configured';
+    const t0 = Date.now();
+
     for (const provider of this.providers) {
       try {
+        const providerStart = Date.now();
         const result = await provider.generate(prompt, style, {
           timeoutMs: this.config.requestTimeoutMs,
           maxRetries: this.config.maxRetries,
         });
+        const elapsed = Date.now() - providerStart;
+
         if (result.success && result.data) {
           const image: GeneratedImage = {
             ...result.data,
@@ -83,6 +89,9 @@ class ImageGenerationService {
           };
           // Cache the successful result.
           await this.cacheImage(postId, [image]);
+          console.debug(
+            `[ImageGenerationService] ${provider.name} generated image in ${elapsed}ms (total: ${Date.now() - t0}ms)`,
+          );
           return { success: true, data: image };
         }
         lastError = result.error?.message ?? 'Provider returned no data';
@@ -141,6 +150,17 @@ class ImageGenerationService {
 
     this._saveMeta(meta);
     this._evictExpiredAndOverLimit(meta);
+
+    // Warn at 80% capacity so the UI can surface a notification if needed.
+    const stats = this.getCacheStats();
+    const usageRatio = stats.totalSizeBytes / this.config.maxCacheSizeBytes;
+    if (usageRatio >= 0.8) {
+      console.warn(
+        `[ImageGenerationService] Cache at ${Math.round(usageRatio * 100)}% capacity ` +
+        `(${(stats.totalSizeBytes / (1024 * 1024)).toFixed(1)} MB / ` +
+        `${(this.config.maxCacheSizeBytes / (1024 * 1024)).toFixed(0)} MB)`,
+      );
+    }
   }
 
   /**
