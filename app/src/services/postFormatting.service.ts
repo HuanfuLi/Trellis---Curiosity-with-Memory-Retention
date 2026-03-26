@@ -1,8 +1,7 @@
 /**
  * PostFormattingService
  *
- * Derives display metadata from a DailyPost for use in image overlays:
- * - generateOverlayText(post) → { emoji, title }
+ * Derives display metadata from a DailyPost for use in preview images:
  * - inferImageStyle(post, index) → ImageStyle
  * - buildImagePrompt(post) → prompt string for image generation
  */
@@ -40,12 +39,52 @@ const KEYWORD_EMOJIS: Array<[RegExp, string]> = [
   [/\b(book|read|literature|story|narrative)\b/i, '📚'],
 ];
 
-function emojiFromKeywords(keywords: string[], title: string, sourceType: DailyPost['sourceType']): string {
+function emojiFromKeywords(keywords: string[], title: string, sourceType: DailyPost['sourceType']): string[] {
   const searchText = [...keywords, title].join(' ');
+  const emojis: string[] = [];
+  
+  // Collect up to 2 matching emojis from keywords
   for (const [regex, emoji] of KEYWORD_EMOJIS) {
-    if (regex.test(searchText)) return emoji;
+    if (regex.test(searchText) && !emojis.includes(emoji)) {
+      emojis.push(emoji);
+      if (emojis.length >= 2) break;
+    }
   }
-  return SOURCE_EMOJIS[sourceType] ?? '💡';
+  
+  // If no keyword matches, use source type emoji
+  if (emojis.length === 0) {
+    emojis.push(SOURCE_EMOJIS[sourceType] ?? '💡');
+  }
+  
+  return emojis;
+}
+
+function trimSentence(value: string, maxLength: number): string {
+  const cleaned = value.replace(/\s+/g, ' ').trim();
+  if (cleaned.length <= maxLength) return cleaned;
+  return cleaned.slice(0, maxLength - 1).trimEnd() + '…';
+}
+
+function pickHeadline(post: DailyPost): string {
+  const raw = post.teaser.hook || post.title;
+  return trimSentence(raw, 58);
+}
+
+function pickHookCaption(post: DailyPost): string {
+  const raw = post.teaser.preview || post.takeaway || post.whyCare || post.bodyMarkdown;
+  return trimSentence(raw.replace(/[#*_`>-]/g, ' '), 96);
+}
+
+function buildTableRows(post: DailyPost): Array<[string, string]> {
+  const topic = trimSentence(post.sourceQuestionTitles[0] || post.title, 28);
+  const angleSource = post.quickAskPrompts[0] || post.takeaway || post.whyCare;
+  const angle = trimSentence(angleSource.replace(/\?+$/, ''), 34);
+  const keywords = trimSentence(post.keywords.slice(0, 3).join(' • '), 30);
+  return [
+    ['Topic', topic],
+    ['Angle', angle],
+    ['Signals', keywords || 'Concept preview'],
+  ];
 }
 
 // ─── Style rotation ────────────────────────────────────────────────────────────
@@ -53,19 +92,6 @@ function emojiFromKeywords(keywords: string[], title: string, sourceType: DailyP
 const STYLE_ROTATION: ImageStyle[] = ['infograph', 'illustration', 'photo'];
 
 // ─── Service ──────────────────────────────────────────────────────────────────
-
-/**
- * Derive the emoji + short title to render as an overlay on a post image.
- */
-export function generateOverlayText(post: DailyPost): { emoji: string; title: string } {
-  const emoji = emojiFromKeywords(post.keywords, post.title, post.sourceType);
-
-  // Prefer teaser hook (short, punchy) over full title.
-  const raw = post.teaser.hook || post.title;
-  const title = raw.length > 50 ? raw.slice(0, 47) + '…' : raw;
-
-  return { emoji, title };
-}
 
 /**
  * Infer the best image style for a post.
@@ -88,13 +114,32 @@ export function inferImageStyle(post: DailyPost, index: number): ImageStyle {
 }
 
 /**
- * Build an optimised image generation prompt from a post.
- * Kept short (< 120 chars) to minimise latency.
+ * Build a structured prompt for a hook-first preview image.
+ * The generated image should explain the post at a glance without repeating
+ * the exact feed title under the card.
  */
 export function buildImagePrompt(post: DailyPost): string {
-  const subject = post.title || post.teaser.hook;
-  const keywords = post.keywords.slice(0, 3).join(', ');
-  const context = post.contextLabel ? ` | context: ${post.contextLabel}` : '';
-  const raw = `${subject}${context}${keywords ? ` | topics: ${keywords}` : ''}`;
-  return raw.length > 120 ? raw.slice(0, 117) + '…' : raw;
+  const emojis = emojiFromKeywords(post.keywords, post.title, post.sourceType);
+  const emojiStr = emojis.join(' ');
+  const headline = pickHeadline(post);
+  const caption = pickHookCaption(post);
+  const chips = post.keywords.slice(0, 3).map((keyword) => trimSentence(keyword, 16));
+  const tableRows = buildTableRows(post);
+  const sourceHints = post.sourceQuestionTitles.slice(0, 2).map((title) => trimSentence(title, 40)).join(' | ');
+
+  return [
+    'Create a mobile discovery-feed cover image for an educational post.',
+    'Show meaningful on-image content so the viewer immediately understands the concept before opening the post.',
+    'Integrate emojis naturally into the headline text, not as a separate badge.',
+    'Use bold editorial layout with clear visual hierarchy and ample whitespace.',
+    'Keep on-image text short, legible, and visually integrated into the composition.',
+    `EMOJI: ${emojiStr}`,
+    `HEADLINE: ${headline}`,
+    `CAPTION: ${caption}`,
+    `CHIPS: ${chips.join(' | ')}`,
+    ...tableRows.map(([label, value], index) => `ROW_${index + 1}: ${label} | ${value}`),
+    `SOURCE_HINTS: ${sourceHints}`,
+    `CONTEXT: ${trimSentence(post.contextLabel, 32)}`,
+    `STYLE_INTENT: ${post.narrativeMode.replace(/-/g, ' ')}`,
+  ].join('\n');
 }

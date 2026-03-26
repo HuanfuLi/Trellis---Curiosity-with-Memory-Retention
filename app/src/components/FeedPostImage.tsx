@@ -2,7 +2,7 @@
  * FeedPostImage
  *
  * Displays a large AI-generated image for a feed post with:
- * - Emoji + title text overlay (semi-transparent scrim behind text)
+ * - Clean edge-to-edge artwork without an extra text scrim
  * - Loading skeleton while the image is being generated
  * - Error state with retry button
  * - Mobile-first safe-area aware layout
@@ -10,8 +10,6 @@
  * Usage:
  *   <FeedPostImage
  *     imageData={generatedImage}        // null = loading, undefined = error
- *     overlayEmoji="🧠"
- *     overlayTitle="Why memory fades after sleep"
  *     isLoading={true}
  *     error="Image generation failed."
  *     onRetry={() => void handleRetry()}
@@ -29,10 +27,6 @@ interface FeedPostImageProps {
   error?: string | null;
   /** Callback for retry button in error state. */
   onRetry?: () => void;
-  /** Emoji rendered on top of the image. */
-  overlayEmoji?: string;
-  /** Title text rendered on top of the image (≤50 chars). */
-  overlayTitle?: string;
   /** Minimum image height in px. Defaults to 220. */
   minHeight?: number;
   /** Additional CSS class names. */
@@ -153,8 +147,6 @@ export function FeedPostImage({
   isLoading = false,
   error = null,
   onRetry,
-  overlayEmoji = '',
-  overlayTitle = '',
   minHeight = 220,
   className,
 }: FeedPostImageProps) {
@@ -190,7 +182,7 @@ export function FeedPostImage({
       {/* Background image */}
       <img
         src={imageSrc}
-        alt={overlayTitle || 'Post image'}
+        alt="Post preview image"
         loading="lazy"
         style={{
           width: '100%',
@@ -206,61 +198,6 @@ export function FeedPostImage({
           (e.currentTarget as HTMLImageElement).style.display = 'none';
         }}
       />
-
-      {/* Bottom gradient scrim for text legibility */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          background: 'linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.15) 55%, transparent 100%)',
-        }}
-      />
-
-      {/* Overlay text */}
-      {(overlayEmoji || overlayTitle) && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            padding: '16px 16px 18px',
-            display: 'flex',
-            alignItems: 'flex-end',
-            gap: '10px',
-          }}
-        >
-          {overlayEmoji && (
-            <span
-              style={{
-                fontSize: '1.8rem',
-                lineHeight: 1,
-                flexShrink: 0,
-                filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))',
-              }}
-            >
-              {overlayEmoji}
-            </span>
-          )}
-          {overlayTitle && (
-            <p
-              style={{
-                fontSize: '0.95rem',
-                fontWeight: 700,
-                color: '#ffffff',
-                lineHeight: 1.3,
-                textShadow: '0 1px 4px rgba(0,0,0,0.6)',
-                overflow: 'hidden',
-                display: '-webkit-box',
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical',
-              }}
-            >
-              {overlayTitle}
-            </p>
-          )}
-        </div>
-      )}
 
       {/* Spacer to enforce minHeight when image is absolute-positioned */}
       <div style={{ minHeight }} />

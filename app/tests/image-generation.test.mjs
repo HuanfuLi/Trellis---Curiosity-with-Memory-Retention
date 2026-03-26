@@ -51,28 +51,6 @@ function makeFailProvider(name = 'fail') {
 
 // ─── PostFormattingService tests ──────────────────────────────────────────────
 
-// Inline the pure functions to avoid Vite import issues in node --test
-function generateOverlayText(post) {
-  const SOURCE_EMOJIS = {
-    recent: '⚡', related: '🔗', resurfaced: '♻️',
-    starter: '🌱', mixed: '🎲', connection: '🧩',
-  };
-  const KEYWORD_EMOJIS = [
-    [/\b(ai|artificial intelligence|machine learning|neural|llm)\b/i, '🤖'],
-    [/\b(brain|memory|neuroscience|cognitive|psychology)\b/i, '🧠'],
-    [/\b(physics|quantum|energy)\b/i, '⚛️'],
-    [/\b(book|read|literature)\b/i, '📚'],
-  ];
-  const searchText = [...(post.keywords ?? []), post.title ?? ''].join(' ');
-  let emoji = SOURCE_EMOJIS[post.sourceType] ?? '💡';
-  for (const [regex, e] of KEYWORD_EMOJIS) {
-    if (regex.test(searchText)) { emoji = e; break; }
-  }
-  const raw = post.teaser?.hook || post.title || '';
-  const title = raw.length > 50 ? raw.slice(0, 47) + '…' : raw;
-  return { emoji, title };
-}
-
 function inferImageStyle(post, index) {
   const ROTATION = ['infograph', 'illustration', 'photo'];
   if (post.sourceType === 'connection') return 'illustration';
@@ -81,11 +59,24 @@ function inferImageStyle(post, index) {
 }
 
 function buildImagePrompt(post) {
-  const subject = post.title || post.teaser?.hook || '';
-  const keywords = (post.keywords ?? []).slice(0, 3).join(', ');
-  const context = post.contextLabel ? ` | context: ${post.contextLabel}` : '';
-  const raw = `${subject}${context}${keywords ? ` | topics: ${keywords}` : ''}`;
-  return raw.length > 120 ? raw.slice(0, 117) + '…' : raw;
+  const emoji = /\b(brain|memory|neuroscience|cognitive|psychology)\b/i.test(
+    [...(post.keywords ?? []), post.title ?? ''].join(' ')
+  )
+    ? '🧠'
+    : '💡';
+  const headline = (post.teaser?.hook || post.title || '').slice(0, 58);
+  const caption = (post.teaser?.preview || post.takeaway || post.whyCare || '').slice(0, 96);
+  const chips = (post.keywords ?? []).slice(0, 3).join(' | ');
+  return [
+    'Create a mobile discovery-feed cover image for an educational post.',
+    `EMOJI: ${emoji}`,
+    `HEADLINE: ${headline}`,
+    `CAPTION: ${caption}`,
+    `CHIPS: ${chips}`,
+    `ROW_1: Topic | ${(post.sourceQuestionTitles?.[0] || post.title || '').slice(0, 28)}`,
+    `ROW_2: Angle | ${(post.quickAskPrompts?.[0] || post.takeaway || post.whyCare || '').replace(/\?+$/, '').slice(0, 34)}`,
+    `ROW_3: Signals | ${(post.keywords ?? []).slice(0, 3).join(' • ').slice(0, 30)}`,
+  ].join('\n');
 }
 
 const makePost = (overrides = {}) => ({
@@ -96,34 +87,14 @@ const makePost = (overrides = {}) => ({
   sourceType: 'recent',
   contextLabel: 'Learning',
   narrativeMode: 'example-first',
+  takeaway: 'Retrieval and repetition make memory durable.',
+  whyCare: 'This explains why some ideas stick and others disappear.',
+  quickAskPrompts: ['What makes a memory retrievable?'],
+  sourceQuestionTitles: ['How memory works'],
   ...overrides,
 });
 
 // ─── Tests: PostFormattingService ─────────────────────────────────────────────
-
-test('generateOverlayText returns emoji and truncated title', () => {
-  const post = makePost();
-  const { emoji, title } = generateOverlayText(post);
-
-  assert.equal(typeof emoji, 'string');
-  assert.ok(emoji.length > 0, 'emoji should not be empty');
-  assert.ok(title.length > 0, 'title should not be empty');
-  assert.ok(title.length <= 50, `title too long: ${title.length}`);
-});
-
-test('generateOverlayText uses keyword-based emoji for brain/neuroscience post', () => {
-  const post = makePost({ keywords: ['memory', 'brain', 'neuroscience'] });
-  const { emoji } = generateOverlayText(post);
-  assert.equal(emoji, '🧠');
-});
-
-test('generateOverlayText truncates long hooks', () => {
-  const longHook = 'A'.repeat(60);
-  const post = makePost({ teaser: { hook: longHook, preview: '' } });
-  const { title } = generateOverlayText(post);
-  assert.ok(title.endsWith('…'), 'should end with ellipsis');
-  assert.ok(title.length <= 50, 'truncated title should be at most 50 chars');
-});
 
 test('inferImageStyle rotates styles across feed indices', () => {
   const post = makePost();
@@ -149,11 +120,15 @@ test('inferImageStyle forces infograph for starter posts', () => {
   assert.equal(inferImageStyle(post, 1), 'infograph');
 });
 
-test('buildImagePrompt keeps output under 120 chars', () => {
-  const longTitle = 'A very long title that goes on and on and on and will definitely exceed the limit if not truncated properly';
+test('buildImagePrompt creates structured hook-card instructions', () => {
+  const longTitle = 'A very long title that goes on and on and on and will still be converted into a structured image prompt';
   const post = makePost({ title: longTitle, keywords: ['a', 'b', 'c'] });
   const prompt = buildImagePrompt(post);
-  assert.ok(prompt.length <= 120, `prompt too long: ${prompt.length} chars`);
+  assert.match(prompt, /EMOJI:/);
+  assert.match(prompt, /HEADLINE:/);
+  assert.match(prompt, /ROW_1:/);
+  assert.match(prompt, /ROW_3:/);
+  assert.match(prompt, /CHIPS:/);
 });
 
 // ─── Tests: Provider mock interface ───────────────────────────────────────────

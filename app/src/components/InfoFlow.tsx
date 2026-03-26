@@ -3,7 +3,7 @@ import { X } from 'lucide-react';
 import type { BlindboxItem, DailyPost, GeneratedImage, Question } from '../types';
 import { FeedPostImage } from './FeedPostImage';
 import { imageGenerationService } from '../services/imageGeneration.service';
-import { generateOverlayText, inferImageStyle, buildImagePrompt } from '../services/postFormatting.service';
+import { inferImageStyle, buildImagePrompt } from '../services/postFormatting.service';
 
 export type InfoFlowItem =
   | { kind: 'concept'; post: DailyPost }
@@ -87,7 +87,6 @@ function ConceptCard({ post, feedIndex = 0, isActive, onOpen }: ConceptCardProps
     });
   };
 
-  const { emoji: overlayEmoji, title: overlayTitle } = generateOverlayText(post);
   // ── End image state ─────────────────────────────────────────────────────────
 
   return (
@@ -146,8 +145,6 @@ function ConceptCard({ post, feedIndex = 0, isActive, onOpen }: ConceptCardProps
           isLoading={imageLoading}
           error={imageError}
           onRetry={handleRetryImage}
-          overlayEmoji={overlayEmoji}
-          overlayTitle={overlayTitle}
           minHeight={200}
         />
 

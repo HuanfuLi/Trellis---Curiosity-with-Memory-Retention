@@ -24,16 +24,19 @@ const MOCK_GRADIENTS: Record<ImageStyle, string[]> = {
     'linear-gradient(135deg, #1e3a5f 0%, #2d6a9f 50%, #4fc3f7 100%)',
     'linear-gradient(135deg, #1a237e 0%, #3949ab 50%, #7986cb 100%)',
     'linear-gradient(135deg, #004d40 0%, #00796b 50%, #4db6ac 100%)',
+    'linear-gradient(135deg, #1b5e20 0%, #2e7d32 50%, #66bb6a 100%)',
   ],
   illustration: [
     'linear-gradient(135deg, #4a148c 0%, #7b1fa2 50%, #ce93d8 100%)',
     'linear-gradient(135deg, #e65100 0%, #f57c00 50%, #ffcc02 100%)',
     'linear-gradient(135deg, #880e4f 0%, #c2185b 50%, #f48fb1 100%)',
+    'linear-gradient(135deg, #311b92 0%, #512da8 50%, #7e57c2 100%)',
   ],
   photo: [
     'linear-gradient(135deg, #263238 0%, #546e7a 50%, #b0bec5 100%)',
     'linear-gradient(135deg, #33691e 0%, #558b2f 50%, #aed581 100%)',
     'linear-gradient(135deg, #bf360c 0%, #e64a19 50%, #ffab91 100%)',
+    'linear-gradient(135deg, #1a237e 0%, #283593 50%, #5c6bc0 100%)',
   ],
 };
 
@@ -43,30 +46,139 @@ function deterministicIndex(seed: string, length: number): number {
   return ((h % length) + length) % length;
 }
 
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function readPromptField(prompt: string, key: string): string {
+  const match = prompt.match(new RegExp(`^${key}:\\s*(.+)$`, 'm'));
+  return match?.[1]?.trim() ?? '';
+}
+
+function wrapText(value: string, maxChars: number): string[] {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = '';
+
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length <= maxChars) {
+      current = candidate;
+    } else {
+      if (current) lines.push(current);
+      current = word;
+    }
+  }
+
+  if (current) lines.push(current);
+  return lines.slice(0, 3);
+}
+
+function parsePromptCard(prompt: string) {
+  const emoji = readPromptField(prompt, 'EMOJI') || '💡';
+  const headline = readPromptField(prompt, 'HEADLINE') || 'Concept preview';
+  const caption = readPromptField(prompt, 'CAPTION') || 'Open the post to explore the idea in detail.';
+  const chips = readPromptField(prompt, 'CHIPS')
+    .split('|')
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+  const rows = [1, 2, 3]
+    .map((index) => readPromptField(prompt, `ROW_${index}`))
+    .filter(Boolean)
+    .map((row) => {
+      const [label, value] = row.split('|').map((part) => part.trim());
+      return { label: label || 'Key', value: value || '' };
+    });
+
+  return { emoji, headline, caption, chips, rows };
+}
+
 function buildMockSvg(prompt: string, style: ImageStyle): string {
   const gradients = MOCK_GRADIENTS[style];
   const gradient = gradients[deterministicIndex(prompt, gradients.length)];
-  void gradient; // referenced for future real implementation
-  const icon = style === 'infograph' ? '[chart]' : style === 'illustration' ? '[art]' : '[photo]';
-  const label = prompt.slice(0, 40) + (prompt.length > 40 ? '...' : '');
+  const { emoji, headline, caption, chips } = parsePromptCard(prompt);
+  const [start, mid, end] = gradient.match(/#[0-9a-fA-F]{6}/g) ?? ['#1a1a2e', '#16213e', '#0f3460'];
+  
+  // Wrap headline with emoji integrated naturally
+  const headlineWithEmoji = `${emoji} ${headline}`;
+  const headlineLines = wrapText(headlineWithEmoji, 28);
+  const captionLines = wrapText(caption, 45);
+  const chipText = chips.length > 0 ? chips.join(' · ') : 'explore · discover · learn';
+  
+  // Decorative accent circles (varied for visual interest)
+  const accentCircles = [
+    { x: 520, y: 60, r: 48, opacity: 0.15 },
+    { x: 80, y: 340, r: 52, opacity: 0.12 },
+    { x: 600, y: 320, r: 36, opacity: 0.1 },
+  ];
+  
+  const accentMarkup = accentCircles
+    .map(({ x, y, r, opacity }) => `<circle cx="${x}" cy="${y}" r="${r}" fill="rgba(255,255,255,${opacity})" />`)
+    .join('');
 
-  // Return a gradient as a data URI (SVG-based placeholder).
-  // Uses charset=utf-8 data URI (no btoa) to avoid non-ASCII encoding errors.
-  // In production this would be replaced by the real API response image.
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400">
-  <defs>
-    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#1a1a2e"/>
-      <stop offset="50%" style="stop-color:#16213e"/>
-      <stop offset="100%" style="stop-color:#0f3460"/>
-    </linearGradient>
-  </defs>
-  <rect width="640" height="400" fill="url(#g)"/>
-  <text x="320" y="185" text-anchor="middle" font-size="20" fill="rgba(255,255,255,0.5)" font-family="system-ui">${icon}</text>
-  <text x="320" y="220" text-anchor="middle" font-size="16" fill="rgba(255,255,255,0.8)" font-family="system-ui">${label}</text>
-  <text x="320" y="248" text-anchor="middle" font-size="12" fill="rgba(255,255,255,0.5)" font-family="system-ui">NanoBanana - ${style}</text>
-</svg>`;
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  // Main headline with emoji integrated
+  const headlineMarkup = headlineLines
+    .map((line, index) => 
+      `<text x="36" y="${100 + index * 42}" font-size="36" font-weight="800" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" letter-spacing="-0.5">${escapeXml(line)}</text>`
+    )
+    .join('');
+  
+  // Secondary caption
+  const captionMarkup = captionLines
+    .map((line, index) => 
+      `<text x="36" y="${226 + index * 24}" font-size="15" fill="rgba(255,255,255,0.88)" font-family="system-ui, -apple-system, sans-serif" line-height="1.4">${escapeXml(line)}</text>`
+    )
+    .join('');
+
+  // Chip/tag bar with visual separation
+  const chipMarkup = `
+  <rect x="0" y="270" width="640" height="1" fill="rgba(255,255,255,0.2)"/>
+  <text x="36" y="297" font-size="12" font-weight="600" letter-spacing="1" fill="rgba(255,255,255,0.72)" font-family="system-ui, -apple-system, sans-serif">CONCEPTS</text>
+  <text x="36" y="324" font-size="14" fill="rgba(255,255,255,0.92)" font-family="system-ui, -apple-system, sans-serif">${escapeXml(chipText)}</text>
+  `;
+
+  // Visual indicator bar at bottom (different colors per style)
+  const indicatorColor = style === 'infograph' ? '#4fc3f7' : style === 'illustration' ? '#ce93d8' : '#ffab91';
+  const indicatorMarkup = `<rect x="0" y="376" width="640" height="4" fill="${indicatorColor}" opacity="0.8" />`;
+
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400">
+      <defs>
+        <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:${start}"/>
+          <stop offset="50%" style="stop-color:${mid}"/>
+          <stop offset="100%" style="stop-color:${end}"/>
+        </linearGradient>
+      </defs>
+      
+      <!-- Background gradient -->
+      <rect width="640" height="400" fill="url(#bg)"/>
+      
+      <!-- Decorative accent circles -->
+      ${accentMarkup}
+      
+      <!-- Main content area with gentle background -->
+      <rect x="0" y="0" width="640" height="360" fill="rgba(0,0,0,0.08)"/>
+      
+      <!-- Headline with integrated emoji -->
+      ${headlineMarkup}
+      
+      <!-- Caption text -->
+      ${captionMarkup}
+      
+      <!-- Concept chips and separator -->
+      ${chipMarkup}
+      
+      <!-- Style indicator bar -->
+      ${indicatorMarkup}
+    </svg>
+  `)}`;
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────────

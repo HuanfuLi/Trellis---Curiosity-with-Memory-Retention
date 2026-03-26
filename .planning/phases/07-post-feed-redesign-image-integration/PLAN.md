@@ -217,6 +217,31 @@ This phase transforms the Home Feed from a text-centric layout to an image-forwa
 
 ---
 
+### Wave 7: Stabilization & UI Fixes (Post-UAT)
+
+#### T7.1: Fix Mock Image Encoding
+- Update `NanoBananaProvider` and `GeminiProvider` mock generation
+- Replace ellipsis (`…`) with three dots (`...`) to prevent `btoa` encoding errors on non-ASCII characters
+- **Acceptance:** Mock images render successfully without silent console errors
+
+#### T7.2: Fix Retry Event Bubbling
+- Update `FeedPostImage.tsx`
+- Add `e.stopPropagation()` to the `onClick` handler of the "Retry" button
+- **Acceptance:** Clicking "Retry" triggers image regeneration WITHOUT navigating to the post detail page
+
+#### T7.3: Primary Provider Selection
+- Update `ImageGenerationSettings` in `src/types/index.ts` to include `primaryProvider: 'nanoBanana' | 'gemini'`
+- Update `SettingsScreen.tsx` to include a dropdown for "Primary Image Provider"
+- Update `imageGeneration.bootstrap.ts` to reorder providers based on this user preference
+- **Acceptance:** User can toggle between providers, and the app respects this priority without reload
+
+#### T7.4: Final UAT Verification
+- Re-run all 4 UAT test cases from `07-HUMAN-UAT.md`
+- Verify Gemini fallback works by purposefully leaving Nano Banana key blank
+- **Acceptance:** 100% UAT pass rate
+
+---
+
 ## Task Dependencies
 
 ```

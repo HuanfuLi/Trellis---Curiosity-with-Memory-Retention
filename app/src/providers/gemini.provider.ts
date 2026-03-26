@@ -40,26 +40,104 @@ function deterministicIndex(seed: string, length: number): number {
   return ((h % length) + length) % length;
 }
 
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function readPromptField(prompt: string, key: string): string {
+  const match = prompt.match(new RegExp(`^${key}:\\s*(.+)$`, 'm'));
+  return match?.[1]?.trim() ?? '';
+}
+
+function wrapText(value: string, maxChars: number): string[] {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = '';
+
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length <= maxChars) {
+      current = candidate;
+    } else {
+      if (current) lines.push(current);
+      current = word;
+    }
+  }
+
+  if (current) lines.push(current);
+  return lines.slice(0, 3);
+}
+
+function parsePromptCard(prompt: string) {
+  const emoji = readPromptField(prompt, 'EMOJI') || '💡';
+  const headline = readPromptField(prompt, 'HEADLINE') || 'Concept preview';
+  const caption = readPromptField(prompt, 'CAPTION') || 'Open the post to explore the idea in detail.';
+  const chips = readPromptField(prompt, 'CHIPS')
+    .split('|')
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+  const rows = [1, 2, 3]
+    .map((index) => readPromptField(prompt, `ROW_${index}`))
+    .filter(Boolean)
+    .map((row) => {
+      const [label, value] = row.split('|').map((part) => part.trim());
+      return { label: label || 'Key', value: value || '' };
+    });
+
+  return { emoji, headline, caption, chips, rows };
+}
+
 function buildMockSvg(prompt: string, style: ImageStyle): string {
   const gradients = MOCK_GRADIENTS[style];
   const idx = deterministicIndex(prompt, gradients.length);
-  void gradients[idx]; // referenced for future real implementation
-  const icon = style === 'infograph' ? '[graph]' : style === 'illustration' ? '[art]' : '[scene]';
-  const label = prompt.slice(0, 40) + (prompt.length > 40 ? '...' : '');
+  const gradient = gradients[idx];
+  const { emoji, headline, caption, chips, rows } = parsePromptCard(prompt);
+  const [start, mid, end] = gradient.match(/#[0-9a-fA-F]{6}/g) ?? ['#0d1b2a', '#1b2a4a', '#243b6e'];
+  const headlineLines = wrapText(headline, 24);
+  const captionLines = wrapText(caption, 42);
+  const chipText = chips.length > 0 ? chips.join('   ') : 'concept   context   hook';
+  const rowMarkup = rows
+    .map((row, index) => {
+      const y = 272 + index * 34;
+      return `
+  <line x1="76" y1="${y - 16}" x2="564" y2="${y - 16}" stroke="rgba(255,255,255,0.12)" />
+  <text x="92" y="${y}" font-size="13" font-weight="700" fill="rgba(255,255,255,0.72)" font-family="system-ui">${escapeXml(row.label.toUpperCase())}</text>
+  <text x="220" y="${y}" font-size="14" fill="rgba(255,255,255,0.92)" font-family="system-ui">${escapeXml(row.value)}</text>`;
+    })
+    .join('');
+  const headlineMarkup = headlineLines
+    .map((line, index) => `<text x="140" y="${120 + index * 34}" font-size="30" font-weight="800" fill="#ffffff" font-family="system-ui">${escapeXml(line)}</text>`)
+    .join('');
+  const captionMarkup = captionLines
+    .map((line, index) => `<text x="76" y="${206 + index * 22}" font-size="16" fill="rgba(255,255,255,0.84)" font-family="system-ui">${escapeXml(line)}</text>`)
+    .join('');
 
   // Uses charset=utf-8 data URI (no btoa) to avoid non-ASCII encoding errors.
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400">
   <defs>
     <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#0d1b2a"/>
-      <stop offset="50%" style="stop-color:#1b2a4a"/>
-      <stop offset="100%" style="stop-color:#243b6e"/>
+      <stop offset="0%" style="stop-color:${start}"/>
+      <stop offset="50%" style="stop-color:${mid}"/>
+      <stop offset="100%" style="stop-color:${end}"/>
     </linearGradient>
   </defs>
   <rect width="640" height="400" fill="url(#g)"/>
-  <text x="320" y="185" text-anchor="middle" font-size="20" fill="rgba(255,255,255,0.5)" font-family="system-ui">${icon}</text>
-  <text x="320" y="220" text-anchor="middle" font-size="16" fill="rgba(255,255,255,0.8)" font-family="system-ui">${label}</text>
-  <text x="320" y="248" text-anchor="middle" font-size="12" fill="rgba(255,255,255,0.5)" font-family="system-ui">Gemini - ${style}</text>
+  <rect x="52" y="48" width="536" height="304" rx="30" fill="rgba(13,17,30,0.18)" stroke="rgba(255,255,255,0.16)"/>
+  <circle cx="546" cy="90" r="52" fill="rgba(255,255,255,0.12)"/>
+  <text x="546" y="104" text-anchor="middle" font-size="44">${emoji}</text>
+  <text x="76" y="82" font-size="12" font-weight="700" letter-spacing="2" fill="rgba(255,255,255,0.68)" font-family="system-ui">AI VISUAL HOOK</text>
+  ${headlineMarkup}
+  ${captionMarkup}
+  <rect x="76" y="224" width="488" height="28" rx="14" fill="rgba(255,255,255,0.11)"/>
+  <text x="94" y="243" font-size="13" fill="rgba(255,255,255,0.86)" font-family="system-ui">${escapeXml(chipText)}</text>
+  <rect x="76" y="258" width="488" height="108" rx="20" fill="rgba(7,10,20,0.24)" stroke="rgba(255,255,255,0.14)"/>
+  ${rowMarkup}
 </svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
