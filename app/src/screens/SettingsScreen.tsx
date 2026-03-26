@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { Brain, Volume2, Network, Radio, BookOpen, Palette, RotateCcw, CheckCircle, XCircle, Shield, Download, Upload, Trash2, Sparkles, Loader2 } from 'lucide-react';
+import { Brain, Volume2, Network, Radio, BookOpen, Palette, RotateCcw, CheckCircle, XCircle, Shield, Download, Upload, Trash2, Sparkles, Loader2, Image } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { mockSettingsService } from '../services/mock/settings.mock';
 import { testLLMConnection } from '../providers/llm';
 import { testTTSConnection } from '../providers/tts';
-import type { LLMConfig, TTSConfig, EmbeddingConfig, EmbeddingDebugConfig, AppSettings } from '../types';
+import type { LLMConfig, TTSConfig, EmbeddingConfig, EmbeddingDebugConfig, AppSettings, ImageGenerationSettings } from '../types';
+import { imageGenerationService } from '../services/imageGeneration.service';
+import { bootstrapImageGeneration } from '../services/imageGeneration.bootstrap';
 import { toast } from '../lib/toast';
 import { Header, HEADER_HEIGHT } from '../components/ui/Header';
 import { applyTheme } from '../lib/theme';
@@ -129,6 +131,11 @@ export function SettingsScreen() {
   const [theme, setTheme] = useState<AppSettings['preferences']['theme']>(() => mockSettingsService.getSync().preferences.theme);
   const [aiConsent, setAiConsent] = useState(() => mockSettingsService.getSync().preferences.aiConsentGiven ?? false);
   const [isGeneratingPlanner, setIsGeneratingPlanner] = useState(false);
+
+  // Image generation settings
+  const [imageGen, setImageGen] = useState<ImageGenerationSettings>(() => mockSettingsService.getSync().imageGeneration);
+  const [cacheStats, setCacheStats] = useState(() => imageGenerationService.getCacheStats());
+  const [isClearingCache, setIsClearingCache] = useState(false);
 
   const noKeyRequired = (p: LLMConfig['provider']) => p === 'local' || p === 'lmstudio';
 
@@ -275,6 +282,28 @@ export function SettingsScreen() {
       setTheme(s.preferences.theme);
       applyTheme(s.preferences.theme);
     }
+  };
+
+  const saveImageGen = async (current: ImageGenerationSettings = imageGen) => {
+    await mockSettingsService.set('imageGeneration', current);
+    // Re-bootstrap providers with new keys.
+    bootstrapImageGeneration();
+    toast('Image generation settings saved.', 'success');
+  };
+
+  const handleClearImageCache = async () => {
+    if (!confirm('Clear all cached post images? They will be regenerated on next view.')) return;
+    setIsClearingCache(true);
+    await imageGenerationService.clearImageCache();
+    setCacheStats(imageGenerationService.getCacheStats());
+    setIsClearingCache(false);
+    toast('Image cache cleared.', 'success');
+  };
+
+  const formatBytes = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   return (
@@ -635,6 +664,80 @@ export function SettingsScreen() {
           </Card>
         </>
       )}
+
+      {/* Image Generation Section */}
+      <SectionHeader icon={<Image size={20} />} title="Image Generation" />
+      <Card style={{ marginBottom: '8px' }}>
+        <p style={{ fontSize: '0.8rem', color: 'var(--muted-foreground)', marginBottom: '12px', lineHeight: 1.5 }}>
+          AI-generated images for feed posts. Add API keys to enable real generation; mock placeholders are used when keys are absent.
+        </p>
+        <SettingRow label="Nano Banana API Key" description="Primary image provider (nanobanana.ai)">
+          <TextInput
+            type="password"
+            value={imageGen.nanoBananaApiKey}
+            onChange={(v) => setImageGen((prev) => ({ ...prev, nanoBananaApiKey: v }))}
+            onBlur={() => void saveImageGen()}
+            placeholder="nb-..."
+          />
+        </SettingRow>
+        <SettingRow label="Gemini API Key" description="Fallback image provider (Google)">
+          <TextInput
+            type="password"
+            value={imageGen.geminiApiKey}
+            onChange={(v) => setImageGen((prev) => ({ ...prev, geminiApiKey: v }))}
+            onBlur={() => void saveImageGen()}
+            placeholder="AIza..."
+          />
+        </SettingRow>
+        <SettingRow label="Cache Limit (MB)" description="Max local image cache size">
+          <TextInput
+            value={String(imageGen.maxCacheSizeMb)}
+            onChange={(v) => setImageGen((prev) => ({ ...prev, maxCacheSizeMb: parseInt(v) || 50 }))}
+            onBlur={() => void saveImageGen()}
+            placeholder="50"
+          />
+        </SettingRow>
+
+        {/* Cache stats */}
+        <div
+          style={{
+            marginTop: '12px',
+            padding: '12px',
+            borderRadius: 'var(--radius)',
+            backgroundColor: 'var(--surface-variant)',
+            border: '1px solid var(--border)',
+          }}
+        >
+          <p style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '8px' }}>
+            Cache Stats
+          </p>
+          <div style={{ display: 'flex', gap: '16px', fontSize: '0.82rem', color: 'var(--foreground)', flexWrap: 'wrap' }}>
+            <span><strong>{cacheStats.itemCount}</strong> images cached</span>
+            <span><strong>{formatBytes(cacheStats.totalSizeBytes)}</strong> used</span>
+            <span>limit: <strong>{imageGen.maxCacheSizeMb} MB</strong></span>
+          </div>
+        </div>
+
+        <div style={{ paddingTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => void saveImageGen()}
+          >
+            Save
+          </Button>
+          <Button
+            size="sm"
+            variant="danger"
+            disabled={isClearingCache || cacheStats.itemCount === 0}
+            onClick={() => void handleClearImageCache()}
+            style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}
+          >
+            {isClearingCache ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : null}
+            Clear Image Cache
+          </Button>
+        </div>
+      </Card>
 
       {/* Podcast Settings */}
       <SectionHeader icon={<Radio size={20} />} title="Podcast" />

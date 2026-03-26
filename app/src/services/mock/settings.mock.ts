@@ -1,7 +1,4 @@
-import type { AppSettings, ServiceResult, ImageGenerationSettings } from '../../types';
-
-// Satisfy TypeScript — only used in type position below
-type _SettingsCheck = ImageGenerationSettings;
+import type { AppSettings, ServiceResult } from '../../types';
 
 const STORAGE_KEY = 'echolearn_settings';
 
