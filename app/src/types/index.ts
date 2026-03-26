@@ -159,6 +159,13 @@ export type PodcastStatus = 'pending' | 'generating' | 'ready' | 'failed';
 // SETTINGS DOMAIN
 // ═══════════════════════════════════════════════════════════════════════════
 
+export interface ImageGenerationSettings {
+  nanoBananaApiKey: string;
+  geminiApiKey: string;
+  maxCacheSizeMb: number;
+  cacheTtlDays: number;
+}
+
 export interface AppSettings {
   llm: LLMConfig;
   tts: TTSConfig;
@@ -168,6 +175,7 @@ export interface AppSettings {
   podcast: PodcastSettings;
   review: ReviewSettings;
   preferences: AppPreferences;
+  imageGeneration: ImageGenerationSettings;
 }
 
 export interface EmbeddingConfig {

@@ -1,4 +1,7 @@
-import type { AppSettings, ServiceResult } from '../../types';
+import type { AppSettings, ServiceResult, ImageGenerationSettings } from '../../types';
+
+// Satisfy TypeScript — only used in type position below
+type _SettingsCheck = ImageGenerationSettings;
 
 const STORAGE_KEY = 'echolearn_settings';
 
@@ -50,6 +53,12 @@ const defaultSettings: AppSettings = {
     language: 'en',
     onboardingCompleted: false,
     aiConsentGiven: false,
+  },
+  imageGeneration: {
+    nanoBananaApiKey: '',
+    geminiApiKey: '',
+    maxCacheSizeMb: 50,
+    cacheTtlDays: 30,
   },
 };
 
