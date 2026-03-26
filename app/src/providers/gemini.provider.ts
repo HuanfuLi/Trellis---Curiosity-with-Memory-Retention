@@ -44,9 +44,10 @@ function buildMockSvg(prompt: string, style: ImageStyle): string {
   const gradients = MOCK_GRADIENTS[style];
   const idx = deterministicIndex(prompt, gradients.length);
   void gradients[idx]; // referenced for future real implementation
-  const icon = style === 'infograph' ? '📈' : style === 'illustration' ? '✨' : '🌅';
-  const label = prompt.slice(0, 40) + (prompt.length > 40 ? '…' : '');
+  const icon = style === 'infograph' ? '[graph]' : style === 'illustration' ? '[art]' : '[scene]';
+  const label = prompt.slice(0, 40) + (prompt.length > 40 ? '...' : '');
 
+  // Uses charset=utf-8 data URI (no btoa) to avoid non-ASCII encoding errors.
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400">
   <defs>
     <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -56,11 +57,11 @@ function buildMockSvg(prompt: string, style: ImageStyle): string {
     </linearGradient>
   </defs>
   <rect width="640" height="400" fill="url(#g)"/>
-  <text x="320" y="170" text-anchor="middle" font-size="72" font-family="system-ui">${icon}</text>
-  <text x="320" y="230" text-anchor="middle" font-size="16" fill="rgba(255,255,255,0.8)" font-family="system-ui">${label}</text>
-  <text x="320" y="260" text-anchor="middle" font-size="12" fill="rgba(255,255,255,0.5)" font-family="system-ui">Gemini · ${style}</text>
+  <text x="320" y="185" text-anchor="middle" font-size="20" fill="rgba(255,255,255,0.5)" font-family="system-ui">${icon}</text>
+  <text x="320" y="220" text-anchor="middle" font-size="16" fill="rgba(255,255,255,0.8)" font-family="system-ui">${label}</text>
+  <text x="320" y="248" text-anchor="middle" font-size="12" fill="rgba(255,255,255,0.5)" font-family="system-ui">Gemini - ${style}</text>
 </svg>`;
-  return `data:image/svg+xml;base64,${btoa(svg)}`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────────

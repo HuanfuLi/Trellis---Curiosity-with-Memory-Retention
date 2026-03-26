@@ -46,10 +46,12 @@ function deterministicIndex(seed: string, length: number): number {
 function buildMockSvg(prompt: string, style: ImageStyle): string {
   const gradients = MOCK_GRADIENTS[style];
   const gradient = gradients[deterministicIndex(prompt, gradients.length)];
-  const icon = style === 'infograph' ? '📊' : style === 'illustration' ? '🎨' : '📸';
-  const label = prompt.slice(0, 40) + (prompt.length > 40 ? '…' : '');
+  void gradient; // referenced for future real implementation
+  const icon = style === 'infograph' ? '[chart]' : style === 'illustration' ? '[art]' : '[photo]';
+  const label = prompt.slice(0, 40) + (prompt.length > 40 ? '...' : '');
 
   // Return a gradient as a data URI (SVG-based placeholder).
+  // Uses charset=utf-8 data URI (no btoa) to avoid non-ASCII encoding errors.
   // In production this would be replaced by the real API response image.
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400">
   <defs>
@@ -60,11 +62,11 @@ function buildMockSvg(prompt: string, style: ImageStyle): string {
     </linearGradient>
   </defs>
   <rect width="640" height="400" fill="url(#g)"/>
-  <text x="320" y="170" text-anchor="middle" font-size="72" font-family="system-ui">${icon}</text>
-  <text x="320" y="230" text-anchor="middle" font-size="16" fill="rgba(255,255,255,0.8)" font-family="system-ui">${label}</text>
-  <text x="320" y="260" text-anchor="middle" font-size="12" fill="rgba(255,255,255,0.5)" font-family="system-ui">NanoBanana · ${style}</text>
+  <text x="320" y="185" text-anchor="middle" font-size="20" fill="rgba(255,255,255,0.5)" font-family="system-ui">${icon}</text>
+  <text x="320" y="220" text-anchor="middle" font-size="16" fill="rgba(255,255,255,0.8)" font-family="system-ui">${label}</text>
+  <text x="320" y="248" text-anchor="middle" font-size="12" fill="rgba(255,255,255,0.5)" font-family="system-ui">NanoBanana - ${style}</text>
 </svg>`;
-  return `data:image/svg+xml;base64,${btoa(svg)}`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
