@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, Loader2, MessageSquare, RefreshCw } from 'lucide-react';
-import type { ChatSession, DailyPost, Question, SessionMessage } from '../types';
+import type { ChatSession, DailyPost, GeneratedImage, Question, SessionMessage } from '../types';
 import { useQuestions } from '../state/useQuestions';
 import { conceptFeedService } from '../services/concept-feed.service';
+import { imageGenerationService } from '../services/imageGeneration.service';
 import { sessionService } from '../services/session.service';
 import { postContextQaService } from '../services/post-context-qa.service';
 import { Markdown } from '../components/Markdown';
 import { ChatMessage } from '../components/ChatMessage';
+import { PostCarousel } from '../components/PostCarousel';
 import { toast } from '../lib/toast';
 
 interface ConnectionMeta {
@@ -37,6 +39,10 @@ export function PostDetailScreen() {
   const [post, setPost] = useState<DailyPost | null>(null);
   const [session, setSession] = useState<ChatSession | null>(null);
   const [loadingPost, setLoadingPost] = useState(true);
+
+  // Carousel images state
+  const [carouselImages, setCarouselImages] = useState<GeneratedImage[]>([]);
+  const [isLoadingCarousel, setIsLoadingCarousel] = useState(false);
 
   // Essay generation state (connection posts only)
   const [essayStreaming, setEssayStreaming] = useState('');
@@ -119,6 +125,43 @@ export function PostDetailScreen() {
     setPost(null);
     setLoadingPost(false);
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps -- passedPost and connectionMeta are stable per navigation
+
+  // Fetch cached images for the carousel whenever the post changes.
+  // If no images are cached (post has none or generation hasn't run), shows essay alone.
+  useEffect(() => {
+    if (!post?.id) {
+      setCarouselImages([]);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingCarousel(true);
+
+    (async () => {
+      try {
+        // Fetch all available image styles for this post from the cache
+        const styles = ['illustration', 'infograph', 'photo'] as const;
+        const results = await Promise.allSettled(
+          styles.map((style) => imageGenerationService.retrieveCachedImage(post.id, style)),
+        );
+        if (cancelled) return;
+        const images: GeneratedImage[] = results
+          .filter((r): r is PromiseFulfilledResult<GeneratedImage | null> => r.status === 'fulfilled')
+          .map((r) => r.value)
+          .filter((img): img is GeneratedImage => img !== null);
+        setCarouselImages(images);
+      } catch (err) {
+        if (!cancelled) {
+          console.error('[PostDetail] Carousel fetch failed:', err);
+          setCarouselImages([]); // Graceful: show essay without carousel
+        }
+      } finally {
+        if (!cancelled) setIsLoadingCarousel(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [post?.id]); // Re-fetch if different post (also resets carousel via PostCarousel's useEffect)
 
   // Track initial Q&A message count so we only auto-scroll on NEW messages, not on mount
   const initialMsgCount = useRef<number | null>(null);
@@ -283,6 +326,13 @@ export function PostDetailScreen() {
           ))}
         </div>
       )}
+
+      {/* Carousel — shown when images are cached (0 images = graceful omission) */}
+      <PostCarousel
+        images={carouselImages}
+        isLoading={isLoadingCarousel}
+        onIndexChange={(index) => { /* Future: analytics or preload */ void index; }}
+      />
 
       <article
         style={{
