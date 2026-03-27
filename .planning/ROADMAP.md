@@ -119,9 +119,14 @@
 
 ---
 
-## Phase 12: Portal Navigation & Rich Moves Linking
+## Phase 12: Portal Navigation & Rich Moves Linking ⏳ PLANNING COMPLETE
+
+**Status:** Planning complete — 12-01-PLAN.md ready for execution (2026-03-27)
 
 **Goal:** Implement navigation portals for suggested moves to enable users to navigate directly to related review content (flashcards, posts, or questions) when tapping suggested moves.
+
+**Plans:** 1 plan
+- [ ] 12-01-PLAN.md — moveNavigator utility + screen integration + navigation flows
 
 **Requirements:**
 - PLANNER-06: Rich "Moves" linking
