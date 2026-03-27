@@ -8,6 +8,7 @@ import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { usePlanner } from '../state/usePlanner';
 import { usePlannerAutoGen } from '../state/usePlannerAutoGen';
+import { useDailyRefresh } from '../state/useDailyRefresh';
 import { useReview } from '../state/useReview';
 import { toast } from '../lib/toast';
 import { Header, HEADER_HEIGHT } from '../components/ui/Header';
@@ -322,6 +323,7 @@ export function PlannerScreen() {
     updateChunkStatus, deleteChunk, toggleThreadSaved, deleteThread, submitCheckIn,
   } = usePlanner();
   const { moves: autoMoves, isRefreshing, accept: acceptMove, dismiss: dismissMove, skipAll, refresh: refreshMoves } = usePlannerAutoGen();
+  useDailyRefresh(); // Mount to activate PODCAST_GENERATION_COMPLETED → refresh subscription
   const { reviewCount } = useReview();
   const [showAutoMoves, setShowAutoMoves] = useState(true);
 

@@ -131,8 +131,13 @@ export function SettingsScreen() {
   const [reviewLimit, setReviewLimit] = useState(() => String(mockSettingsService.getSync().review.dailyLimit));
   const [reviewNotif, setReviewNotif] = useState(() => mockSettingsService.getSync().review.notificationsEnabled);
   const [reviewReminderTime, setReviewReminderTime] = useState(() => mockSettingsService.getSync().review.reminderTime);
-  const [plannerRefreshEnabled, setPlannerRefreshEnabled] = useState(true);
-  const [plannerRefreshTime, setPlannerRefreshTime] = useState('08:00');
+  const [plannerRefreshEnabled, setPlannerRefreshEnabled] = useState(() => {
+    const stored = localStorage.getItem('echolearn_planner_refresh_enabled');
+    return stored !== null ? stored === 'true' : true;
+  });
+  const [plannerRefreshTime, setPlannerRefreshTime] = useState(() => {
+    return localStorage.getItem('echolearn_planner_refresh_time') ?? '08:00';
+  });
   const [isRefreshingPlanner, setIsRefreshingPlanner] = useState(false);
   const [theme, setTheme] = useState<AppSettings['preferences']['theme']>(() => mockSettingsService.getSync().preferences.theme);
   const [aiConsent, setAiConsent] = useState(() => mockSettingsService.getSync().preferences.aiConsentGiven ?? false);
@@ -268,6 +273,15 @@ export function SettingsScreen() {
       toast('All data cleared — reloading…', 'success');
       setTimeout(() => window.location.reload(), 800);
     });
+  };
+
+  const savePlannerRefreshEnabled = (value: boolean) => {
+    setPlannerRefreshEnabled(value);
+    localStorage.setItem('echolearn_planner_refresh_enabled', String(value));
+  };
+  const savePlannerRefreshTime = (value: string) => {
+    setPlannerRefreshTime(value);
+    localStorage.setItem('echolearn_planner_refresh_time', value);
   };
 
   const handleReset = async () => {
@@ -895,12 +909,12 @@ export function SettingsScreen() {
         <SettingRow label="Daily Auto-Refresh" description="Refresh suggestions once per day">
           <MaterialSwitch
             checked={plannerRefreshEnabled}
-            onChange={() => setPlannerRefreshEnabled((v) => !v)}
+            onChange={() => savePlannerRefreshEnabled(!plannerRefreshEnabled)}
           />
         </SettingRow>
         {plannerRefreshEnabled && (
           <SettingRow label="Preferred Refresh Time" description="Default: 8:00 AM; also triggers after podcast">
-            <TextInput type="time" value={plannerRefreshTime} onChange={setPlannerRefreshTime} placeholder="08:00" />
+            <TextInput type="time" value={plannerRefreshTime} onChange={savePlannerRefreshTime} placeholder="08:00" />
           </SettingRow>
         )}
         <div style={{ paddingTop: '12px', display: 'flex', gap: '8px' }}>
