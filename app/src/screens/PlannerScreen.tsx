@@ -326,6 +326,7 @@ export function PlannerScreen() {
   useDailyRefresh(); // Mount to activate PODCAST_GENERATION_COMPLETED → refresh subscription
   const { reviewCount } = useReview();
   const [showAutoMoves, setShowAutoMoves] = useState(true);
+  const totalSuggestions = autoMoves.length + suggestedChunks.length;
 
   const [checkInInput, setCheckInInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -392,6 +393,11 @@ export function PlannerScreen() {
       mediaRecorderRef.current.stop();
     }
     setIsRecording(false);
+  };
+
+  const handleSkipAll = () => {
+    skipAll();
+    toast('Suggestions cleared');
   };
 
   return (
@@ -493,58 +499,63 @@ export function PlannerScreen() {
         <CheckInOutcome key={ci.id} checkIn={ci} />
       ))}
 
-      {/* ── Auto-Suggested Moves ──────────────────────────────────────── */}
-      {autoMoves.length > 0 && (
-        <>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', marginTop: '24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h2 style={{ fontSize: '1rem', fontWeight: 600 }}>Suggested Moves</h2>
-              <Badge color="gray">{autoMoves.length}</Badge>
-            </div>
-            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-              <button
-                onClick={() => void refreshMoves()}
-                disabled={isRefreshing}
-                title="Refresh suggestions"
-                className="active-squish"
-                style={{
-                  width: '28px', height: '28px', borderRadius: '50%',
-                  backgroundColor: 'var(--surface-variant)',
-                  color: 'var(--muted-foreground)',
-                  border: '1px solid var(--border)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  opacity: isRefreshing ? 0.5 : 1,
-                }}
-              >
-                {isRefreshing
-                  ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
-                  : <RefreshCw size={13} />}
-              </button>
-              <button
-                onClick={() => setShowAutoMoves(!showAutoMoves)}
-                style={{
-                  background: 'none', display: 'flex', alignItems: 'center',
-                  gap: '3px', color: 'var(--muted-foreground)', fontSize: '0.78rem',
-                  padding: '4px',
-                }}
-              >
-                {showAutoMoves ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-              </button>
-            </div>
-          </div>
+      {/* ── Suggested Moves (unified) ─────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', marginTop: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <h2 style={{ fontSize: '1rem', fontWeight: 600 }}>Suggested Moves</h2>
+          {totalSuggestions > 0 && <Badge color="gray">{totalSuggestions}</Badge>}
+        </div>
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          <button
+            onClick={() => void refreshMoves()}
+            disabled={isRefreshing}
+            title="Refresh suggestions"
+            className="active-squish"
+            style={{
+              width: '28px', height: '28px', borderRadius: '50%',
+              backgroundColor: 'var(--surface-variant)',
+              color: 'var(--muted-foreground)',
+              border: '1px solid var(--border)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              opacity: isRefreshing ? 0.5 : 1,
+            }}
+          >
+            {isRefreshing
+              ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
+              : <RefreshCw size={13} />}
+          </button>
+          <button
+            onClick={() => setShowAutoMoves(!showAutoMoves)}
+            style={{
+              background: 'none', display: 'flex', alignItems: 'center',
+              gap: '3px', color: 'var(--muted-foreground)', fontSize: '0.78rem',
+              padding: '4px',
+            }}
+          >
+            {showAutoMoves ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+          </button>
+        </div>
+      </div>
 
-          {showAutoMoves && (
-            <>
-              {autoMoves.map((move) => (
-                <MoveCard
-                  key={move.id}
-                  move={move}
-                  onAccept={acceptMove}
-                  onDismiss={dismissMove}
-                />
-              ))}
+      {showAutoMoves && (
+        totalSuggestions === 0 ? (
+          <EmptySectionHint text="No suggestions right now — tap refresh to check for new moves." />
+        ) : (
+          <>
+            {autoMoves.map((move) => (
+              <MoveCard
+                key={move.id}
+                move={move}
+                onAccept={acceptMove}
+                onDismiss={dismissMove}
+              />
+            ))}
+            {suggestedChunks.map((chunk) => (
+              <ChunkCard key={chunk.id} chunk={chunk} onStatusChange={updateChunkStatus} onDelete={deleteChunk} />
+            ))}
+            {autoMoves.length > 0 && (
               <button
-                onClick={skipAll}
+                onClick={handleSkipAll}
                 style={{
                   background: 'none', padding: '6px 0 4px', display: 'flex',
                   alignItems: 'center', gap: '4px', color: 'var(--muted-foreground)',
@@ -553,13 +564,13 @@ export function PlannerScreen() {
               >
                 Skip all suggestions
               </button>
-            </>
-          )}
-        </>
+            )}
+          </>
+        )
       )}
 
       {/* Empty planner state with suggestion CTA */}
-      {continueChunks.length === 0 && suggestedChunks.length === 0 && autoMoves.length > 0 && (
+      {continueChunks.length === 0 && totalSuggestions > 0 && (
         <Card style={{ padding: '14px 16px', marginBottom: '16px', backgroundColor: 'color-mix(in srgb, var(--primary-40) 8%, var(--surface))' }}>
           <p style={{ fontSize: '0.85rem', lineHeight: 1.5, color: 'var(--foreground)', marginBottom: '6px' }}>
             No planned moves yet. We've suggested some ideas above.
@@ -576,14 +587,6 @@ export function PlannerScreen() {
         <ChunkCard key={chunk.id} chunk={chunk} onStatusChange={updateChunkStatus} onDelete={deleteChunk} />
       )) : (
         <EmptySectionHint text="Chunks you start will stay here so you can pick them back up without pressure." />
-      )}
-
-      {/* ── Suggested Moves ───────────────────────────────────────────── */}
-      <SectionHeader title="Suggested Moves" count={suggestedChunks.length} />
-      {suggestedChunks.length > 0 ? suggestedChunks.map((chunk) => (
-        <ChunkCard key={chunk.id} chunk={chunk} onStatusChange={updateChunkStatus} onDelete={deleteChunk} />
-      )) : (
-        <EmptySectionHint text="New suggestions appear here after check-ins or when the system notices a useful next move." />
       )}
 
       {/* ── Saved Threads ─────────────────────────────────────────────── */}
