@@ -397,6 +397,7 @@ export function PlannerScreen() {
 
   const handleSkipAll = () => {
     skipAll();
+    suggestedChunks.forEach(chunk => deleteChunk(chunk.id));
     toast('Suggestions cleared');
   };
 
