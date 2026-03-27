@@ -92,7 +92,8 @@ export function AskScreen() {
   const navigate = useNavigate();
   const location = useLocation();
   const { askStreaming, questions } = useQuestions();
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [anchorMsgId, setAnchorMsgId] = useState<string | null>(null);
 
   const [session, setSession] = useState<ChatSession>(() => sessionService.getActive());
   const [streaming, setStreaming] = useState<StreamingOverlay | null>(null);
@@ -125,9 +126,19 @@ export function AskScreen() {
     return () => { abortRef.current?.abort(); };
   }, []);
 
+  // Scroll so the top of the user's question bubble sits near the top of the viewport.
+  // Fires only when anchorMsgId changes (i.e. on each new send), never during streaming.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [session.messages, streaming]);
+    if (!anchorMsgId || !scrollContainerRef.current) return;
+    const container = scrollContainerRef.current;
+    const el = container.querySelector<HTMLElement>(`[data-msg-id="${anchorMsgId}"]`);
+    if (!el) return;
+    const containerTop = container.getBoundingClientRect().top;
+    const elTop = el.getBoundingClientRect().top;
+    const PADDING_TOP = 12;
+    const target = container.scrollTop + (elTop - containerTop) - PADDING_TOP;
+    container.scrollTo({ top: target, behavior: 'smooth' });
+  }, [anchorMsgId]);
 
   // Refresh the sessions list whenever the history panel opens
   useEffect(() => {
@@ -265,6 +276,8 @@ export function AskScreen() {
       };
       sessionService.save(updated);
       setSession(updated);
+      // Anchor view to the top of this user bubble — only fires once, never during streaming
+      setAnchorMsgId(userMsg.id);
 
       await generateAiReply(content, placeholderId);
     },
@@ -303,6 +316,7 @@ export function AskScreen() {
     const updated: ChatSession = { ...current, messages: [...truncated, editedMsg] };
     sessionService.save(updated);
     setSession(updated);
+    setAnchorMsgId(editedMsg.id);
 
     setEditingMessageId(null);
     setEditingContent('');
@@ -458,7 +472,7 @@ export function AskScreen() {
       <div style={{ height: `${HEADER_HEIGHT}px`, flexShrink: 0 }} />
 
       {/* Messages */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', paddingBottom: 'calc(140px + var(--safe-area-bottom))' }}>
+      <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '16px', paddingBottom: 'calc(140px + var(--safe-area-bottom))' }}>
         {session.origin?.type === 'post' && (
           <div
             style={{
@@ -568,7 +582,7 @@ export function AskScreen() {
           </>
         )}
         {displayMessages.map((message) => (
-          <div key={message.id}>
+          <div key={message.id} data-msg-id={message.id}>
             <ChatMessage
               messageId={message.id}
               type={message.type}
@@ -652,7 +666,6 @@ export function AskScreen() {
             )}
           </div>
         ))}
-        <div ref={messagesEndRef} />
       </div>
 
       <ChatInput

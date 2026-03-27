@@ -601,7 +601,7 @@ export const conceptFeedService = {
     const allPosts = [...newPosts, ...preserved];
 
     saveCache({ date, fingerprint, posts: allPosts, connectionCards: generated.connectionCards });
-    return newPosts;
+    return allPosts.filter((p) => p.sourceType !== 'connection');
   },
 
   /** Return cached connection card data for the current session. */

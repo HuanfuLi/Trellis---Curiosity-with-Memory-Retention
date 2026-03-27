@@ -31,7 +31,7 @@ function truncate(s: string, n: number): string {
 function buildMindElixirData(nodes: Question[]): MindElixirData {
   const rootObj: NodeObj = {
     id: 'root-knowledge',
-    topic: 'Knowledge Reflection',
+    topic: 'Knowledge',
     children: [],
     expanded: true,
   };

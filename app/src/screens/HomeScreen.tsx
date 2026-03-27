@@ -4,8 +4,7 @@ import { BookOpen, CheckSquare, Headphones } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { InlineInfoFlow, type InfoFlowItem } from '../components/InfoFlow';
-import { PullUpHint } from '../components/PullUpHint';
-import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
+import { PullUpHint, PULL_THRESHOLD } from '../components/PullUpHint';
 import { infiniteScrollService } from '../services/infiniteScroll.service';
 import type { BlindboxItem, DailyPost, Question } from '../types';
 import { useQuestions } from '../state/useQuestions';
@@ -33,7 +32,10 @@ export function HomeScreen() {
   const { reviewCount } = useReview();
   const { getPodcastForDate } = usePodcast();
   const [dailyPosts, setDailyPosts] = useState<DailyPost[]>(() => conceptFeedService.getCachedDailyPosts());
-  const [isAtBottom, setIsAtBottom] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [pullDistance, setPullDistance] = useState(0);
+  const isLoadingMoreRef = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Stable ref so the onLoadMore callback can access latest questions
   // without re-creating the callback (which would reset scroll listeners).
@@ -84,8 +86,11 @@ export function HomeScreen() {
     };
   }, [questions, questionsLoading]);
 
-  // Infinite scroll load handler — uses questionsRef for stable callback
-  const handleLoadMore = useCallback(async () => {
+  // Load handler — called on intentional pull-and-release gesture
+  const handleLoad = useCallback(async () => {
+    if (isLoadingMoreRef.current) return;
+    isLoadingMoreRef.current = true;
+    setIsLoadingMore(true);
     try {
       const newPosts = await infiniteScrollService.loadNextBatch(questionsRef.current, 10);
       if (newPosts.length > 0) {
@@ -93,17 +98,15 @@ export function HomeScreen() {
       } else {
         toast('No more posts to generate right now', 'info');
       }
-    } catch {
-      console.error('[HomeScreen] Infinite scroll load failed');
-      // User can retry by scrolling to bottom again
+    } finally {
+      isLoadingMoreRef.current = false;
+      setIsLoadingMore(false);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- questionsRef is stable
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- questionsRef + isLoadingMoreRef are refs
 
-  const { containerRef, isLoading: isLoadingMore, setCanLoadMore } = useInfiniteScroll({
-    onLoadMore: handleLoadMore,
-    threshold: 0,
-    debounceMs: 300,
-  });
+  // Stable ref so the touch effect can always call the latest handleLoad
+  const handleLoadRef = useRef(handleLoad);
+  handleLoadRef.current = handleLoad;
 
   // Initialize infiniteScrollService on mount; reset on unmount
   useEffect(() => {
@@ -111,17 +114,119 @@ export function HomeScreen() {
     return () => { infiniteScrollService.reset(); };
   }, []);
 
-  // Track scroll position for PullUpHint visibility
+  // Pull-to-load gesture: track overscroll at the bottom via touch events.
+  // Non-passive touchmove so we can preventDefault() to own the gesture
+  // and prevent the browser's native rubber-band while pulling.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const handleScroll = () => {
+
+    let touchStartY = 0;
+    let tracking = false;
+    let currentPull = 0;
+
+    const onTouchStart = (e: TouchEvent) => {
+      // Only arm the gesture when already at the absolute bottom
       const dist = el.scrollHeight - (el.scrollTop + el.clientHeight);
-      setIsAtBottom(dist <= 1);
+      if (dist > 4) return; // not at bottom (4px tolerance for subpixel)
+      if (isLoadingMoreRef.current) return;
+      touchStartY = e.touches[0].clientY;
+      tracking = true;
+      currentPull = 0;
     };
-    el.addEventListener('scroll', handleScroll, { passive: true });
-    return () => el.removeEventListener('scroll', handleScroll);
-  }, [containerRef]);
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!tracking) return;
+      // Claim the gesture immediately — must be before any early-return so the
+      // browser never gets a chance to rubber-band the page on the first event.
+      e.preventDefault();
+      const dy = touchStartY - e.touches[0].clientY; // positive = pull up
+      if (dy < -10) {
+        // Clear intentional downward swipe — cancel the pull gesture
+        tracking = false;
+        if (currentPull > 0) {
+          currentPull = 0;
+          setPullDistance(0);
+        }
+        return;
+      }
+      if (dy <= 0) return; // Tiny jitter at gesture start — stay armed, wait for real movement
+      currentPull = dy;
+      setPullDistance(dy);
+    };
+
+    const onTouchEnd = () => {
+      if (!tracking) return;
+      const pd = currentPull;
+      tracking = false;
+      currentPull = 0;
+      setPullDistance(0); // triggers CSS snap-back transition in PullUpHint
+      if (pd >= PULL_THRESHOLD) {
+        void handleLoadRef.current();
+      }
+    };
+
+    // ── Mouse drag (PC testing) ─────────────────────────────────────────────
+    let mouseStartY = 0;
+    let mouseTracking = false;
+    let currentMousePull = 0;
+
+    const onMouseDown = (e: MouseEvent) => {
+      const dist = el.scrollHeight - (el.scrollTop + el.clientHeight);
+      // Desktop wheel scrolling is discrete — user may stop at dist 30–80px when
+      // the PullUpHint is visible. Use a generous threshold so the gesture still arms.
+      if (dist > 120) return;
+      if (isLoadingMoreRef.current) return;
+      mouseStartY = e.clientY;
+      mouseTracking = true;
+      currentMousePull = 0;
+      e.preventDefault(); // prevent text selection during drag
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!mouseTracking) return;
+      const dy = mouseStartY - e.clientY;
+      if (dy < -10) {
+        mouseTracking = false;
+        currentMousePull = 0;
+        setPullDistance(0);
+        return;
+      }
+      if (dy <= 0) return;
+      currentMousePull = dy;
+      setPullDistance(dy);
+    };
+
+    const onMouseUp = () => {
+      if (!mouseTracking) return;
+      const pd = currentMousePull;
+      mouseTracking = false;
+      currentMousePull = 0;
+      setPullDistance(0);
+      if (pd >= PULL_THRESHOLD) {
+        void handleLoadRef.current();
+      }
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
+    el.addEventListener('touchcancel', onTouchEnd, { passive: true });
+    el.addEventListener('mousedown', onMouseDown);
+    // mousemove/mouseup on window so releasing outside the element still works
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+      el.removeEventListener('touchcancel', onTouchEnd);
+      el.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- containerRef and refs are stable after mount
 
   // Build the Home curiosity feed from daily posts + LLM-generated connection cards.
   const infoFlowItems = useMemo<InfoFlowItem[]>(() => {
@@ -225,10 +330,6 @@ export function HomeScreen() {
   const [activeChunkCount, setActiveChunkCount] = useState(0);
   const [threadCount, setThreadCount] = useState(0);
 
-  // Suppress unused variable warning for setCanLoadMore (used if we want to
-  // disable pagination when all posts exhausted)
-  void setCanLoadMore;
-
   return (
     <>
       <Header title={getGreeting()} />
@@ -238,9 +339,10 @@ export function HomeScreen() {
           overflowY: 'auto',
           height: '100dvh',
           WebkitOverflowScrolling: 'touch',
+          overscrollBehavior: 'contain',
         }}
       >
-      <div style={{ padding: `${HEADER_HEIGHT + 8}px 16px 0`, maxWidth: '448px', margin: '0 auto' }}>
+      <div style={{ padding: `${HEADER_HEIGHT + 8}px 16px calc(96px + var(--safe-area-bottom))`, maxWidth: '448px', margin: '0 auto' }}>
 
         {/* Bento Grid */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
@@ -351,7 +453,7 @@ export function HomeScreen() {
         </div>
 
         {/* Pull-up affordance — always reserves 80px, shows hint when at bottom */}
-        <PullUpHint isAtBottom={isAtBottom} isLoading={isLoadingMore} />
+        <PullUpHint isLoading={isLoadingMore} pullDistance={pullDistance} />
 
       </div>
       </div>
