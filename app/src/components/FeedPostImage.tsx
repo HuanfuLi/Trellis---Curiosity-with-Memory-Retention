@@ -27,27 +27,75 @@ interface FeedPostImageProps {
   error?: string | null;
   /** Callback for retry button in error state. */
   onRetry?: () => void;
-  /** Minimum image height in px. Defaults to 220. */
+  /**
+   * Aspect ratio as a percentage string for the padding-bottom trick
+   * (e.g. '100%' = 1:1 square, '56.25%' = 16:9).
+   * When provided, height = width × (value/100). Defaults to fixed minHeight.
+   */
+  aspectPadding?: string;
+  /** Minimum image height in px. Used when aspectPadding is not set. Defaults to 220. */
   minHeight?: number;
   /** Additional CSS class names. */
   className?: string;
 }
 
-// ─── Loading skeleton ──────────────────────────────────────────────────────────
+// ─── Shared wrapper: padding-bottom trick gives reliable height in all WebKit ──
 
-function ImageSkeleton({ minHeight }: { minHeight: number }) {
+function AspectBox({
+  aspectPadding,
+  minHeight,
+  children,
+  style,
+}: {
+  aspectPadding?: string;
+  minHeight: number;
+  children?: React.ReactNode;
+  style?: React.CSSProperties;
+}) {
+  if (aspectPadding) {
+    // padding-bottom % is relative to width → creates exact aspect ratio.
+    // height: 0 ensures the box height comes entirely from padding, not content.
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: 0,
+          paddingBottom: aspectPadding,
+          position: 'relative',
+          overflow: 'hidden',
+          borderRadius: 'var(--radius-xl)',
+          backgroundColor: 'var(--surface-variant)',
+          ...style,
+        }}
+      >
+        {children}
+      </div>
+    );
+  }
   return (
     <div
-      aria-label="Loading image"
       style={{
         width: '100%',
         minHeight,
-        borderRadius: 'var(--radius-xl)',
-        backgroundColor: 'var(--surface-variant)',
         position: 'relative',
         overflow: 'hidden',
+        borderRadius: 'var(--radius-xl)',
+        backgroundColor: 'var(--surface-variant)',
+        ...style,
       }}
     >
+      {children}
+      {/* Spacer ensures minHeight is respected even with absolute-positioned children */}
+      <div style={{ minHeight }} />
+    </div>
+  );
+}
+
+// ─── Loading skeleton ──────────────────────────────────────────────────────────
+
+function ImageSkeleton({ minHeight, aspectPadding }: { minHeight: number; aspectPadding?: string }) {
+  return (
+    <AspectBox minHeight={minHeight} aspectPadding={aspectPadding}>
       {/* Shimmer sweep */}
       <div
         style={{
@@ -74,7 +122,7 @@ function ImageSkeleton({ minHeight }: { minHeight: number }) {
           Generating image…
         </p>
       </div>
-    </div>
+    </AspectBox>
   );
 }
 
@@ -84,59 +132,64 @@ function ImageError({
   message,
   onRetry,
   minHeight,
+  aspectPadding,
 }: {
   message: string;
   onRetry?: () => void;
   minHeight: number;
+  aspectPadding?: string;
 }) {
   return (
-    <div
-      role="alert"
-      style={{
-        width: '100%',
-        minHeight,
-        borderRadius: 'var(--radius-xl)',
-        border: '1.5px dashed var(--border)',
-        backgroundColor: 'var(--surface-variant)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '10px',
-        padding: '20px',
-        boxSizing: 'border-box',
-      }}
+    <AspectBox
+      minHeight={minHeight}
+      aspectPadding={aspectPadding}
+      style={{ border: '1.5px dashed var(--border)' }}
     >
-      <span style={{ fontSize: '1.8rem' }}>🖼</span>
-      <p
+      <div
+        role="alert"
         style={{
-          fontSize: '0.82rem',
-          color: 'var(--muted-foreground)',
-          textAlign: 'center',
-          lineHeight: 1.5,
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '10px',
+          padding: '20px',
+          boxSizing: 'border-box',
         }}
       >
-        {message}
-      </p>
-      {onRetry && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onRetry(); }}
+        <span style={{ fontSize: '1.8rem' }}>🖼</span>
+        <p
           style={{
-            marginTop: '4px',
-            padding: '8px 20px',
-            borderRadius: 'var(--radius)',
-            border: '1.5px solid var(--primary-40)',
-            backgroundColor: 'transparent',
-            color: 'var(--primary-40)',
             fontSize: '0.82rem',
-            fontWeight: 600,
-            cursor: 'pointer',
+            color: 'var(--muted-foreground)',
+            textAlign: 'center',
+            lineHeight: 1.5,
           }}
         >
-          Retry
-        </button>
-      )}
-    </div>
+          {message}
+        </p>
+        {onRetry && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onRetry(); }}
+            style={{
+              marginTop: '4px',
+              padding: '8px 20px',
+              borderRadius: 'var(--radius)',
+              border: '1.5px solid var(--primary-40)',
+              backgroundColor: 'transparent',
+              color: 'var(--primary-40)',
+              fontSize: '0.82rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Retry
+          </button>
+        )}
+      </div>
+    </AspectBox>
   );
 }
 
@@ -147,60 +200,45 @@ export function FeedPostImage({
   isLoading = false,
   error = null,
   onRetry,
+  aspectPadding,
   minHeight = 220,
   className,
 }: FeedPostImageProps) {
   // Loading state
   if (isLoading && !imageData) {
-    return <ImageSkeleton minHeight={minHeight} />;
+    return <ImageSkeleton minHeight={minHeight} aspectPadding={aspectPadding} />;
   }
 
   // Error state (no image, not loading)
   if (error && !imageData) {
-    return <ImageError message={error} onRetry={onRetry} minHeight={minHeight} />;
+    return <ImageError message={error} onRetry={onRetry} minHeight={minHeight} aspectPadding={aspectPadding} />;
   }
 
   // No data at all — show neutral placeholder
   if (!imageData) {
-    return <ImageSkeleton minHeight={minHeight} />;
+    return <ImageSkeleton minHeight={minHeight} aspectPadding={aspectPadding} />;
   }
 
   const imageSrc = imageData.imageBase64 ?? imageData.imageUrl ?? '';
 
   return (
-    <div
-      className={className}
-      style={{
-        width: '100%',
-        minHeight,
-        borderRadius: 'var(--radius-xl)',
-        overflow: 'hidden',
-        position: 'relative',
-        backgroundColor: 'var(--surface-variant)',
-      }}
-    >
-      {/* Background image */}
+    <AspectBox minHeight={minHeight} aspectPadding={aspectPadding} className={className}>
       <img
         src={imageSrc}
         alt="Post preview image"
         loading="lazy"
         style={{
-          width: '100%',
-          height: '100%',
-          minHeight,
-          objectFit: 'cover',
-          display: 'block',
           position: 'absolute',
           inset: 0,
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          display: 'block',
         }}
         onError={(e) => {
-          // If image fails to load, hide it gracefully
           (e.currentTarget as HTMLImageElement).style.display = 'none';
         }}
       />
-
-      {/* Spacer to enforce minHeight when image is absolute-positioned */}
-      <div style={{ minHeight }} />
-    </div>
+    </AspectBox>
   );
 }

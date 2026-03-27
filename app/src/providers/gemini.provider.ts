@@ -1,27 +1,34 @@
 /**
  * GeminiProvider
  *
- * Fallback image generation provider using Google Gemini Imagen API.
+ * Fallback image generation provider using the Google Gemini Flash API.
  *
  * Requires API key in Settings. If key not configured or API fails,
  * returns a structured error — callers decide how to handle it.
  *
- * Endpoint: https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict
+ * Endpoint: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent
  * Auth: API key as query param (?key=...)
+ *
+ * Notes:
+ * - responseModalities MUST include both "TEXT" and "IMAGE" — "IMAGE" alone is rejected.
+ * - The Imagen API (/models/imagen-*:predict) uses a completely different request schema
+ *   and is NOT used here.
  */
 
 import type { ServiceResult, GeneratedImage, ImageStyle } from '../types';
 import type { IImageProvider, ImageProviderOptions } from './imageProvider.interface';
 
+const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+const DEFAULT_MODEL = 'gemini-3.1-flash-image-preview';
+
 export class GeminiProvider implements IImageProvider {
   readonly name = 'Gemini';
   private apiKey: string;
+  private model: string;
 
-  private readonly modelEndpoint =
-    'https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict';
-
-  constructor(apiKey: string = '') {
+  constructor(apiKey: string = '', model: string = DEFAULT_MODEL) {
     this.apiKey = apiKey;
+    this.model = model || DEFAULT_MODEL;
   }
 
   isConfigured(): boolean {
@@ -53,12 +60,14 @@ export class GeminiProvider implements IImageProvider {
   ): Promise<ServiceResult<Omit<GeneratedImage, 'postId'>>> {
     let attempt = 0;
     let backoffMs = 1000;
+    let lastResult: ServiceResult<Omit<GeneratedImage, 'postId'>> | null = null;
 
     while (attempt < options.maxRetries) {
       attempt++;
       try {
         const result = await this._callApi(prompt, style, options.timeoutMs);
         if (result.success) return result;
+        lastResult = result;
         if (result.error?.code === 'API_RATE_LIMITED') {
           await sleep(backoffMs);
           backoffMs = Math.min(backoffMs * 2, 8000);
@@ -69,24 +78,16 @@ export class GeminiProvider implements IImageProvider {
         backoffMs = Math.min(backoffMs * 2, 8000);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        if (attempt >= options.maxRetries) {
-          return {
-            success: false,
-            error: { code: 'NETWORK_ERROR', message: msg, retryable: true },
-          };
-        }
+        lastResult = { success: false, error: { code: 'NETWORK_ERROR', message: msg, retryable: true } };
+        if (attempt >= options.maxRetries) return lastResult;
         await sleep(backoffMs);
         backoffMs = Math.min(backoffMs * 2, 8000);
       }
     }
 
-    return {
+    return lastResult ?? {
       success: false,
-      error: {
-        code: 'RETRIES_EXHAUSTED',
-        message: 'Gemini image generation failed after multiple retries.',
-        retryable: true,
-      },
+      error: { code: 'RETRIES_EXHAUSTED', message: 'Gemini image generation failed after all retries.', retryable: true },
     };
   }
 
@@ -106,13 +107,22 @@ export class GeminiProvider implements IImageProvider {
           : 'photorealistic, cinematic lighting, high quality';
     const fullPrompt = `${prompt}. Visual style: ${styleHint}`;
 
+    const endpoint = `${BASE_URL}/${this.model}:generateContent`;
+
     try {
-      const response = await fetch(`${this.modelEndpoint}?key=${this.apiKey}`, {
+      const response = await fetch(`${endpoint}?key=${this.apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          instances: [{ prompt: fullPrompt }],
-          parameters: { sampleCount: 1 },
+          contents: [
+            {
+              parts: [{ text: fullPrompt }],
+            },
+          ],
+          generationConfig: {
+            // TEXT must be included alongside IMAGE — the API rejects IMAGE alone.
+            responseModalities: ['TEXT', 'IMAGE'],
+          },
         }),
         signal: controller.signal,
       });
@@ -125,10 +135,28 @@ export class GeminiProvider implements IImageProvider {
           error: { code: 'API_RATE_LIMITED', message: 'Gemini rate limit exceeded', retryable: true },
         };
       }
-      if (response.status === 400 || response.status === 403) {
+      if (response.status === 403) {
         return {
           success: false,
           error: { code: 'API_KEY_INVALID', message: 'Invalid Gemini API key', retryable: false },
+        };
+      }
+      if (response.status === 404) {
+        return {
+          success: false,
+          error: { code: 'INVALID_REQUEST', message: `Gemini model not found: "${this.model}". Check the model name in Settings → Image Generation.`, retryable: false },
+        };
+      }
+      if (response.status === 400) {
+        // Bad request — surface the API's own error message rather than misreporting as auth failure.
+        let detail = 'Bad request';
+        try {
+          const errBody = (await response.json()) as { error?: { message?: string } };
+          detail = errBody.error?.message ?? detail;
+        } catch { /* ignore parse errors */ }
+        return {
+          success: false,
+          error: { code: 'INVALID_REQUEST', message: `Gemini API rejected the request: ${detail}`, retryable: false },
         };
       }
       if (!response.ok) {
@@ -139,24 +167,34 @@ export class GeminiProvider implements IImageProvider {
       }
 
       const data = (await response.json()) as {
-        predictions?: Array<{ bytesBase64Encoded?: string; mimeType?: string }>;
+        candidates?: Array<{
+          content?: {
+            parts?: Array<{
+              inlineData?: {
+                mimeType?: string;
+                data?: string;
+              };
+            }>;
+          };
+        }>;
       };
-      const prediction = data.predictions?.[0];
-      if (!prediction?.bytesBase64Encoded) {
+
+      const part = data.candidates?.[0]?.content?.parts?.find((p) => p.inlineData);
+      if (!part?.inlineData?.data) {
         return {
           success: false,
           error: { code: 'UNKNOWN_ERROR', message: 'No image data in response', retryable: false },
         };
       }
 
-      const mime = prediction.mimeType ?? 'image/png';
+      const mime = part.inlineData.mimeType ?? 'image/png';
       return {
         success: true,
         data: {
           id: crypto.randomUUID(),
           prompt,
           style,
-          imageBase64: `data:${mime};base64,${prediction.bytesBase64Encoded}`,
+          imageBase64: `data:${mime};base64,${part.inlineData.data}`,
           provider: 'gemini',
           generatedAt: Date.now(),
         },

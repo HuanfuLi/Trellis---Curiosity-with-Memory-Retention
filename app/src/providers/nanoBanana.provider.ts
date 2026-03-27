@@ -60,12 +60,14 @@ export class NanoBananaProvider implements IImageProvider {
   ): Promise<ServiceResult<Omit<GeneratedImage, 'postId'>>> {
     let attempt = 0;
     let backoffMs = 1000;
+    let lastResult: ServiceResult<Omit<GeneratedImage, 'postId'>> | null = null;
 
     while (attempt < options.maxRetries) {
       attempt++;
       try {
         const result = await this._callApi(prompt, style, options.timeoutMs);
         if (result.success) return result;
+        lastResult = result;
 
         // Rate limited — wait with backoff.
         if (result.error?.code === 'API_RATE_LIMITED') {
@@ -81,24 +83,16 @@ export class NanoBananaProvider implements IImageProvider {
         backoffMs = Math.min(backoffMs * 2, 8000);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        if (attempt >= options.maxRetries) {
-          return {
-            success: false,
-            error: { code: 'NETWORK_ERROR', message: msg, retryable: true },
-          };
-        }
+        lastResult = { success: false, error: { code: 'NETWORK_ERROR', message: msg, retryable: true } };
+        if (attempt >= options.maxRetries) return lastResult;
         await sleep(backoffMs);
         backoffMs = Math.min(backoffMs * 2, 8000);
       }
     }
 
-    return {
+    return lastResult ?? {
       success: false,
-      error: {
-        code: 'RETRIES_EXHAUSTED',
-        message: 'Failed to generate image after multiple retries. Check API status.',
-        retryable: true,
-      },
+      error: { code: 'RETRIES_EXHAUSTED', message: 'Failed to generate image after all retries. Check API status.', retryable: true },
     };
   }
 

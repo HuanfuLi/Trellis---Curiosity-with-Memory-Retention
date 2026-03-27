@@ -26,10 +26,11 @@ export function bootstrapImageGeneration(): void {
 
   const nanoBananaKey = imageSettings?.nanoBananaApiKey ?? '';
   const geminiKey = imageSettings?.geminiApiKey ?? '';
+  const geminiModel = imageSettings?.geminiModel || 'gemini-3.1-flash-image-preview';
   const primaryProvider = imageSettings?.primaryProvider ?? 'auto';
 
   const nanoBanana = new NanoBananaProvider(nanoBananaKey);
-  const gemini = new GeminiProvider(geminiKey);
+  const gemini = new GeminiProvider(geminiKey, geminiModel);
 
   const hasNanoBanana = nanoBanana.isConfigured();
   const hasGemini = gemini.isConfigured();

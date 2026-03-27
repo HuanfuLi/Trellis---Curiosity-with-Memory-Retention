@@ -8,6 +8,8 @@ import { testTTSConnection } from '../providers/tts';
 import type { LLMConfig, TTSConfig, EmbeddingConfig, EmbeddingDebugConfig, AppSettings, ImageGenerationSettings, ImageProviderPrimary } from '../types';
 import { imageGenerationService } from '../services/imageGeneration.service';
 import { bootstrapImageGeneration } from '../services/imageGeneration.bootstrap';
+import { NanoBananaProvider } from '../providers/nanoBanana.provider';
+import { GeminiProvider } from '../providers/gemini.provider';
 import { toast } from '../lib/toast';
 import { Header, HEADER_HEIGHT } from '../components/ui/Header';
 import { applyTheme } from '../lib/theme';
@@ -300,6 +302,35 @@ export function SettingsScreen() {
     toast('Image cache cleared.', 'success');
   };
 
+  const handleTestImageConnection = async () => {
+    setIsTesting((prev) => ({ ...prev, imageGen: true }));
+    setTestResult((prev) => ({ ...prev, imageGen: null }));
+
+    const opts = { timeoutMs: 90_000, maxRetries: 1 };
+    const results: string[] = [];
+
+    if (imageGen.nanoBananaApiKey.trim()) {
+      const nb = new NanoBananaProvider(imageGen.nanoBananaApiKey);
+      const r = await nb.generate('A small coloured circle on white background.', 'photo', opts);
+      results.push(`NanoBanana: ${r.success ? '✓ OK' : (r.error?.message ?? 'failed')}`);
+    }
+
+    if (imageGen.geminiApiKey.trim()) {
+      const g = new GeminiProvider(imageGen.geminiApiKey);
+      const r = await g.generate('A small coloured circle on white background.', 'photo', opts);
+      results.push(`Gemini: ${r.success ? '✓ OK' : (r.error?.message ?? 'failed')}`);
+    }
+
+    if (results.length === 0) {
+      setTestResult((prev) => ({ ...prev, imageGen: '✗ No API keys configured' }));
+    } else {
+      const allOk = results.every((r) => r.includes('✓'));
+      setTestResult((prev) => ({ ...prev, imageGen: (allOk ? '✓ ' : '✗ ') + results.join(' | ') }));
+    }
+
+    setIsTesting((prev) => ({ ...prev, imageGen: false }));
+  };
+
   const formatBytes = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -321,7 +352,7 @@ export function SettingsScreen() {
               const defaults: Record<string, Partial<LLMConfig>> = {
                 openai: { model: 'gpt-4o', baseUrl: '', apiKey: '' },
                 claude: { model: 'claude-sonnet-4-6', baseUrl: '', apiKey: '' },
-                gemini: { model: 'gemini-2.0-flash', baseUrl: '', apiKey: '' },
+                gemini: { model: 'gemini-3.1-flash-image-preview', baseUrl: '', apiKey: '' },
                 local: { model: 'llama3', baseUrl: 'http://localhost:11434/v1', apiKey: '' },
                 lmstudio: { model: 'local-model', baseUrl: 'http://localhost:1234', apiKey: '' },
               };
@@ -372,7 +403,7 @@ export function SettingsScreen() {
             onChange={(v) => setLlm((prev) => ({ ...prev, model: v }))}
             onBlur={() => saveLlm()}
             placeholder={
-              llm.provider === 'gemini' ? 'gemini-2.0-flash' :
+              llm.provider === 'gemini' ? 'gemini-3.1-flash-image-preview' :
                 llm.provider === 'claude' ? 'claude-sonnet-4-6' :
                   llm.provider === 'lmstudio' ? 'local-model' :
                     'gpt-4o'
@@ -704,6 +735,14 @@ export function SettingsScreen() {
             placeholder="AIza..."
           />
         </SettingRow>
+        <SettingRow label="Gemini Model" description="Model name from Google's documentation">
+          <TextInput
+            value={imageGen.geminiModel ?? 'gemini-3.1-flash-image-preview'}
+            onChange={(v) => setImageGen((prev) => ({ ...prev, geminiModel: v }))}
+            onBlur={() => void saveImageGen()}
+            placeholder="gemini-3.1-flash-image-preview"
+          />
+        </SettingRow>
         <SettingRow label="Cache Limit (MB)" description="Max local image cache size">
           <TextInput
             value={String(imageGen.maxCacheSizeMb)}
@@ -743,6 +782,16 @@ export function SettingsScreen() {
           </Button>
           <Button
             size="sm"
+            variant="secondary"
+            disabled={isTesting['imageGen'] || (!imageGen.nanoBananaApiKey.trim() && !imageGen.geminiApiKey.trim())}
+            onClick={() => void handleTestImageConnection()}
+            style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}
+          >
+            {isTesting['imageGen'] ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : null}
+            Test Connection
+          </Button>
+          <Button
+            size="sm"
             variant="danger"
             disabled={isClearingCache || cacheStats.itemCount === 0}
             onClick={() => void handleClearImageCache()}
@@ -752,6 +801,20 @@ export function SettingsScreen() {
             Clear Image Cache
           </Button>
         </div>
+        {testResult['imageGen'] && (
+          <div style={{
+            marginTop: '10px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '6px',
+            fontSize: '0.8rem',
+            color: testResult['imageGen'].startsWith('✓') ? 'var(--primary-40)' : '#E53935',
+            lineHeight: 1.5,
+          }}>
+            {testResult['imageGen'].startsWith('✓') ? <CheckCircle size={16} style={{ flexShrink: 0, marginTop: '1px' }} /> : <XCircle size={16} style={{ flexShrink: 0, marginTop: '1px' }} />}
+            <span>{testResult['imageGen']}</span>
+          </div>
+        )}
       </Card>
 
       {/* Podcast Settings */}

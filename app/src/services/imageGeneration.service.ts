@@ -100,8 +100,8 @@ class ImageGenerationService {
   private config: ImageGenerationConfig = {
     maxCacheSizeBytes: DEFAULT_MAX_CACHE_BYTES,
     cacheTtlMs: DEFAULT_CACHE_TTL_MS,
-    requestTimeoutMs: 15_000,
-    maxRetries: 3,
+    requestTimeoutMs: 90_000, // image generation (esp. Gemini) can take 20–60 s
+    maxRetries: 2,
   };
 
   /**

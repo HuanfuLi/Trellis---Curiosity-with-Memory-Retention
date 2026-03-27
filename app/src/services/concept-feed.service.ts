@@ -362,7 +362,7 @@ function buildGenerationPrompt(
     'Each post must be substantial: teaser preview 25-55 words; bodyMarkdown 180-340 words.',
     'Vary narrative style across posts using these modes: example-first, historical-story, contrast, analogy, false-intuition, mnemonic, mechanism-breakdown.',
     'At least one post should use an example, and if helpful one may use a gentle joke or mnemonic to improve recall.',
-    'Every post must include: title, teaserHook, teaserPreview, bodyMarkdown, whyCare, takeaway, quickAskPrompts (3 strings), narrativeMode, contextLabel, sourceType, sourceQuestionIds, keywords.',
+    'Every post must include: title, teaserHook, teaserPreview, bodyMarkdown, takeaway, quickAskPrompts (3 strings), narrativeMode, contextLabel, sourceType, sourceQuestionIds, keywords.',
     'sourceType must be exactly one of: "recent", "related", "resurfaced", "mixed". Use "recent" for posts from recent questions, "related" for posts bridging two questions, "resurfaced" for older questions brought back, "mixed" for posts drawing from multiple questions.',
     'Use only sourceQuestionIds that appear in the provided context.',
     'Ground the essay in the supplied knowledge. Do not invent unrelated facts. Keep the writing vivid and readable.',
@@ -591,12 +591,13 @@ export const conceptFeedService = {
       newPosts = buildFallbackPosts(questions, date);
     }
 
-    // Preserve connection posts (they live behind their own route and must remain
-    // accessible via getPostById). Stale feed posts from previous days are dropped
-    // so the Home feed never bloats with every post ever generated.
-    const oldPosts = cached?.posts ?? [];
+    // Preserve all old posts (both feed and connection posts) so they remain
+    // accessible via getPostById and don't disappear when new questions are added.
+    // New posts are appended; old posts are only dropped if their ID collides with
+    // a newly generated post (prevents duplicates).
+    const oldPosts = cached?.date === date ? (cached?.posts ?? []) : [];
     const newIds = new Set(newPosts.map((p) => p.id));
-    const preserved = oldPosts.filter((p) => !newIds.has(p.id) && p.sourceType === 'connection');
+    const preserved = oldPosts.filter((p) => !newIds.has(p.id));
     const allPosts = [...newPosts, ...preserved];
 
     saveCache({ date, fingerprint, posts: allPosts, connectionCards: generated.connectionCards });

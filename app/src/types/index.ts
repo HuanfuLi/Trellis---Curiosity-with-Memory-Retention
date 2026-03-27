@@ -165,6 +165,8 @@ export type ImageProviderPrimary = 'nanoBanana' | 'gemini' | 'auto';
 export interface ImageGenerationSettings {
   nanoBananaApiKey: string;
   geminiApiKey: string;
+  /** Gemini model name — e.g. 'gemini-3.1-flash-image-preview'. User-configurable so it never needs a code change. */
+  geminiModel: string;
   maxCacheSizeMb: number;
   cacheTtlDays: number;
   /** Provider order preference. 'auto' tries both based on key availability. */

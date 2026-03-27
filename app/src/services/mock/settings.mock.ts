@@ -54,6 +54,7 @@ const defaultSettings: AppSettings = {
   imageGeneration: {
     nanoBananaApiKey: '',
     geminiApiKey: '',
+    geminiModel: 'gemini-3.1-flash-image-preview',
     maxCacheSizeMb: 50,
     cacheTtlDays: 30,
     primaryProvider: 'auto' as const,

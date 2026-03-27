@@ -145,7 +145,7 @@ function ConceptCard({ post, feedIndex = 0, isActive, onOpen }: ConceptCardProps
           isLoading={imageLoading}
           error={imageError}
           onRetry={handleRetryImage}
-          minHeight={200}
+          aspectPadding="100%"
         />
 
         <div style={{ padding: '0 20px' }}>
@@ -166,24 +166,7 @@ function ConceptCard({ post, feedIndex = 0, isActive, onOpen }: ConceptCardProps
           </p>
         </div>
 
-        <div
-          style={{
-            margin: '0 20px',
-            padding: '14px 16px',
-            borderRadius: '18px',
-            backgroundColor: 'color-mix(in srgb, var(--surface) 65%, white)',
-            border: '1px solid color-mix(in srgb, var(--primary-40) 18%, var(--border))',
-          }}
-        >
-          <p style={{ fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.08em', color: badge.color, textTransform: 'uppercase', marginBottom: '6px' }}>
-            Why open this
-          </p>
-          <p style={{ fontSize: '0.92rem', color: 'var(--foreground)', lineHeight: 1.65 }}>
-            {post.whyCare}
-          </p>
-        </div>
-
-        <div style={{ padding: '0 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+        <div style={{ padding: '0 20px' }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
             {post.keywords.slice(0, 3).map((keyword) => (
               <span
@@ -201,7 +184,6 @@ function ConceptCard({ post, feedIndex = 0, isActive, onOpen }: ConceptCardProps
               </span>
             ))}
           </div>
-          <span style={{ fontSize: '0.78rem', color: badge.color, fontWeight: 700 }}>Open article</span>
         </div>
       </button>
     </div>
