@@ -105,7 +105,6 @@
 
 **Requirements:**
 - PLANNER-04: Retry/regenerate suggestions button
-- PLANNER-06: Rich "Moves" linking
 - CARDS-01: Multiple card designs (3+)
 - CARDS-02: Card design rotation/shuffling
 - CARDS-03: Accessibility and readability standards
@@ -120,6 +119,24 @@
 
 ---
 
+## Phase 12: Portal Navigation & Rich Moves Linking
+
+**Goal:** Implement navigation portals for suggested moves to enable users to navigate directly to related review content (flashcards, posts, or questions) when tapping suggested moves.
+
+**Requirements:**
+- PLANNER-06: Rich "Moves" linking
+- NAV-01: Portal navigation routing
+- NAV-02: Context-aware screen parameters
+
+**Success Criteria:**
+1. When user taps a suggested move, system navigates to relevant content screen
+2. Navigation based on move type: flashcard → ReviewScreen, post → PostDetailScreen, question → QuestionDetailScreen
+3. Target screens receive proper context parameters (e.g., conceptId for filtered reviews)
+4. Navigation maintains back-stack consistency
+5. All existing navigation patterns work without regression
+
+---
+
 ## Requirement Traceability
 
 | Phase | Requirements | Count |
@@ -128,8 +145,9 @@
 | Phase 8 | FEED-04, FEED-05, FEED-06 | 3 |
 | Phase 9 | IMAGE-04, IMAGE-05 | 2 |
 | Phase 10 | PLANNER-01, PLANNER-02, PLANNER-03, PLANNER-05 | 4 |
-| Phase 11 | PLANNER-04, PLANNER-06, CARDS-01, CARDS-02, CARDS-03 | 5 |
-| **Total** | **18 requirements** | **18** |
+| Phase 11 | PLANNER-04, CARDS-01, CARDS-02, CARDS-03 | 4 |
+| Phase 12 | PLANNER-06, NAV-01, NAV-02 | 3 |
+| **Total** | **22 requirements** | **22** |
 
 ✓ All requirements mapped. 100% coverage.
 
