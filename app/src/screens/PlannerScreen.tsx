@@ -578,14 +578,6 @@ export function PlannerScreen() {
         <EmptySectionHint text="Chunks you start will stay here so you can pick them back up without pressure." />
       )}
 
-      {/* ── Suggested Moves ───────────────────────────────────────────── */}
-      <SectionHeader title="Suggested Moves" count={suggestedChunks.length} />
-      {suggestedChunks.length > 0 ? suggestedChunks.map((chunk) => (
-        <ChunkCard key={chunk.id} chunk={chunk} onStatusChange={updateChunkStatus} onDelete={deleteChunk} />
-      )) : (
-        <EmptySectionHint text="New suggestions appear here after check-ins or when the system notices a useful next move." />
-      )}
-
       {/* ── Saved Threads ─────────────────────────────────────────────── */}
       <SectionHeader title="Saved Threads" count={savedThreads.length} />
       {savedThreads.length > 0 ? savedThreads.map((thread) => (
