@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
-status: Phase 10 Complete
-stopped_at: Completed 10-03-PLAN.md (UAT Gap Closure — Unified Suggested Moves Section)
-last_updated: "2026-03-27T21:30:00Z"
+status: Phase 12 Planned
+stopped_at: Completed Phase 12 planning (Portal Navigation & Rich Moves Linking)
+last_updated: "2026-03-27T22:20:00Z"
 progress:
-  total_phases: 5
+  total_phases: 6
   completed_phases: 2
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 4
+  completed_plans: 4
 ---
 
 # Project State: Milestone 1.1
@@ -30,9 +30,10 @@ Phase 9 - Image Regeneration & Error Handling (next to start)
 
 - **Phase 7:** Post Feed Redesign & Image Integration (COMPLETE)
 - **Phase 8:** Post Detail & Infinite Scroll (COMPLETE — 08-01-PLAN.md)
-- **Phase 9:** Image Regeneration & Error Handling (2 requirements)
-- **Phase 10:** Planner Auto-Suggestions Engine (4 requirements)
-- **Phase 11:** Planner Retry & Milestone Card Variety (5 requirements)
+- **Phase 9:** Image Regeneration & Error Handling (SKIPPED)
+- **Phase 10:** Planner Auto-Suggestions Engine (COMPLETE)
+- **Phase 11:** Planner Retry & Milestone Card Variety (COMPLETE)
+- **Phase 12:** Portal Navigation & Rich Moves Linking (12-PLAN.md, 12-CONTEXT.md — READY TO EXECUTE)
 
 ## Latest Decisions
 
@@ -63,13 +64,14 @@ Phase 9 - Image Regeneration & Error Handling (next to start)
 
 ## Last Session
 
-Completed Phase 10 plan 03 (10-03-PLAN.md) — UAT Gap Closure (Unified Suggested Moves Section)
-**Stopped At:** Completed 10-03-PLAN.md (UAT Gap Closure — Unified Suggested Moves Section)
+Completed Phase 12 planning (Phase 12 — Portal Navigation & Rich Moves Linking)
+**Stopped At:** Completed Phase 12 planning (12-PLAN.md, CONTEXT.md ready)
 **Date:** 2026-03-27
 
-### Phase 9: SKIPPED
+### Phase 12: NEW
 
-- Decision: Phase 8 error handling sufficient; no regeneration feature needed
-- Rationale: FeedPostImage component covers error states, retry, graceful degradation
-- Research created but not used: 09-RESEARCH.md (archived)
-- Impact: Roadmap continues to Phase 10
+- Requirement: PLANNER-06 (Rich Moves linking) — moved from Phase 11
+- Purpose: Navigate suggested moves to target content (flashcards, posts, questions)
+- Architecture: moveNavigator utility + SuggestedMovesSection integration
+- Effort: 8-12 hours (4 waves)
+- Removed from Phase 11: PLANNER-06; Phase 11 now covers only PLANNER-04 + CARDS-01/02/03
