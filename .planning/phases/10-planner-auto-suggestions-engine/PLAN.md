@@ -1,12 +1,12 @@
 # Phase 10: Planner Auto-Suggestions Engine
 
 **Milestone:** v1.1 (Engagement & Discovery Iteration)  
-**Status:** Planning  
+**Status:** In Progress (Gaps Identified)
 **Depends on:** v1.0 Planner foundation
 
 ## Goal
 
-Implement automatic generation of Planner "Suggested Moves" when the Knowledge Graph is sufficiently populated and the Planner is empty. Support daily auto-refresh and trajectory-aware recommendation scoring.
+Implement automatic generation of Planner "Suggested Moves" when the Knowledge Graph is sufficiently populated and the Planner is empty. Support daily auto-refresh and trajectory-aware recommendation scoring. **Consolidate multiple 'Suggested Moves' sections into a single, unified UX.**
 
 ## Requirements
 
@@ -14,12 +14,8 @@ Implement automatic generation of Planner "Suggested Moves" when the Knowledge G
 - **PLANNER-02**: Display suggestions automatically on Planner screen
 - **PLANNER-03**: Daily auto-refresh (after podcast time)
 - **PLANNER-05**: Trajectory-aware scoring algorithm
-
-## User Stories
-
-1. **As a learner**, I want the Planner to auto-suggest moves when I have accumulated knowledge but no planned activities, so I don't feel lost after learning.
-2. **As a learner**, I want suggestions based on my learning trajectory (questions asked, reviews done, engagement patterns) so they're personalized to my needs.
-3. **As a learner**, I want new suggestions daily to keep my learning fresh and motivated.
+- **PLANNER-06 (UAT FIX)**: Consolidate redundant "Suggested Moves" sections (Auto-Suggested vs. Manual-Suggested)
+- **PLANNER-07 (UAT FIX)**: Global accessibility for "Refresh" and "Skip All" buttons in the unified section
 
 ## Success Criteria
 
@@ -31,6 +27,8 @@ Implement automatic generation of Planner "Suggested Moves" when the Knowledge G
 6. ✅ Suggestions ranked by relevance score (0-100)
 7. ✅ Suggestions persist across app restarts
 8. ✅ No duplicate suggestions within 24 hours
+9. ❌ Unified "Suggested Moves" section (no redundancy)
+10. ❌ "Refresh" and "Skip All" buttons remain accessible regardless of section content
 
 ## Technical Approach
 
@@ -121,30 +119,21 @@ where:
 
 ### Wave 2: UI & Display (Days 2-3)
 
-#### T10.5: Suggested Moves Section
+#### T10.5: Unified Suggested Moves Section (Updated)
 - Update `PlannerScreen.tsx`
-- Add "Suggested Moves" section (if auto-generated)
-- Display suggestions with:
-  - Concept name / title
-  - Brief explanation of why suggested
-  - Relevance score as visual indicator
-  - Icon indicating move type (📚 review, 🔗 connection, 🎙️ podcast)
-- Allow collapsing/expanding section
-- **Acceptance:** Section renders cleanly, icons visible
+- Merge the "Auto-Suggested Moves" (top) and "Suggested Moves" (bottom) into a single logical section.
+- Section should appear below "Continue" but above "Saved Threads".
+- **Acceptance:** Only ONE "Suggested Moves" header exists on the screen.
 
-#### T10.6: Suggestion Interaction
-- User can tap suggestion to add to Planner
-- User can dismiss suggestion (remove from view)
-- User can "Skip" all suggestions temporarily
-- Show confirmation toast: "Added to Planner!"
-- **Acceptance:** All interactions work
+#### T10.6: Global Action Controls (Updated)
+- Ensure "Refresh" and "Skip All" buttons are attached to the unified section header or a persistent action bar.
+- Buttons MUST remain visible/clickable even if all suggestions are dismissed (user can still refresh to see if new signals produce new moves).
+- **Acceptance:** Buttons never "disappear" when suggestions are empty.
 
-#### T10.7: Empty Planner State
-- Update empty Planner UI
-- Show "No planned moves yet. We've suggested some ideas below."
-- Highlight Suggested Moves section
-- CTA: "Try one of these suggestions!"
-- **Acceptance:** Empty state is helpful, not frustrating
+#### T10.7: Empty Planner State (Updated)
+- Update empty Planner UI to handle both types of suggestions.
+- If no suggestions exist, show a single helpful CTA.
+- **Acceptance:** Clean UI when no moves are planned OR suggested.
 
 #### T10.8: Move Display Detail
 - Implement `MoveCard.tsx` component
@@ -247,11 +236,28 @@ where:
 - Document any technical debt
 - **Acceptance:** Phase 11 can extend this feature
 
+### Wave 6: UI Consolidation & UX Refinement (New - UAT Response)
+
+#### T10.21: Component Refactoring (SuggestedMovesSection)
+- Extract the unified suggested moves logic into a dedicated component if needed to keep `PlannerScreen.tsx` clean.
+- Ensure it handles both `PlannedMove` (auto) and `PlannerChunk` (manual suggested) arrays.
+- **Acceptance:** Code is modular and readable.
+
+#### T10.22: Unified Header & Badge Logic
+- Implement a single `SectionHeader` for Suggested Moves that sums up counts from both auto and manual sources.
+- Attach "Refresh" and "Skip All" actions to this unified header.
+- **Acceptance:** Badge count is accurate (Sum of auto + manual).
+
+#### T10.23: Refined Skip All Logic
+- Update `skipAll` to clear auto-generated moves while leaving manually-created suggestions (or confirm user preference).
+- Provide visual feedback (toast) when list is cleared.
+- **Acceptance:** "Skip All" works reliably for auto-generated items.
+
 ---
 
-## Estimated Scope: 5-6 working days
+## Estimated Scope: 6-7 working days (extended for UAT fixes)
 
-**Key complexity:** Trajectory scoring algorithm needs careful tuning to feel relevant.
+**Key complexity:** Trajectory scoring algorithm and unified UI state management.
 
 ---
 
