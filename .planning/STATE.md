@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
-status: Phase 12 Executing — Plan 1 Complete
-stopped_at: Completed 12-01-PLAN.md (Portal Navigation & Rich Moves Linking)
-last_updated: "2026-03-27T22:35:00Z"
+status: Executing Phase 12
+stopped_at: Completed 12-02-PLAN.md (Gap Closure — Deepdive Routing Fix & NAV Requirements)
+last_updated: "2026-03-28T11:13:01.995Z"
 progress:
   total_phases: 6
-  completed_phases: 3
-  total_plans: 5
+  completed_phases: 2
+  total_plans: 6
   completed_plans: 5
 ---
 
@@ -33,7 +33,7 @@ Phase 9 - Image Regeneration & Error Handling (next to start)
 - **Phase 9:** Image Regeneration & Error Handling (SKIPPED)
 - **Phase 10:** Planner Auto-Suggestions Engine (COMPLETE)
 - **Phase 11:** Planner Retry & Milestone Card Variety (COMPLETE)
-- **Phase 12:** Portal Navigation & Rich Moves Linking (12-01-PLAN.md — COMPLETE)
+- **Phase 12:** Portal Navigation & Rich Moves Linking (12-01-PLAN.md — COMPLETE, 12-02-PLAN.md — COMPLETE)
 
 ## Latest Decisions
 
@@ -65,12 +65,14 @@ Phase 9 - Image Regeneration & Error Handling (next to start)
 - [Phase 12-01] MoveNavigationState passed via location.state (React Router 7 pattern)
 - [Phase 12-01] ReviewScreen filters items by linkedResource.id (nodeId match) when from move navigation
 - [Phase 12-01] PostDetailScreen back button navigates to -1 when moveState present (returns to Planner)
+- [Phase 12-02] deepdive moves route to PostDetailScreen at /posts/:id (not AskScreen at /ask/:id)
+- [Phase 12-02] NAV-01 and NAV-02 registered in REQUIREMENTS.md as checked [x] — implemented in Phase 12
 
 ## Last Session
 
-Completed Phase 12 Plan 01 (12-01-PLAN.md) — Portal Navigation & Rich Moves Linking
-**Stopped At:** Completed 12-01-PLAN.md (Portal Navigation & Rich Moves Linking)
-**Date:** 2026-03-27
+Completed Phase 12 Plan 02 (12-02-PLAN.md) — Gap Closure: Deepdive Routing Fix & NAV Requirements
+**Stopped At:** Completed 12-02-PLAN.md (Gap Closure — Deepdive Routing Fix & NAV Requirements)
+**Date:** 2026-03-28
 
 ### Phase 12: NEW
 
