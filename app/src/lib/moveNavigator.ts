@@ -145,7 +145,7 @@ export function buildMoveNavigationPath(
       return '/podcast';
 
     default:
-      console.warn(`[moveNavigator] Unknown screen in route: ${route.screen}`);
+      console.warn(`[moveNavigator] Unknown screen in route: ${(route as { screen: string }).screen}`);
       return null;
   }
 }
