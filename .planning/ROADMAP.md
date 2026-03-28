@@ -142,6 +142,32 @@
 
 ---
 
+## Phase 13: Planner Redesign (Bug Fixes & UX Polish) 📋 PLANNING
+
+**Goal:** Fix Daily Check-in workflow (remove inert threads), improve recommendation algorithm (prioritize weak areas), and clarify Planner UX (sourceSignal context, priority badges).
+
+**Status:** Investigation complete (2026-03-28) — Ready for detailed planning
+
+**Requirements:**
+- PLANNER-07: Remove thread data model
+- PLANNER-08: Fix signal extraction (confusion vs curiosity)
+- PLANNER-09: Improve weak area detection
+- PLANNER-10: Clarify UI and add sourceSignal context
+
+**Success Criteria:**
+1. Daily Check-in creates actionable chunks (not inert threads)
+2. Curiosity signals → post chunks; confusion signals → flashcard chunks
+3. Weak areas effectively prioritized (40-50% of concepts identified, +30 boost)
+4. UI shows top 5 suggestions by default with [Show All] button
+5. Each chunk displays source context ("From check-in: ...")
+6. Priority badges (🔴 🟠 🟡 ⚪) show why each chunk was suggested
+7. Section renamed to "Your Learning Progress" for clarity
+8. No regression in existing features
+
+**Plans:** 0 plans (planning in progress)
+
+---
+
 ## Requirement Traceability
 
 | Phase | Requirements | Count |
@@ -152,7 +178,8 @@
 | Phase 10 | PLANNER-01, PLANNER-02, PLANNER-03, PLANNER-05 | 4 |
 | Phase 11 | PLANNER-04, CARDS-01, CARDS-02, CARDS-03 | 4 |
 | Phase 12 | PLANNER-06, NAV-01, NAV-02 | 3 |
-| **Total** | **22 requirements** | **22** |
+| Phase 13 | PLANNER-07, PLANNER-08, PLANNER-09, PLANNER-10 | 4 |
+| **Total** | **26 requirements** | **26** |
 
 ✓ All requirements mapped. 100% coverage.
 
