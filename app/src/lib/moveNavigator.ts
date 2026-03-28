@@ -17,8 +17,8 @@ const MOVE_TYPE_ROUTES = {
     paramKey: 'conceptId', // ReviewScreen loads flashcards for this concept
   },
   deepdive: {
-    screen: 'ask', // Navigate to AskScreen for Q&A deep dive
-    paramKey: 'questionId',
+    screen: 'posts', // Navigate to PostDetailScreen for learning posts
+    paramKey: 'postId',
   },
   connection: {
     screen: 'ask', // Navigate to QuestionDetailScreen
@@ -135,6 +135,10 @@ export function buildMoveNavigationPath(
     case 'ask':
       // QuestionDetailScreen uses :id URL param
       return `/ask/${linkedResource.id}`;
+
+    case 'posts':
+      // PostDetailScreen uses :id URL param
+      return `/posts/${linkedResource.id}`;
 
     case 'podcast':
       // PodcastScreen doesn't use URL params — context passed via state
