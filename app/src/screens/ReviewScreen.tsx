@@ -252,10 +252,25 @@ export function ReviewScreen() {
   const moveState = parseMoveNavigationState(location.state);
   const linkedResource = moveState?.linkedResource;
 
+  // Anchor review: when navigated from AnchorDetailScreen, filter to that anchor's Q&As
+  const anchorReview = (location.state as { anchorReview?: { anchorId: string; qaIds: string[]; title: string } } | null)?.anchorReview;
+  const anchorFilteredItems = anchorReview
+    ? allCards.filter((card) => anchorReview.qaIds.some((qaId) => card.nodeId === qaId))
+    : null;
+
+  // Cluster review: when navigated from ClusterDetailScreen, filter to all Q&As across child anchors
+  const clusterReview = (location.state as { clusterReview?: { clusterId: string; qaIds: string[]; title: string } } | null)?.clusterReview;
+  const clusterFilteredItems = clusterReview
+    ? allCards.filter((card) => clusterReview.qaIds.some((qaId) => card.nodeId === qaId))
+    : null;
+
   // When coming from a move with conceptId, filter cards to show only that concept
-  const filteredItems = linkedResource?.type === 'review' && linkedResource.id
+  const moveFilteredItems = linkedResource?.type === 'review' && linkedResource.id
     ? items.filter((card) => card.nodeId === linkedResource.id)
     : null;
+
+  // Priority: anchor review > cluster review > move review > all items
+  const filteredItems = anchorFilteredItems ?? clusterFilteredItems ?? moveFilteredItems;
 
   // Use filtered items for review session if navigated from move and there are matches
   const reviewItems = filteredItems && filteredItems.length > 0 ? filteredItems : items;
