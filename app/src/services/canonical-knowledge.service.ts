@@ -1,14 +1,17 @@
 import type {
   CandidateContextPack,
+  ClassificationResult,
   DailyReviewMap,
   FlashCard,
   HierarchySummary,
   IngestionDecision,
   KnowledgeNode,
+  LLMConfig,
   Question,
   StructuralSignalType,
 } from '../types/index.ts';
 import { cosine } from '../providers/embedding/index.ts';
+import { chatCompletion } from '../providers/llm/index.ts';
 
 const ROOT_FALLBACK = 'Knowledge';
 const BRANCH_FALLBACK = 'General concepts';
@@ -373,6 +376,190 @@ export function buildDailyReviewMap(
     totalDue: cards.length,
     revealedCount: revealed.size,
   };
+}
+
+export function buildTreeContext(questions: Question[]): string {
+  const tree = buildReflectionTree(questions);
+  if (tree.length === 0) return 'No existing branches or clusters yet.';
+  const lines: string[] = [];
+  for (const root of tree) {
+    for (const branch of root.branches) {
+      const clusterNames = branch.clusters.map(c => c.clusterLabel).join(', ');
+      lines.push(`- ${branch.branchLabel}: [${clusterNames}]`);
+      // List existing anchors under each cluster
+      for (const cluster of branch.clusters) {
+        const anchors = cluster.nodes.filter(n => {
+          // Find the original question to check isAnchorNode
+          const q = questions.find(qItem => qItem.id === n.id);
+          return q?.isAnchorNode === true;
+        });
+        if (anchors.length > 0) {
+          lines.push(`  Anchors: ${anchors.map(a => `${a.title} (id:${a.id})`).join(', ')}`);
+        }
+      }
+    }
+  }
+  return lines.join('\n');
+}
+
+export async function classifyAndAnchor(
+  question: Question,
+  allQuestions: Question[],
+  llmConfig: LLMConfig,
+): Promise<void> {
+  const treeContext = buildTreeContext(allQuestions);
+
+  const systemPrompt = [
+    'You are a knowledge classification assistant. Your job is to place a question into an academic knowledge hierarchy.',
+    'Given a question and the existing tree of branches and clusters, determine where this question belongs.',
+    '',
+    'Existing tree structure:',
+    treeContext,
+    '',
+    'Instructions:',
+    '- branchLabel: a broad sub-discipline (e.g., "Psychology", "Computer Science", "Physics", "Economics", "Biology")',
+    '- clusterLabel: a topic grouping that holds multiple related concepts (e.g., "Memory", "Machine Learning", "Thermodynamics") — NOT the specific concept itself',
+    '- anchorName: a clean noun/concept name (e.g., "Transformer", "Spaced Repetition", "Entropy") — the specific concept this question is about',
+    '- anchorId: if an existing anchor matches this concept, provide its id; otherwise omit',
+    '- Reuse existing branches and clusters when the question fits. Create new ones only when truly needed.',
+    '',
+    'Respond ONLY with JSON:',
+    '{"briefAnswer":"<=30 word answer for self-context","keyword":"single most descriptive keyword","rootLabel":"Knowledge","branchLabel":"...","clusterLabel":"...","anchorName":"...","anchorId":"optional-existing-anchor-id"}',
+  ].join('\n');
+
+  try {
+    const raw = await chatCompletion(
+      [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: question.content },
+      ],
+      llmConfig,
+    );
+
+    let result: ClassificationResult;
+    try {
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : raw) as Partial<ClassificationResult>;
+      result = {
+        briefAnswer: parsed.briefAnswer ?? '',
+        keyword: parsed.keyword ?? '',
+        rootLabel: parsed.rootLabel?.trim() || 'Knowledge',
+        branchLabel: parsed.branchLabel?.trim() || 'General concepts',
+        clusterLabel: parsed.clusterLabel?.trim() || 'Open questions',
+        anchorName: parsed.anchorName?.trim() || question.title || question.content.slice(0, 40),
+        anchorId: parsed.anchorId?.trim() || undefined,
+      };
+    } catch {
+      // JSON parse failed — derive labels from keywords
+      const kw = question.keywords[0] || 'learning';
+      result = {
+        briefAnswer: '',
+        keyword: kw,
+        rootLabel: 'Knowledge',
+        branchLabel: `${kw.charAt(0).toUpperCase()}${kw.slice(1)} concepts`,
+        clusterLabel: `${kw.charAt(0).toUpperCase()}${kw.slice(1)} cluster`,
+        anchorName: question.title || question.content.slice(0, 40),
+      };
+    }
+
+    // Import questionService lazily to avoid circular dependency
+    const { questionService } = await import('./question.service.ts');
+
+    // --- Resolve or create anchor node ---
+    let anchorId: string | undefined;
+
+    if (result.anchorId) {
+      // Verify the referenced anchor actually exists
+      const existingAnchor = allQuestions.find(q => q.id === result.anchorId && q.isAnchorNode === true);
+      if (existingAnchor) {
+        anchorId = existingAnchor.id;
+      }
+    }
+
+    if (!anchorId) {
+      // Check if an anchor with the same name already exists under the same cluster
+      const existingByName = allQuestions.find(
+        q => q.isAnchorNode === true &&
+          q.title?.toLowerCase() === result.anchorName.toLowerCase() &&
+          q.clusterLabel === result.clusterLabel
+      );
+
+      if (existingByName) {
+        anchorId = existingByName.id;
+      } else {
+        // Create a new anchor node
+        const anchorNode: Question = {
+          id: `anchor-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          timestamp: Date.now(),
+          date: new Date().toISOString().slice(0, 10),
+          content: result.anchorName,
+          answer: '',
+          summary: result.anchorName,
+          title: result.anchorName,
+          keywords: result.keyword ? [result.keyword] : [],
+          relatedQuestionIds: [],
+          categoryIds: [],
+          reviewSchedule: { nextReviewDate: '9999-12-31', reviewCount: 0, easeFactor: 2.5 },
+          createdAt: Date.now(),
+          aliases: [],
+          sourcePrompts: [],
+          sourceQuestionIds: [],
+          rootLabel: result.rootLabel,
+          branchLabel: result.branchLabel,
+          clusterLabel: result.clusterLabel,
+          nodeSummary: '',
+          isAnchorNode: true,
+          qaCount: 0,
+        };
+
+        // Save anchor directly to localStorage (same storage key as questionService)
+        const ANCHOR_STORAGE_KEY = 'echolearn_questions';
+        try {
+          const storedRaw = localStorage.getItem(ANCHOR_STORAGE_KEY);
+          const store: Question[] = storedRaw ? JSON.parse(storedRaw) as Question[] : [];
+          store.unshift(anchorNode);
+          localStorage.setItem(ANCHOR_STORAGE_KEY, JSON.stringify(store));
+        } catch { /* storage error — anchor won't be created */ }
+
+        anchorId = anchorNode.id;
+      }
+    }
+
+    // --- Patch Q&A with labels and anchor attachment ---
+    const shortSummary = question.shortSummary || question.summary || question.answer.slice(0, 200);
+    const summaryEntry = `[${question.id}] ${shortSummary.slice(0, 200)}`;
+
+    // Patch the Q&A node with classification labels and anchor parentId
+    questionService.patchQuestion(question.id, {
+      rootLabel: result.rootLabel,
+      branchLabel: result.branchLabel,
+      clusterLabel: result.clusterLabel,
+      placementReason: `Classified under ${result.branchLabel} > ${result.clusterLabel} > ${result.anchorName}`,
+      parentId: anchorId,
+    });
+
+    // Update anchor: increment qaCount and append to nodeSummary
+    if (anchorId) {
+      const freshStore = questionService.getAll();
+      const anchor = freshStore.find(q => q.id === anchorId);
+      if (anchor) {
+        const currentSummary = anchor.nodeSummary || '';
+        const newSummary = currentSummary ? `${currentSummary}\n${summaryEntry}` : summaryEntry;
+        questionService.patchQuestion(anchorId, {
+          qaCount: (anchor.qaCount || 0) + 1,
+          nodeSummary: newSummary,
+          // Ensure anchor has correct labels (in case it was just created)
+          rootLabel: result.rootLabel,
+          branchLabel: result.branchLabel,
+          clusterLabel: result.clusterLabel,
+        });
+      }
+    }
+  } catch (err) {
+    // Second call failed — Q&A keeps whatever labels it had (empty/undefined from first call).
+    // Fallback: labels will be derived from keywords at display time via buildFallbackPlacement.
+    console.warn('[EchoLearn] Second classification call failed — labels will use keyword fallback:', err instanceof Error ? err.message : err);
+  }
 }
 
 export function recordStructuralSignalPatch(question: Question, signal: StructuralSignalType): Partial<Question> {
