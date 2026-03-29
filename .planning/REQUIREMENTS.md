@@ -42,7 +42,7 @@
 - [x] **GRAPH-03**: `decideIngestionOutcome` returns only `{ outcome, targetNodeId }` — all label fields stripped; labels sourced exclusively from the second call
 - [x] **GRAPH-04**: Concept anchor nodes are explicitly created by LLM with a clean noun/concept name (e.g., "Transformer"), separate from individual Q&A leaf nodes
 - [x] **GRAPH-05**: Q&A nodes attach to their concept anchor via `parentId`; anchor maintains an append-only `nodeSummary` log of short Q&A summaries (≤80 words each) with Q&A ID bindings
-- [ ] **GRAPH-06**: Mindmap renders only concept anchor nodes as leaves; individual Q&As are hidden and accessible via Mind-Elixir expand/retract on each anchor node
+- [x] **GRAPH-06**: Mindmap renders only concept anchor nodes as leaves; individual Q&As are hidden and accessible via Mind-Elixir expand/retract on each anchor node
 
 ---
 

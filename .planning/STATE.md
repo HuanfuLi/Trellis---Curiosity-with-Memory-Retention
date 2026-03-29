@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
 status: Executing Phase 14
-stopped_at: Completed 14-02-PLAN.md (Second Classification Call & Anchor Creation)
-last_updated: "2026-03-29T19:22:00.000Z"
+stopped_at: Completed 14-03-PLAN.md (Anchor-Based Mindmap Rendering)
+last_updated: "2026-03-29T19:25:11.025Z"
 progress:
   total_phases: 8
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 10
-  completed_plans: 8
+  completed_plans: 9
 ---
 
 # Project State: Milestone 1.1
@@ -35,7 +35,7 @@ Phase 9 - Image Regeneration & Error Handling (next to start)
 - **Phase 11:** Planner Retry & Milestone Card Variety (COMPLETE)
 - **Phase 12:** Portal Navigation & Rich Moves Linking (12-01-PLAN.md — COMPLETE, 12-02-PLAN.md — COMPLETE)
 - **Phase 13:** Planner Redesign (13-01-PLAN.md — COMPLETE)
-- **Phase 14:** Knowledge Graph Classification & Anchor Nodes (14-01-PLAN.md — COMPLETE, 14-02-PLAN.md — COMPLETE)
+- **Phase 14:** Knowledge Graph Classification & Anchor Nodes (14-01-PLAN.md — COMPLETE, 14-02-PLAN.md — COMPLETE, 14-03-PLAN.md — COMPLETE)
 
 ## Latest Decisions
 
@@ -73,8 +73,15 @@ Phase 9 - Image Regeneration & Error Handling (next to start)
 ## Last Session
 
 Completed Phase 14 Plan 02 (14-02-PLAN.md) — Second Classification Call & Anchor Creation
-**Stopped At:** Completed 14-02-PLAN.md (Second Classification Call & Anchor Creation)
+**Stopped At:** Completed 14-03-PLAN.md (Anchor-Based Mindmap Rendering)
 **Date:** 2026-03-29
+
+## Latest Decisions (Phase 14-03)
+
+- [Phase 14-03] buildAnchorReflectionTree added alongside buildReflectionTree — mindmap renders anchors as collapsed cluster leaves with Q&A children
+- [Phase 14-03] Anchor NodeObj uses expanded=false; mind-elixir built-in expand/collapse requires no extra code
+- [Phase 14-03] Legacy Q&As without anchor parents rendered directly as cluster leaves — full backward compatibility
+- [Phase 14-03] Detail panel cursor:default and no 'View details' chevron for anchor nodes to signal non-navigable
 
 ## Latest Decisions (Phase 14-02)
 
