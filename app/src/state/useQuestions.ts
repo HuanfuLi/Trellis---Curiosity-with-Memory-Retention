@@ -4,7 +4,7 @@ import { questionService } from '../services/question.service';
 import { mockSettingsService } from '../services/mock/settings.mock';
 import { chatStream } from '../providers/llm';
 import { today } from '../lib/date';
-import { buildCandidateContextPack, formatCandidateContextPack } from '../services/canonical-knowledge.service';
+import { buildCandidateContextPack, classifyAndAnchor, formatCandidateContextPack } from '../services/canonical-knowledge.service';
 import { evaluateQuestion as filterQuestion, type QuestionFilterContext } from '../services/question-filter.service';
 
 interface UseQuestionsReturn {
@@ -115,6 +115,14 @@ export function useQuestions(): UseQuestionsReturn {
         // Persist the flagged status back to store if it changed
         if (question.flagged !== rawQuestion.flagged) {
           questionService.patchQuestion(question.id, { flagged: question.flagged });
+        }
+
+        // ── Second classification call (Phase 14) ──────────────────────────────
+        // Fire ONLY when Q&A enters the mindmap (not flagged).
+        if (question.flagged !== true) {
+          void classifyAndAnchor(question, questionService.getAll(), llmConfig).catch((err: unknown) => {
+            console.warn('[EchoLearn] classifyAndAnchor failed:', err instanceof Error ? err.message : err);
+          });
         }
 
         setQuestions((prev) => [question, ...prev.filter((q) => q.id !== question.id)]);
