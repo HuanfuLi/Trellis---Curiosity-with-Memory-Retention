@@ -573,6 +573,90 @@ export function recordStructuralSignalPatch(question: Question, signal: Structur
   };
 }
 
+/**
+ * Build a reflection tree where leaf nodes are concept anchors (not individual Q&As).
+ * Each anchor carries its attached Q&A children for expand/retract display.
+ * Legacy Q&As (no anchor parent) are included as direct leaves for backward compatibility.
+ */
+export function buildAnchorReflectionTree(questions: Question[]): Array<{
+  rootLabel: string;
+  branches: Array<{
+    branchLabel: string;
+    clusters: Array<{
+      clusterLabel: string;
+      anchors: Array<{ anchor: Question; qaChildren: Question[] }>;
+      legacyNodes: Question[];
+    }>;
+  }>;
+}> {
+  const anchorMap = new Map<string, Question>();
+  const anchoredQAs = new Map<string, Question[]>();
+  const legacyQAs: Question[] = [];
+
+  for (const q of questions) {
+    if (q.flagged === true) continue;
+    if (q.isAnchorNode === true) {
+      anchorMap.set(q.id, q);
+      if (!anchoredQAs.has(q.id)) anchoredQAs.set(q.id, []);
+    }
+  }
+
+  for (const q of questions) {
+    if (q.flagged === true) continue;
+    if (q.isAnchorNode === true) continue;
+    if (q.parentId && anchorMap.has(q.parentId)) {
+      anchoredQAs.get(q.parentId)!.push(q);
+    } else {
+      legacyQAs.push(q);
+    }
+  }
+
+  const grouped = new Map<string, Map<string, Map<string, { anchors: Array<{ anchor: Question; qaChildren: Question[] }>; legacyNodes: Question[] }>>>();
+
+  for (const [anchorId, anchor] of anchorMap) {
+    const rootLabel = anchor.rootLabel || 'Knowledge';
+    const branchLabel = anchor.branchLabel || 'General concepts';
+    const clusterLabel = anchor.clusterLabel || 'Open questions';
+
+    const root = grouped.get(rootLabel) ?? new Map();
+    grouped.set(rootLabel, root);
+    const branch = root.get(branchLabel) ?? new Map();
+    root.set(branchLabel, branch);
+    const cluster = branch.get(clusterLabel) ?? { anchors: [], legacyNodes: [] };
+    branch.set(clusterLabel, cluster);
+
+    cluster.anchors.push({ anchor, qaChildren: anchoredQAs.get(anchorId) || [] });
+  }
+
+  for (const q of legacyQAs) {
+    const placement = {
+      rootLabel: q.rootLabel || 'Knowledge',
+      branchLabel: q.branchLabel || 'General concepts',
+      clusterLabel: q.clusterLabel || 'Open questions',
+    };
+    const root = grouped.get(placement.rootLabel) ?? new Map();
+    grouped.set(placement.rootLabel, root);
+    const branch = root.get(placement.branchLabel) ?? new Map();
+    root.set(placement.branchLabel, branch);
+    const cluster = branch.get(placement.clusterLabel) ?? { anchors: [], legacyNodes: [] };
+    branch.set(placement.clusterLabel, cluster);
+
+    cluster.legacyNodes.push(q);
+  }
+
+  return Array.from(grouped.entries()).map(([rootLabel, branches]) => ({
+    rootLabel,
+    branches: Array.from(branches.entries()).map(([branchLabel, clusters]) => ({
+      branchLabel,
+      clusters: Array.from(clusters.entries()).map(([clusterLabel, data]) => ({
+        clusterLabel,
+        anchors: data.anchors,
+        legacyNodes: data.legacyNodes,
+      })),
+    })),
+  }));
+}
+
 export function buildReflectionTree(questions: Question[]): Array<{
   rootLabel: string;
   branches: Array<{ branchLabel: string; clusters: Array<{ clusterLabel: string; nodes: KnowledgeNode[] }> }>;

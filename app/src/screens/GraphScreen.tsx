@@ -8,7 +8,7 @@ import type { Question } from '../types';
 import { graphService } from '../services/graph.service';
 import { toast } from '../lib/toast';
 import { Header, HEADER_HEIGHT } from '../components/ui/Header';
-import { buildReflectionTree } from '../services/canonical-knowledge.service';
+import { buildAnchorReflectionTree } from '../services/canonical-knowledge.service';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -37,50 +37,49 @@ function buildMindElixirData(nodes: Question[]): MindElixirData {
   };
 
   if (nodes.length === 0) return { nodeData: rootObj };
-  const reflection = buildReflectionTree(nodes);
+  const reflection = buildAnchorReflectionTree(nodes);
 
   const children: NodeObj[] = [];
   for (const root of reflection) {
-    if (root.rootLabel === 'Knowledge') {
-      // Promote the fallback "Knowledge" root's branches directly under the main root
-      // to avoid a near-duplicate of "Knowledge Reflection" → "Knowledge".
-      for (const branch of root.branches) {
-        children.push({
-          id: `branch-${root.rootLabel}-${branch.branchLabel}`,
-          topic: branch.branchLabel,
-          expanded: true,
-          children: branch.clusters.map((cluster) => ({
-            id: `cluster-${root.rootLabel}-${branch.branchLabel}-${cluster.clusterLabel}`,
-            topic: cluster.clusterLabel,
-            expanded: true,
-            children: cluster.nodes.map((node) => ({
-              id: node.id,
-              topic: truncate(node.title, 60),
+    const branchNodes: NodeObj[] = root.branches.map((branch) => ({
+      id: `branch-${root.rootLabel}-${branch.branchLabel}`,
+      topic: branch.branchLabel,
+      expanded: true,
+      children: branch.clusters.map((cluster) => ({
+        id: `cluster-${root.rootLabel}-${branch.branchLabel}-${cluster.clusterLabel}`,
+        topic: cluster.clusterLabel,
+        expanded: true,
+        children: [
+          // Anchor nodes as leaves (with collapsed Q&A children)
+          ...cluster.anchors.map(({ anchor, qaChildren }) => ({
+            id: anchor.id,
+            topic: `${truncate(anchor.title || anchor.content, 50)}${qaChildren.length > 0 ? ` (${qaChildren.length})` : ''}`,
+            expanded: false,
+            children: qaChildren.map((qa) => ({
+              id: qa.id,
+              topic: truncate(qa.title || qa.content, 60),
               children: [],
             })),
           })),
-        });
-      }
+          // Legacy nodes (no anchor) shown directly as leaves
+          ...cluster.legacyNodes.map((node) => ({
+            id: node.id,
+            topic: truncate(node.title || node.content, 60),
+            children: [],
+          })),
+        ],
+      })),
+    }));
+
+    if (root.rootLabel === 'Knowledge') {
+      // Promote "Knowledge" root branches directly under main root
+      children.push(...branchNodes);
     } else {
       children.push({
         id: `root-${root.rootLabel}`,
         topic: root.rootLabel,
         expanded: true,
-        children: root.branches.map((branch) => ({
-          id: `branch-${root.rootLabel}-${branch.branchLabel}`,
-          topic: branch.branchLabel,
-          expanded: true,
-          children: branch.clusters.map((cluster) => ({
-            id: `cluster-${root.rootLabel}-${branch.branchLabel}-${cluster.clusterLabel}`,
-            topic: cluster.clusterLabel,
-            expanded: true,
-            children: cluster.nodes.map((node) => ({
-              id: node.id,
-              topic: truncate(node.title, 60),
-              children: [],
-            })),
-          })),
-        })),
+        children: branchNodes,
       });
     }
   }
@@ -643,11 +642,19 @@ export function GraphScreen() {
 
           {selectedNode && (
             <div
-              onClick={() => navigate(`/ask/${selectedNode.id}`)}
-              style={{ padding: '16px', borderRadius: 'var(--radius-xl)', backgroundColor: 'var(--surface-variant)', border: '1px solid var(--border)', animation: 'fade-in 0.2s ease', cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' }}
-              onPointerEnter={(e) => { e.currentTarget.style.transform = 'scale(1.01)'; e.currentTarget.style.boxShadow = 'var(--shadow-2)'; }}
+              onClick={() => {
+                // Don't navigate to ask/:id for anchor nodes (they have no conversation)
+                if (!selectedNode.isAnchorNode) navigate(`/ask/${selectedNode.id}`);
+              }}
+              style={{ padding: '16px', borderRadius: 'var(--radius-xl)', backgroundColor: 'var(--surface-variant)', border: '1px solid var(--border)', animation: 'fade-in 0.2s ease', cursor: selectedNode.isAnchorNode ? 'default' : 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' }}
+              onPointerEnter={(e) => { if (!selectedNode.isAnchorNode) { e.currentTarget.style.transform = 'scale(1.01)'; e.currentTarget.style.boxShadow = 'var(--shadow-2)'; } }}
               onPointerLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
             >
+              {selectedNode.isAnchorNode && (
+                <p style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--primary-40)', marginBottom: '4px' }}>
+                  CONCEPT ANCHOR — {selectedNode.qaCount || 0} Q&As
+                </p>
+              )}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                 <p style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--foreground)', flex: 1 }}>
                   {selectedNode.title ?? selectedNode.content}
@@ -673,10 +680,12 @@ export function GraphScreen() {
                 <p style={{ fontSize: '0.72rem', color: 'var(--muted-foreground)' }}>
                   {selectedNode.relatedQuestionIds.length} connections
                 </p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: 'var(--primary-40)', fontWeight: 600 }}>
-                  <span>View details</span>
-                  <ChevronRight size={14} />
-                </div>
+                {!selectedNode.isAnchorNode && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: 'var(--primary-40)', fontWeight: 600 }}>
+                    <span>View details</span>
+                    <ChevronRight size={14} />
+                  </div>
+                )}
               </div>
             </div>
           )}
