@@ -36,6 +36,14 @@
 - [ ] **CARDS-02**: Cards alternate or shuffle designs to prevent visual fatigue
 - [ ] **CARDS-03**: All card designs maintain accessibility and readability standards
 
+### Knowledge Graph Classification (GRAPH)
+- [ ] **GRAPH-01**: Classification uses a dedicated second LLM call (fired only after filterQuestion confirms Q&A enters mindmap), keeping answer generation and placement decisions separate
+- [ ] **GRAPH-02**: Second classification call receives the question text, a ≤30-word self-answer for context, most descriptive keyword, and the existing branches/clusters from the tree — never inherits labels from poorly-classified existing nodes
+- [x] **GRAPH-03**: `decideIngestionOutcome` returns only `{ outcome, targetNodeId }` — all label fields stripped; labels sourced exclusively from the second call
+- [x] **GRAPH-04**: Concept anchor nodes are explicitly created by LLM with a clean noun/concept name (e.g., "Transformer"), separate from individual Q&A leaf nodes
+- [x] **GRAPH-05**: Q&A nodes attach to their concept anchor via `parentId`; anchor maintains an append-only `nodeSummary` log of short Q&A summaries (≤80 words each) with Q&A ID bindings
+- [ ] **GRAPH-06**: Mindmap renders only concept anchor nodes as leaves; individual Q&As are hidden and accessible via Mind-Elixir expand/retract on each anchor node
+
 ---
 
 ## Requirements by Category
@@ -54,6 +62,9 @@
 
 ### Visual Variety (3 requirements)
 - CARDS-01 through CARDS-03: Multiple card designs, rotation strategy
+
+### Knowledge Graph Classification (6 requirements)
+- GRAPH-01 through GRAPH-06: Two-call classification architecture, anchor node schema, Q&A attachment, mindmap rendering of anchors only
 
 ---
 

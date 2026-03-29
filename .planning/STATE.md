@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
-status: Executing Phase 13
-stopped_at: Completed 13-01-PLAN.md (Planner Redesign — Thread Removal, Signal Extraction, Weak Area Detection, Priority Badges)
-last_updated: "2026-03-28T12:00:00.000Z"
+status: Executing Phase 14
+stopped_at: Completed 14-01-PLAN.md (Type Foundation & Two-Call Split)
+last_updated: "2026-03-29T19:17:09.566Z"
 progress:
-  total_phases: 7
+  total_phases: 8
   completed_phases: 3
-  total_plans: 7
-  completed_plans: 6
+  total_plans: 10
+  completed_plans: 7
 ---
 
 # Project State: Milestone 1.1
@@ -35,6 +35,7 @@ Phase 9 - Image Regeneration & Error Handling (next to start)
 - **Phase 11:** Planner Retry & Milestone Card Variety (COMPLETE)
 - **Phase 12:** Portal Navigation & Rich Moves Linking (12-01-PLAN.md — COMPLETE, 12-02-PLAN.md — COMPLETE)
 - **Phase 13:** Planner Redesign (13-01-PLAN.md — COMPLETE)
+- **Phase 14:** Knowledge Graph Classification & Anchor Nodes (14-01-PLAN.md — COMPLETE)
 
 ## Latest Decisions
 
@@ -72,8 +73,16 @@ Phase 9 - Image Regeneration & Error Handling (next to start)
 ## Last Session
 
 Completed Phase 13 Plan 01 (13-01-PLAN.md) — Planner Redesign: Thread Removal, Signal Extraction Fix, Weak Area Detection, Priority Badges
-**Stopped At:** Completed 13-01-PLAN.md (Planner Redesign — Thread Removal, Signal Extraction, Weak Area Detection, Priority Badges)
+**Stopped At:** Completed 14-01-PLAN.md (Type Foundation & Two-Call Split)
 **Date:** 2026-03-28
+
+## Latest Decisions (Phase 14-01)
+
+- [Phase 14-01] IngestionDecision stripped to outcome+targetNodeId only — labels come from dedicated second call (Plan 02)
+- [Phase 14-01] First LLM call schema now requests shortSummary (<=80 words) instead of knowledgeDecision
+- [Phase 14-01] formatCandidateContextPack feedback loop removed from ask() system prompt — was source of vague branch names
+- [Phase 14-01] Anchor nodes excluded from projectQuestionsToKnowledgeNodes via isAnchorNode===true guard
+- [Phase 14-01] ClassificationResult interface exported with anchorName+anchorId for Plan 02 consumption
 
 ## Latest Decisions (Phase 13-01)
 
