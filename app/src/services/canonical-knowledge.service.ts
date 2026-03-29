@@ -68,6 +68,10 @@ export function projectQuestionToKnowledgeNode(question: Question): KnowledgeNod
   if (question.isAnchorNode === true) {
     return null;
   }
+  // Guard: cluster nodes are aggregate containers, not reviewable Q&A nodes
+  if (question.isClusterNode === true) {
+    return null;
+  }
   const placement = buildFallbackPlacement(question);
   return {
     id: question.id,
@@ -468,20 +472,75 @@ export async function classifyAndAnchor(
     // Import questionService lazily to avoid circular dependency
     const { questionService } = await import('./question.service.ts');
 
+    // Use a mutable reference to allQuestions so anchor resolution sees newly created cluster
+    let freshQuestions: Question[] = allQuestions;
+
+    // --- Resolve or create cluster node ---
+    let clusterEntityId: string | undefined;
+
+    const existingCluster = freshQuestions.find(
+      q => q.isClusterNode === true &&
+        q.branchLabel === result.branchLabel &&
+        q.clusterLabel === result.clusterLabel
+    );
+
+    if (existingCluster) {
+      clusterEntityId = existingCluster.id;
+    } else {
+      const clusterNode: Question = {
+        id: `cluster-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        timestamp: Date.now(),
+        date: new Date().toISOString().slice(0, 10),
+        content: result.clusterLabel,
+        answer: '',
+        summary: result.clusterLabel,
+        title: result.clusterLabel,
+        keywords: [],
+        relatedQuestionIds: [],
+        categoryIds: [],
+        reviewSchedule: { nextReviewDate: '9999-12-31', reviewCount: 0, easeFactor: 2.5 },
+        createdAt: Date.now(),
+        aliases: [],
+        sourcePrompts: [],
+        sourceQuestionIds: [],
+        rootLabel: result.rootLabel,
+        branchLabel: result.branchLabel,
+        clusterLabel: result.clusterLabel,
+        nodeSummary: '',
+        isClusterNode: true,
+        qaCount: 0,
+      };
+      const CLUSTER_STORAGE_KEY = 'echolearn_questions';
+      try {
+        const storedRaw = localStorage.getItem(CLUSTER_STORAGE_KEY);
+        const store: Question[] = storedRaw ? JSON.parse(storedRaw) as Question[] : [];
+        store.unshift(clusterNode);
+        localStorage.setItem(CLUSTER_STORAGE_KEY, JSON.stringify(store));
+      } catch { /* storage error */ }
+      clusterEntityId = clusterNode.id;
+
+      // Refresh freshQuestions snapshot so anchor resolution sees the new cluster
+      freshQuestions = questionService.getAll();
+    }
+
     // --- Resolve or create anchor node ---
     let anchorId: string | undefined;
 
     if (result.anchorId) {
       // Verify the referenced anchor actually exists
-      const existingAnchor = allQuestions.find(q => q.id === result.anchorId && q.isAnchorNode === true);
+      const existingAnchor = freshQuestions.find(q => q.id === result.anchorId && q.isAnchorNode === true);
       if (existingAnchor) {
         anchorId = existingAnchor.id;
+        // Patch existing anchor with clusterNodeId if it doesn't have one
+        if (clusterEntityId && !existingAnchor.clusterNodeId) {
+          questionService.patchQuestion(existingAnchor.id, { clusterNodeId: clusterEntityId });
+        }
       }
     }
 
     if (!anchorId) {
       // Check if an anchor with the same name already exists under the same cluster
-      const existingByName = allQuestions.find(
+      const existingByName = freshQuestions.find(
         q => q.isAnchorNode === true &&
           q.title?.toLowerCase() === result.anchorName.toLowerCase() &&
           q.clusterLabel === result.clusterLabel
@@ -489,6 +548,10 @@ export async function classifyAndAnchor(
 
       if (existingByName) {
         anchorId = existingByName.id;
+        // Patch existing anchor with clusterNodeId if it doesn't have one
+        if (clusterEntityId && !existingByName.clusterNodeId) {
+          questionService.patchQuestion(existingByName.id, { clusterNodeId: clusterEntityId });
+        }
       } else {
         // Create a new anchor node
         const anchorNode: Question = {
@@ -513,6 +576,7 @@ export async function classifyAndAnchor(
           nodeSummary: '',
           isAnchorNode: true,
           qaCount: 0,
+          clusterNodeId: clusterEntityId,
         };
 
         // Save anchor directly to localStorage (same storage key as questionService)
@@ -539,6 +603,7 @@ export async function classifyAndAnchor(
       clusterLabel: result.clusterLabel,
       placementReason: `Classified under ${result.branchLabel} > ${result.clusterLabel} > ${result.anchorName}`,
       parentId: anchorId,
+      clusterNodeId: clusterEntityId,
     });
 
     // Update anchor: increment qaCount and append to nodeSummary
@@ -557,6 +622,16 @@ export async function classifyAndAnchor(
           clusterLabel: result.clusterLabel,
         });
       }
+    }
+
+    // Update cluster entity: aggregate qaCount from all child anchors
+    if (clusterEntityId) {
+      const freshStore = questionService.getAll();
+      const childAnchors = freshStore.filter(q => q.isAnchorNode === true && q.clusterNodeId === clusterEntityId);
+      const totalQaCount = childAnchors.reduce((sum, a) => sum + (a.qaCount || 0), 0);
+      questionService.patchQuestion(clusterEntityId, {
+        qaCount: totalQaCount,
+      });
     }
   } catch (err) {
     // Second call failed — Q&A keeps whatever labels it had (empty/undefined from first call).
@@ -587,6 +662,7 @@ export function buildAnchorReflectionTree(questions: Question[]): Array<{
     branchLabel: string;
     clusters: Array<{
       clusterLabel: string;
+      clusterEntity: Question | undefined;
       anchors: Array<{ anchor: Question; qaChildren: Question[] }>;
       legacyNodes: Question[];
     }>;
@@ -598,6 +674,7 @@ export function buildAnchorReflectionTree(questions: Question[]): Array<{
 
   for (const q of questions) {
     if (q.flagged === true) continue;
+    if (q.isClusterNode === true) continue;
     if (q.isAnchorNode === true) {
       anchorMap.set(q.id, q);
       if (!anchoredQAs.has(q.id)) anchoredQAs.set(q.id, []);
@@ -606,6 +683,7 @@ export function buildAnchorReflectionTree(questions: Question[]): Array<{
 
   for (const q of questions) {
     if (q.flagged === true) continue;
+    if (q.isClusterNode === true) continue;
     if (q.isAnchorNode === true) continue;
     if (q.parentId && anchorMap.has(q.parentId)) {
       anchoredQAs.get(q.parentId)!.push(q);
@@ -647,12 +725,21 @@ export function buildAnchorReflectionTree(questions: Question[]): Array<{
     cluster.legacyNodes.push(q);
   }
 
+  const clusterEntities = new Map<string, Question>();
+  for (const q of questions) {
+    if (q.isClusterNode === true) {
+      const key = `${q.branchLabel || ''}::${q.clusterLabel || ''}`;
+      clusterEntities.set(key, q);
+    }
+  }
+
   return Array.from(grouped.entries()).map(([rootLabel, branches]) => ({
     rootLabel,
     branches: Array.from(branches.entries()).map(([branchLabel, clusters]) => ({
       branchLabel,
       clusters: Array.from(clusters.entries()).map(([clusterLabel, data]) => ({
         clusterLabel,
+        clusterEntity: clusterEntities.get(`${branchLabel}::${clusterLabel}`),
         anchors: data.anchors,
         legacyNodes: data.legacyNodes,
       })),
