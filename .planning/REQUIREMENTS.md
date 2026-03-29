@@ -46,11 +46,11 @@
 
 ### Cluster Detail System (CLUSTER)
 - [ ] **CLUSTER-01**: Cluster nodes stored as Question entities with `isClusterNode: true` flag and metadata (title, nodeSummary, qaCount aggregated from child anchors)
-- [ ] **CLUSTER-02**: Tapping a cluster node in the mindmap graph shows a bottom detail panel with cluster name, total Q&A count, and "View details" CTA
-- [ ] **CLUSTER-03**: Cluster detail page at `/cluster/:id` aggregates and displays all Q&As and summaries from every child anchor under the cluster
-- [ ] **CLUSTER-04**: "Review Flashcards" button on cluster detail gathers flashcards from all Q&As across all child anchors and launches a filtered review session
-- [ ] **CLUSTER-05**: "Learn as Post" button on cluster detail generates an essay using only `nodeSummary` entries from child anchors
-- [ ] **CLUSTER-06**: Cluster label in anchor detail breadcrumb is tappable and navigates to the cluster detail page
+- [x] **CLUSTER-02**: Tapping a cluster node in the mindmap graph shows a bottom detail panel with cluster name, total Q&A count, and "View details" CTA
+- [x] **CLUSTER-03**: Cluster detail page at `/cluster/:id` aggregates and displays all Q&As and summaries from every child anchor under the cluster
+- [x] **CLUSTER-04**: "Review Flashcards" button on cluster detail gathers flashcards from all Q&As across all child anchors and launches a filtered review session
+- [x] **CLUSTER-05**: "Learn as Post" button on cluster detail generates an essay using only `nodeSummary` entries from child anchors
+- [x] **CLUSTER-06**: Cluster label in anchor detail breadcrumb is tappable and navigates to the cluster detail page
 
 ---
 

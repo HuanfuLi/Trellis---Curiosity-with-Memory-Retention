@@ -204,10 +204,10 @@
 
 **Goal:** Extend the anchor detail system (bottom panel, detail page, review buttons) to cluster-level nodes, so users can view aggregated Q&As and summaries from all child anchors, review flashcards across an entire cluster, and generate post essays from cluster-wide knowledge.
 
-**Plans:** 3 plans (1/3 complete)
+**Plans:** 3/3 plans complete
 - [x] 15-01-PLAN.md — Type extensions + cluster creation in classifyAndAnchor + reflection tree + guards (COMPLETE 2026-03-29)
-- [ ] 15-02-PLAN.md — GraphScreen cluster node rendering + bottom panel
-- [ ] 15-03-PLAN.md — ClusterDetailScreen + route + ReviewScreen clusterReview + breadcrumb navigation
+- [x] 15-02-PLAN.md — GraphScreen cluster node rendering + bottom panel
+- [x] 15-03-PLAN.md — ClusterDetailScreen + route + ReviewScreen clusterReview + breadcrumb navigation
 
 **Requirements:**
 - CLUSTER-01: Cluster nodes stored as Question entities with isClusterNode flag
