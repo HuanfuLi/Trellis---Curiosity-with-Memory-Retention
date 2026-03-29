@@ -38,7 +38,7 @@ interface ConceptCardProps {
   onOpen: (postId: string, post: DailyPost) => void;
 }
 
-function ConceptCard({ post, feedIndex = 0, isActive, onOpen }: ConceptCardProps) {
+function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen }: ConceptCardProps) {
   const badge = CONCEPT_BADGE_META[post.sourceType] ?? FALLBACK_BADGE;
 
   // ── Image generation state ──────────────────────────────────────────────────

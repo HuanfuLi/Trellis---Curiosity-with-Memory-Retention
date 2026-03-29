@@ -20,6 +20,13 @@ interface ConnectionMeta {
   conceptNounB: string;
 }
 
+interface DiscoverMeta {
+  /** Concept name / topic for the essay. */
+  concept: string;
+  /** LLM-generated essay title (from chunk.goal). */
+  title: string;
+}
+
 let msgIdCounter = 0;
 function newMsgId(prefix: string): string {
   return `${prefix}-${Date.now()}-${++msgIdCounter}`;
@@ -31,7 +38,7 @@ export function PostDetailScreen() {
   const { id } = useParams();
   const { questions } = useQuestions();
 
-  const locationState = location.state as { post?: DailyPost; connectionMeta?: ConnectionMeta } | null;
+  const locationState = location.state as { post?: DailyPost; connectionMeta?: ConnectionMeta; discoverMeta?: DiscoverMeta } | null;
   const passedPost = locationState?.post ?? null;
 
   // Extract move navigation context (when navigated from a suggested move)
@@ -43,9 +50,10 @@ export function PostDetailScreen() {
       moveState.linkedResource.id, '!=', id
     );
   }
-  // connectionMeta is stable per navigation — read once via ref so the generation
-  // effect does not re-fire when the parent re-renders.
+  // connectionMeta and discoverMeta are stable per navigation — read once via ref so the
+  // generation effect does not re-fire when the parent re-renders.
   const connectionMetaRef = useRef<ConnectionMeta | null>(locationState?.connectionMeta ?? null);
+  const discoverMetaRef = useRef<DiscoverMeta | null>(locationState?.discoverMeta ?? null);
 
   const [post, setPost] = useState<DailyPost | null>(null);
   const [session, setSession] = useState<ChatSession | null>(null);
@@ -89,10 +97,12 @@ export function PostDetailScreen() {
       return;
     }
 
-    // Post not in cache — if connection metadata was passed, generate the essay here
-    // so the user lands in PostDetailScreen with full Q&A capability.
-    const meta = connectionMetaRef.current;
-    if (meta) {
+    // Post not in cache — check for generation metadata
+    const connectionMeta = connectionMetaRef.current;
+    const discoverMeta = discoverMetaRef.current;
+
+    if (connectionMeta) {
+      // Connection essay: stream from two source questions
       setLoadingPost(false);
       setIsGeneratingEssay(true);
 
@@ -100,10 +110,10 @@ export function PostDetailScreen() {
         let accumulated = '';
         try {
           for await (const chunk of conceptFeedService.generateConnectionPost(
-            meta.questionA,
-            meta.questionB,
-            meta.conceptNounA,
-            meta.conceptNounB,
+            connectionMeta.questionA,
+            connectionMeta.questionB,
+            connectionMeta.conceptNounA,
+            connectionMeta.conceptNounB,
           )) {
             if (generateAbortRef.current) return;
             accumulated += chunk;
@@ -111,13 +121,47 @@ export function PostDetailScreen() {
           }
           if (generateAbortRef.current) return;
           const saved = conceptFeedService.saveConnectionPost(
-            meta.questionA,
-            meta.questionB,
-            meta.conceptNounA,
-            meta.conceptNounB,
+            connectionMeta.questionA,
+            connectionMeta.questionB,
+            connectionMeta.conceptNounA,
+            connectionMeta.conceptNounB,
             accumulated,
           );
-          conceptFeedService.setConnectionPostId(meta.questionA.id, meta.questionB.id, saved.id);
+          conceptFeedService.setConnectionPostId(connectionMeta.questionA.id, connectionMeta.questionB.id, saved.id);
+          setPost(saved);
+          setSession(sessionService.getOrCreatePostSession(saved, questionsRef.current));
+          setEssayStreaming('');
+        } catch (err) {
+          if (!generateAbortRef.current) {
+            setEssayError(err instanceof Error ? err.message : 'Generation failed. Check your AI settings.');
+          }
+        } finally {
+          if (!generateAbortRef.current) setIsGeneratingEssay(false);
+        }
+      })();
+
+      return () => { generateAbortRef.current = true; };
+    }
+
+    if (discoverMeta && id) {
+      // Discover essay: stream an exploratory post for a curiosity topic
+      setLoadingPost(false);
+      setIsGeneratingEssay(true);
+
+      void (async () => {
+        let accumulated = '';
+        try {
+          for await (const chunk of conceptFeedService.generateDiscoverPost(
+            discoverMeta.concept,
+            discoverMeta.title,
+          )) {
+            if (generateAbortRef.current) return;
+            accumulated += chunk;
+            setEssayStreaming(accumulated);
+          }
+          if (generateAbortRef.current) return;
+          // Use the URL id as stable post ID so revisits find it in cache
+          const saved = conceptFeedService.saveDiscoverPost(discoverMeta.concept, discoverMeta.title, accumulated, id);
           setPost(saved);
           setSession(sessionService.getOrCreatePostSession(saved, questionsRef.current));
           setEssayStreaming('');
@@ -135,7 +179,7 @@ export function PostDetailScreen() {
 
     setPost(null);
     setLoadingPost(false);
-  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps -- passedPost and connectionMeta are stable per navigation
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps -- passedPost, connectionMeta, discoverMeta are stable per navigation
 
   // Fetch cached images for the carousel whenever the post changes.
   // If no images are cached (post has none or generation hasn't run), shows essay alone.
@@ -231,20 +275,21 @@ export function PostDetailScreen() {
     );
   }
 
-  // Connection essay is being generated — show streaming content before the Q&A section is ready.
+  // Essay is being generated — show streaming content before the Q&A section is ready.
   if (isGeneratingEssay || essayError) {
-    const meta = connectionMetaRef.current;
+    const connMeta = connectionMetaRef.current;
+    const discMeta = discoverMetaRef.current;
     return (
       <div style={{ padding: '16px 16px 104px', maxWidth: '448px', margin: '0 auto' }}>
-        <button onClick={() => navigate('/home')} style={{ background: 'none', padding: '4px 2px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px', fontSize: '0.95rem' }}>
+        <button onClick={() => navigate(-1)} style={{ background: 'none', padding: '4px 2px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px', fontSize: '0.95rem' }}>
           <ArrowLeft size={18} />
-          Back to Home
+          Back
         </button>
 
-        {/* Concept pills */}
-        {meta && (
+        {/* Connection concept pills */}
+        {connMeta && (
           <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
-            {[meta.conceptNounA, meta.conceptNounB].map((noun, i) => (
+            {[connMeta.conceptNounA, connMeta.conceptNounB].map((noun, i) => (
               <span
                 key={i}
                 style={{
@@ -259,6 +304,19 @@ export function PostDetailScreen() {
                 {noun}
               </span>
             ))}
+          </div>
+        )}
+
+        {/* Discover title pill */}
+        {discMeta && (
+          <div style={{ marginBottom: '20px' }}>
+            <span style={{
+              padding: '6px 16px', borderRadius: '100px',
+              backgroundColor: 'var(--node-peach)',
+              color: 'var(--foreground)', fontWeight: 700, fontSize: '0.875rem',
+            }}>
+              {discMeta.title}
+            </span>
           </div>
         )}
 

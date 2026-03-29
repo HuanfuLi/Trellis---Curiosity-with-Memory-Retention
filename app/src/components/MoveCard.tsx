@@ -10,7 +10,8 @@
  *  - Accept and dismiss actions
  */
 
-import { BookOpen, Zap, Link2, Mic } from 'lucide-react';
+import { BookOpen, FileText, Link2, Mic, RefreshCw } from 'lucide-react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { PlannedMove, PlannedMoveType } from '../types';
 import { Card } from './ui/Card';
@@ -28,14 +29,14 @@ const MOVE_TYPE_CONFIG: Record<PlannedMoveType, {
     label: 'Review',
     color: 'var(--node-mint)',
   },
-  deepdive: {
-    icon: <Zap size={14} />,
-    label: 'Deep Dive',
+  read: {
+    icon: <FileText size={14} />,
+    label: 'Read',
     color: 'var(--node-sky)',
   },
-  connection: {
+  compare: {
     icon: <Link2 size={14} />,
-    label: 'Connection',
+    label: 'Compare',
     color: 'var(--node-lilac)',
   },
   podcast: {
@@ -50,8 +51,8 @@ const MOVE_TYPE_CONFIG: Record<PlannedMoveType, {
 function getPriorityBadge(score: number): { emoji: string; label: string; bg: string } {
   if (score >= 75) return { emoji: '🔴', label: 'WEAK AREA', bg: 'color-mix(in srgb, #ef4444 12%, transparent)' };
   if (score >= 60) return { emoji: '🟠', label: 'OVERDUE', bg: 'color-mix(in srgb, #f97316 12%, transparent)' };
-  if (score >= 45) return { emoji: '🟡', label: 'ACTIVE', bg: 'color-mix(in srgb, #eab308 12%, transparent)' };
-  return { emoji: '⚪', label: 'EXPLORE', bg: 'var(--surface-variant)' };
+  if (score >= 45) return { emoji: '🟡', label: 'RECENT', bg: 'color-mix(in srgb, #eab308 12%, transparent)' };
+  return { emoji: '⚪', label: 'GOOD', bg: 'var(--surface-variant)' };
 }
 
 // ── Score bar component ────────────────────────────────────────────────────
@@ -97,20 +98,36 @@ interface MoveCardProps {
   onAccept: (id: string) => void;
   onDismiss: (id: string) => void;
   onNavigate?: (success: boolean) => void;
+  onRegenerate?: (moveId: string) => Promise<void>;
 }
 
-export function MoveCard({ move, onAccept, onDismiss, onNavigate }: MoveCardProps) {
-  const config = MOVE_TYPE_CONFIG[move.moveType];
+export function MoveCard({ move, onAccept, onDismiss, onNavigate, onRegenerate }: MoveCardProps) {
+  const config = MOVE_TYPE_CONFIG[move.moveType] ?? MOVE_TYPE_CONFIG.review;
   const badge = getPriorityBadge(move.relevanceScore);
   const navigate = useNavigate();
+  const [isRegenerating, setIsRegenerating] = useState(false);
+
+  const noPost = (move.moveType === 'compare' || move.moveType === 'read') && !move.linkedResource?.id;
 
   const handleCardClick = () => {
+    if (noPost) return;
     void navigateToMove(move, navigate, {
       fromScreen: 'planner',
       replace: false,
     }).then((success) => {
       onNavigate?.(success);
     });
+  };
+
+  const handleRegenerate = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onRegenerate || isRegenerating) return;
+    setIsRegenerating(true);
+    try {
+      await onRegenerate(move.id);
+    } finally {
+      setIsRegenerating(false);
+    }
   };
 
   return (
@@ -120,7 +137,7 @@ export function MoveCard({ move, onAccept, onDismiss, onNavigate }: MoveCardProp
         borderLeft: `3px solid ${config.color}`,
         padding: '14px 16px',
         marginBottom: '10px',
-        cursor: 'pointer',
+        cursor: noPost ? 'default' : 'pointer',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
@@ -178,6 +195,29 @@ export function MoveCard({ move, onAccept, onDismiss, onNavigate }: MoveCardProp
 
           {/* Relevance score bar */}
           <ScoreBar score={move.relevanceScore} color={config.color} />
+
+          {/* No-post notice with Regenerate */}
+          {noPost && (
+            <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)' }}>No post found</span>
+              {onRegenerate && (
+                <button
+                  onClick={(e) => { void handleRegenerate(e); }}
+                  disabled={isRegenerating}
+                  className="active-squish"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '4px',
+                    padding: '3px 8px', borderRadius: '8px', fontSize: '0.72rem',
+                    fontWeight: 600, backgroundColor: 'var(--surface-variant)',
+                    color: 'var(--muted-foreground)', border: '1px solid var(--border)',
+                  }}
+                >
+                  <RefreshCw size={11} />
+                  {isRegenerating ? 'Generating…' : 'Regenerate'}
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Actions */}

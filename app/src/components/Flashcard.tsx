@@ -39,11 +39,13 @@ export function Flashcard({ front, back, onRate, pinned, onTogglePin }: Flashcar
           padding: '32px',
           marginBottom: '24px',
           minHeight: '280px',
+          maxHeight: '60vh',
           display: 'flex',
-          alignItems: 'center',
+          flexDirection: 'column',
           justifyContent: 'center',
           borderRadius: 'var(--radius-xl)',
           boxShadow: 'var(--shadow-2)',
+          overflow: 'hidden',
         }}
       >
         {/* Pin button — top-right corner */}
@@ -72,7 +74,7 @@ export function Flashcard({ front, back, onRate, pinned, onTogglePin }: Flashcar
           </button>
         )}
 
-        <div style={{ width: '100%' }}>
+        <div style={{ width: '100%', overflowY: 'auto', minHeight: 0 }}>
           {!isFlipped ? (
             <div>
               <p

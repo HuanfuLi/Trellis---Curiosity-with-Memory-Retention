@@ -159,11 +159,11 @@ export const plannerAutoGenService = {
     if (!move) return false;
 
     // Map move type to chunk type
-    const typeMap: Record<PlannedMove['moveType'], 'retrieve' | 'repair' | 'connect' | 'create'> = {
-      review: 'retrieve',
-      deepdive: 'create',
-      connection: 'connect',
-      podcast: 'repair',
+    const typeMap: Record<PlannedMove['moveType'], 'review' | 'compare' | 'discover'> = {
+      review: 'review',
+      read: 'discover',
+      compare: 'compare',
+      podcast: 'review',
     };
 
     plannerService.createChunk({

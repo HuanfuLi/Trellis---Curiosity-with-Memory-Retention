@@ -326,6 +326,66 @@ function findLinkedConceptIds(signal: string): string[] {
     .map((m) => m.id);
 }
 
+// ── Post lookup (avoids circular import with concept-feed.service) ─────────
+
+const POSTS_STORAGE_KEY = 'echolearn_daily_posts';
+
+function findClosestCachedPost(conceptIds: string[], connectionOnly: boolean): string | null {
+  try {
+    const raw = localStorage.getItem(POSTS_STORAGE_KEY);
+    if (!raw) return null;
+    const cached = JSON.parse(raw) as { posts?: Array<{ id: string; sourceType: string; sourceQuestionIds: unknown }> };
+    if (!Array.isArray(cached?.posts)) return null;
+
+    const posts = connectionOnly
+      ? cached.posts.filter((p) => p.sourceType === 'connection')
+      : cached.posts.filter((p) => p.sourceType !== 'connection');
+
+    const idSet = new Set(conceptIds);
+    let bestId: string | null = null;
+    let bestScore = 0;
+    for (const post of posts) {
+      if (!Array.isArray(post.sourceQuestionIds)) continue;
+      const overlap = (post.sourceQuestionIds as string[]).filter((id) => idSet.has(id)).length;
+      if (overlap > bestScore) {
+        bestScore = overlap;
+        bestId = post.id;
+      }
+    }
+    return bestId;
+  } catch {
+    return null;
+  }
+}
+
+// ── Discover title generation ───────────────────────────────────────────────
+
+async function generateDiscoverTitle(
+  topic: string,
+  settings: ReturnType<typeof mockSettingsService.getSync>,
+): Promise<string> {
+  if (!settings.llm.isConfigured) return `Discover: ${topic}`;
+  try {
+    const response = await chatCompletion(
+      [
+        {
+          role: 'system',
+          content: 'You generate short, compelling educational essay titles. Return only the title text (5-10 words), no quotes, no explanation.',
+        },
+        {
+          role: 'user',
+          content: `Topic: "${topic}"\nWrite a short essay title introducing this concept to a curious learner.`,
+        },
+      ],
+      settings.llm,
+    );
+    const title = response.trim().replace(/^["']|["']$/g, '');
+    return title || `Discover: ${topic}`;
+  } catch {
+    return `Discover: ${topic}`;
+  }
+}
+
 // ── Service ────────────────────────────────────────────────────────────────
 
 export const plannerService = {
@@ -400,6 +460,18 @@ export const plannerService = {
     return { ...chunk };
   },
 
+  updateChunkLinkedPost(chunkId: string, linkedPostId: string): PlannerChunk | null {
+    const chunks = loadChunks();
+    const chunk = chunks.find((c) => c.id === chunkId);
+    if (!chunk) return null;
+    chunk.linkedPostId = linkedPostId;
+    chunk.updatedAt = Date.now();
+    saveChunks(chunks);
+    persistChunkToSQLite(chunk);
+    eventBus.emit({ type: 'PLANNER_UPDATED', payload: { reason: 'chunk' } });
+    return { ...chunk };
+  },
+
   deleteChunk(chunkId: string): boolean {
     const chunks = loadChunks();
     const idx = chunks.findIndex((c) => c.id === chunkId);
@@ -438,6 +510,7 @@ export const plannerService = {
       goal: string,
       linkedConceptIds: string[],
       sourceSignal: PlannerChunk['sourceSignal'],
+      linkedPostId?: string,
     ): PlannerChunk | null {
       if (existingGoals.has(goal.toLowerCase())) return null;
       existingGoals.add(goal.toLowerCase());
@@ -455,6 +528,7 @@ export const plannerService = {
         sourceSignal,
         sourceText: content,
         priorityReason: sourceSignal ? priorityReasonMap[sourceSignal] : undefined,
+        linkedPostId,
         status: 'suggested',
         createdAt: now,
         updatedAt: now,
@@ -463,28 +537,31 @@ export const plannerService = {
       return chunk;
     }
 
-    // Process confusion signals → repair chunks (flashcards)
+    // Process confusion signals → review chunks (flashcards)
     for (const item of signals.confusion) {
       const conceptIds = findLinkedConceptIds(item);
-      makeChunk('repair', `Clarify: ${item}`, conceptIds, 'confusion');
+      makeChunk('review', `Clarify: ${item}`, conceptIds, 'confusion');
     }
 
-    // Process connections → connect chunks (questions)
+    // Process connections → compare chunks (connection post lookup)
     for (const item of signals.connections) {
       const conceptIds = findLinkedConceptIds(item);
-      makeChunk('connect', `Explore: ${item}`, conceptIds, 'connection');
+      const linkedPostId = findClosestCachedPost(conceptIds, true) ?? undefined;
+      makeChunk('compare', `Compare: ${item}`, conceptIds, 'connection', linkedPostId);
     }
 
-    // Process curiosity → connect chunks (posts — exploration intent)
-    for (const item of signals.curiosity) {
-      const conceptIds = findLinkedConceptIds(item);
-      makeChunk('connect', `Explore: ${item}`, conceptIds, 'curiosity');
-    }
-
-    // Process revisit intent → retrieve chunks (spaced repetition)
+    // Process revisit intent → review chunks (spaced repetition)
     for (const item of signals.revisitIntent) {
       const conceptIds = findLinkedConceptIds(item);
-      makeChunk('retrieve', `Revisit: ${item}`, conceptIds, 'revisit');
+      makeChunk('review', `Revisit: ${item}`, conceptIds, 'revisit');
+    }
+
+    // Process curiosity → discover chunks (LLM generates essay title)
+    const settings = mockSettingsService.getSync();
+    for (const item of signals.curiosity) {
+      const conceptIds = findLinkedConceptIds(item);
+      const title = await generateDiscoverTitle(item, settings);
+      makeChunk('discover', title, conceptIds, 'curiosity');
     }
 
     // ── Batched persist: single write per store, single event emit ────────

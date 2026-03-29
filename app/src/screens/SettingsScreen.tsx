@@ -164,7 +164,7 @@ export function SettingsScreen() {
 
   const saveEmbedding = (current: EmbeddingConfig = embedding) => {
     const isConfigured =
-      current.provider === 'local' ? !!current.baseUrl :
+      current.provider === 'local' || current.provider === 'lmstudio' ? !!current.baseUrl :
         !!current.apiKey;
     mockSettingsService.set('embedding', { ...current, isConfigured });
   };
@@ -201,7 +201,7 @@ export function SettingsScreen() {
     setTestResult((prev) => ({ ...prev, embedding: null }));
     const config: EmbeddingConfig = {
       ...embedding,
-      isConfigured: embedding.provider === 'local' ? !!embedding.baseUrl : !!embedding.apiKey,
+      isConfigured: embedding.provider === 'local' || embedding.provider === 'lmstudio' ? !!embedding.baseUrl : !!embedding.apiKey,
     };
     const start = Date.now();
     try {
@@ -467,22 +467,24 @@ export function SettingsScreen() {
             onChange={(v) => {
               const p = v as EmbeddingConfig['provider'];
               const defaults: Record<string, Partial<EmbeddingConfig>> = {
-                openai: { model: 'text-embedding-3-small', baseUrl: '', apiKey: '' },
-                google: { model: 'text-embedding-004', baseUrl: '', apiKey: '' },
-                local: { model: 'nomic-embed-text', baseUrl: 'http://localhost:11434', apiKey: '' },
+                openai:    { model: 'text-embedding-3-small', baseUrl: '', apiKey: '' },
+                google:    { model: 'text-embedding-004', baseUrl: '', apiKey: '' },
+                local:     { model: 'nomic-embed-text', baseUrl: 'http://localhost:11434', apiKey: '' },
+                lmstudio:  { model: 'nomic-embed-text', baseUrl: 'http://localhost:1234', apiKey: '' },
               };
               const next = { ...embedding, provider: p, ...defaults[p] } as EmbeddingConfig;
               setEmbedding(next);
               saveEmbedding(next);
             }}
             options={[
-              { value: 'openai', label: 'OpenAI' },
-              { value: 'google', label: 'Google' },
-              { value: 'local', label: 'Local (Ollama / LM Studio)' },
+              { value: 'openai',   label: 'OpenAI' },
+              { value: 'google',   label: 'Google' },
+              { value: 'local',    label: 'Local (Ollama)' },
+              { value: 'lmstudio', label: 'LM Studio' },
             ]}
           />
         </SettingRow>
-        {embedding.provider !== 'local' && (
+        {embedding.provider !== 'local' && embedding.provider !== 'lmstudio' && (
           <SettingRow label="API Key">
             <TextInput
               type="password"
@@ -493,13 +495,16 @@ export function SettingsScreen() {
             />
           </SettingRow>
         )}
-        {embedding.provider === 'local' && (
-          <SettingRow label="Base URL" description="Ollama or LM Studio server URL">
+        {(embedding.provider === 'local' || embedding.provider === 'lmstudio') && (
+          <SettingRow
+            label="Base URL"
+            description={embedding.provider === 'lmstudio' ? 'LM Studio server URL' : 'Ollama server URL'}
+          >
             <TextInput
               value={embedding.baseUrl ?? ''}
               onChange={(v) => setEmbedding((prev) => ({ ...prev, baseUrl: v }))}
               onBlur={() => saveEmbedding()}
-              placeholder="http://localhost:11434"
+              placeholder={embedding.provider === 'lmstudio' ? 'http://localhost:1234' : 'http://localhost:11434'}
             />
           </SettingRow>
         )}
@@ -509,9 +514,10 @@ export function SettingsScreen() {
             onChange={(v) => setEmbedding((prev) => ({ ...prev, model: v }))}
             onBlur={() => saveEmbedding()}
             placeholder={
-              embedding.provider === 'google' ? 'text-embedding-004' :
-                embedding.provider === 'local' ? 'nomic-embed-text' :
-                  'text-embedding-3-small'
+              embedding.provider === 'google'   ? 'text-embedding-004' :
+              embedding.provider === 'local'    ? 'nomic-embed-text' :
+              embedding.provider === 'lmstudio' ? 'nomic-embed-text' :
+                'text-embedding-3-small'
             }
           />
         </SettingRow>

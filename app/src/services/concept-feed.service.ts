@@ -800,4 +800,99 @@ export const conceptFeedService = {
   },
 
   buildPostOriginContext,
+
+  /**
+   * Find the cached post with the most overlap with the given concept IDs.
+   * @param conceptIds   - Question IDs to match against post sourceQuestionIds.
+   * @param connectionOnly - If true, only search connection posts (sourceType: 'connection').
+   */
+  findClosestPost(conceptIds: string[], connectionOnly = false): DailyPost | null {
+    const cached = loadCache();
+    if (!cached) return null;
+    const posts = connectionOnly
+      ? cached.posts.filter((p) => p.sourceType === 'connection')
+      : cached.posts.filter((p) => p.sourceType !== 'connection');
+    if (posts.length === 0) return null;
+
+    const idSet = new Set(conceptIds);
+    let best: DailyPost | null = null;
+    let bestScore = 0;
+    for (const post of posts) {
+      const overlap = post.sourceQuestionIds.filter((id) => idSet.has(id)).length;
+      if (overlap > bestScore) {
+        bestScore = overlap;
+        best = post;
+      }
+    }
+    return best;
+  },
+
+  /**
+   * Stream an exploratory essay for a discover chunk. Yields markdown chunks as they arrive.
+   */
+  async *generateDiscoverPost(concept: string, title: string): AsyncGenerator<string> {
+    const settings = mockSettingsService.getSync();
+    if (!settings.preferences.aiConsentGiven || !settings.llm.isConfigured) return;
+
+    const system = [
+      'You are a learning-focused educational writer.',
+      'Write an educational essay introducing a concept to a curious learner.',
+      'Use clear headers (##) and keep total length 220–380 words.',
+      'Write in a vivid, readable style — not a list or flashcard.',
+    ].join('\n');
+
+    const prompt = [
+      `Write an educational essay with the title: "${title}"`,
+      `The essay introduces the concept: "${concept}"`,
+      '',
+      'Structure the essay with:',
+      '## The Core Idea',
+      '## Why It Matters',
+      '## A Useful Way To Remember It',
+    ].join('\n');
+
+    yield* chatStream(
+      [{ role: 'system', content: system }, { role: 'user', content: prompt }],
+      settings.llm,
+    );
+  },
+
+  /** Save a completed discover essay as a DailyPost with the given stable ID. */
+  saveDiscoverPost(concept: string, title: string, bodyMarkdown: string, postId: string): DailyPost {
+    const date = today();
+    const post: DailyPost = {
+      id: postId,
+      date,
+      title,
+      teaser: { hook: title, preview: `An exploration of ${concept}.` },
+      bodyMarkdown,
+      whyCare: `Exploring ${concept} builds new connections in your learning path.`,
+      takeaway: `${concept} is worth understanding deeply — it connects to much of what you already know.`,
+      quickAskPrompts: [
+        `Can you give a concrete example of ${concept}?`,
+        `How does ${concept} relate to what I already know?`,
+        `What should I learn after understanding ${concept}?`,
+      ],
+      narrativeMode: 'mechanism-breakdown',
+      contextLabel: 'Discover',
+      sourceType: 'mixed',
+      sourceQuestionIds: [],
+      sourceQuestionTitles: [],
+      keywords: [concept.toLowerCase()],
+      generatedAt: Date.now(),
+      origin: 'ai',
+    };
+
+    const cached = loadCache();
+    const existing = cached?.posts ?? [];
+    const withoutOld = existing.filter((p) => p.id !== postId);
+    saveCache({
+      date: cached?.date ?? date,
+      fingerprint: cached?.fingerprint ?? '',
+      posts: [...withoutOld, post],
+      connectionCards: cached?.connectionCards,
+    });
+
+    return post;
+  },
 };

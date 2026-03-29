@@ -338,8 +338,8 @@ export function buildProjectedFlashcard(node: KnowledgeNode): FlashCard {
   return {
     id: `node-${node.id}`,
     sessionId: `node:${node.id}`,
-    front: node.title.endsWith('?') ? node.title : node.content,
-    back: (node.answer || node.summary).slice(0, 240),
+    front: node.title || node.content,
+    back: (node.nodeSummary || node.answer || node.summary).slice(0, 240),
     createdAt: node.createdAt,
     pinned: node.pinned,
     reviewSchedule: node.reviewSchedule,

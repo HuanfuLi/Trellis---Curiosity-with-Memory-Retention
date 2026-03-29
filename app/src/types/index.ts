@@ -59,7 +59,7 @@ export interface Category {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /** Learning action types that a chunk can represent. */
-export type ChunkType = 'retrieve' | 'repair' | 'connect' | 'create';
+export type ChunkType = 'review' | 'compare' | 'discover';
 
 // ── Trajectory & Auto-Suggestions ──────────────────────────────────────────
 
@@ -83,7 +83,7 @@ export interface TrajectorySignal {
 }
 
 /** Move types for auto-generated Planner suggestions. */
-export type PlannedMoveType = 'review' | 'deepdive' | 'connection' | 'podcast';
+export type PlannedMoveType = 'review' | 'read' | 'compare' | 'podcast';
 
 /**
  * An auto-generated Planner suggestion linking a knowledge concept to a
@@ -133,6 +133,8 @@ export interface PlannerChunk {
   sourceText?: string;
   /** Why this chunk was suggested (set by scoring service). */
   priorityReason?: string;
+  /** Post ID to navigate to (set for compare chunks; for discover, generated on demand). */
+  linkedPostId?: string;
   status: ChunkStatus;
   createdAt: number;
   updatedAt: number;
@@ -222,7 +224,7 @@ export interface AppSettings {
 }
 
 export interface EmbeddingConfig {
-  provider: 'openai' | 'google' | 'local';
+  provider: 'openai' | 'google' | 'local' | 'lmstudio';
   apiKey?: string;
   model: string;
   baseUrl?: string;

@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Play, Bookmark, Check, Trash2, Lightbulb, Link2, RefreshCw, Sparkles,
+  Play, Bookmark, Check, Trash2, Link2, RefreshCw, Sparkles,
   BookOpen, Mic, Loader2, X, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
@@ -10,19 +10,21 @@ import { usePlanner } from '../state/usePlanner';
 import { usePlannerAutoGen } from '../state/usePlannerAutoGen';
 import { useDailyRefresh } from '../state/useDailyRefresh';
 import { useReview } from '../state/useReview';
+import { useQuestions } from '../state/useQuestions';
 import { toast } from '../lib/toast';
 import { Header, HEADER_HEIGHT } from '../components/ui/Header';
 import { MoveCard } from '../components/MoveCard';
 import { Capacitor } from '@capacitor/core';
+import { conceptFeedService } from '../services/concept-feed.service';
+import { plannerService } from '../services/planner.service';
 import type { PlannerChunk, ChunkStatus, LearningCheckIn } from '../types';
 
 // ── Chunk type display helpers ─────────────────────────────────────────────
 
 const CHUNK_TYPE_CONFIG: Record<PlannerChunk['type'], { icon: React.ReactNode; color: string; label: string }> = {
-  retrieve: { icon: <RefreshCw size={14} />, color: 'var(--node-mint)', label: 'Retrieve' },
-  repair: { icon: <Lightbulb size={14} />, color: 'var(--node-salmon)', label: 'Repair' },
-  connect: { icon: <Link2 size={14} />, color: 'var(--node-lilac)', label: 'Connect' },
-  create: { icon: <Sparkles size={14} />, color: 'var(--node-peach)', label: 'Create' },
+  review: { icon: <RefreshCw size={14} />, color: 'var(--node-mint)', label: 'Review' },
+  compare: { icon: <Link2 size={14} />, color: 'var(--node-lilac)', label: 'Compare' },
+  discover: { icon: <Sparkles size={14} />, color: 'var(--node-peach)', label: 'Discover' },
 };
 
 // ── Section header ─────────────────────────────────────────────────────────
@@ -52,20 +54,58 @@ function ChunkCard({
   chunk,
   onStatusChange,
   onDelete,
+  onRegenerate,
 }: {
   chunk: PlannerChunk;
   onStatusChange: (id: string, status: ChunkStatus) => void;
   onDelete: (id: string) => void;
+  onRegenerate?: (chunkId: string) => Promise<void>;
 }) {
-  const config = CHUNK_TYPE_CONFIG[chunk.type];
+  const config = CHUNK_TYPE_CONFIG[chunk.type] ?? CHUNK_TYPE_CONFIG.review;
   const isActive = chunk.status === 'in_progress';
+  const navigate = useNavigate();
+  const [isRegenerating, setIsRegenerating] = useState(false);
+
+  const needsPost = (chunk.type === 'compare') && !chunk.linkedPostId;
+
+  const handleCardClick = () => {
+    if (chunk.type === 'review') {
+      navigate('/review');
+    } else if (chunk.type === 'compare' && chunk.linkedPostId) {
+      navigate(`/posts/${chunk.linkedPostId}`);
+    } else if (chunk.type === 'discover') {
+      navigate(`/posts/discover-${chunk.id}`, {
+        state: {
+          discoverMeta: {
+            concept: chunk.linkedConceptIds[0] ?? chunk.goal,
+            title: chunk.goal,
+          },
+        },
+      });
+    }
+  };
+
+  const handleRegenerate = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onRegenerate || isRegenerating) return;
+    setIsRegenerating(true);
+    try {
+      await onRegenerate(chunk.id);
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
 
   return (
-    <Card style={{
-      borderLeft: `3px solid ${config.color}`,
-      padding: '14px 16px',
-      marginBottom: '10px',
-    }}>
+    <Card
+      onClick={handleCardClick}
+      style={{
+        borderLeft: `3px solid ${config.color}`,
+        padding: '14px 16px',
+        marginBottom: '10px',
+        cursor: needsPost ? 'default' : 'pointer',
+      }}
+    >
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
@@ -88,13 +128,34 @@ function ChunkCard({
               {chunk.priorityReason}
             </p>
           )}
+          {needsPost && (
+            <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)' }}>No post found</span>
+              {onRegenerate && (
+                <button
+                  onClick={(e) => { void handleRegenerate(e); }}
+                  disabled={isRegenerating}
+                  className="active-squish"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '4px',
+                    padding: '3px 8px', borderRadius: '8px', fontSize: '0.72rem',
+                    fontWeight: 600, backgroundColor: 'var(--surface-variant)',
+                    color: 'var(--muted-foreground)', border: '1px solid var(--border)',
+                  }}
+                >
+                  <RefreshCw size={11} />
+                  {isRegenerating ? 'Generating…' : 'Regenerate'}
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
           {chunk.status === 'suggested' && (
             <>
               <button
-                onClick={() => onStatusChange(chunk.id, 'in_progress')}
+                onClick={(e) => { e.stopPropagation(); onStatusChange(chunk.id, 'in_progress'); }}
                 title="Start"
                 className="active-squish"
                 style={{
@@ -106,7 +167,7 @@ function ChunkCard({
                 <Play size={13} />
               </button>
               <button
-                onClick={() => onStatusChange(chunk.id, 'saved_for_later')}
+                onClick={(e) => { e.stopPropagation(); onStatusChange(chunk.id, 'saved_for_later'); }}
                 title="Save for later"
                 className="active-squish"
                 style={{
@@ -119,7 +180,7 @@ function ChunkCard({
                 <Bookmark size={13} />
               </button>
               <button
-                onClick={() => onDelete(chunk.id)}
+                onClick={(e) => { e.stopPropagation(); onDelete(chunk.id); }}
                 title="Dismiss"
                 className="active-squish"
                 style={{
@@ -136,7 +197,7 @@ function ChunkCard({
           {isActive && (
             <>
               <button
-                onClick={() => onStatusChange(chunk.id, 'done')}
+                onClick={(e) => { e.stopPropagation(); onStatusChange(chunk.id, 'done'); }}
                 title="Mark done"
                 className="active-squish"
                 style={{
@@ -148,7 +209,7 @@ function ChunkCard({
                 <Check size={13} />
               </button>
               <button
-                onClick={() => onDelete(chunk.id)}
+                onClick={(e) => { e.stopPropagation(); onDelete(chunk.id); }}
                 title="Remove"
                 className="active-squish"
                 style={{
@@ -165,7 +226,7 @@ function ChunkCard({
           {chunk.status === 'saved_for_later' && (
             <>
               <button
-                onClick={() => onStatusChange(chunk.id, 'in_progress')}
+                onClick={(e) => { e.stopPropagation(); onStatusChange(chunk.id, 'in_progress'); }}
                 title="Start"
                 className="active-squish"
                 style={{
@@ -177,7 +238,7 @@ function ChunkCard({
                 <Play size={13} />
               </button>
               <button
-                onClick={() => onDelete(chunk.id)}
+                onClick={(e) => { e.stopPropagation(); onDelete(chunk.id); }}
                 title="Remove"
                 className="active-squish"
                 style={{
@@ -250,6 +311,7 @@ export function PlannerScreen() {
   const { moves: autoMoves, isRefreshing, accept: acceptMove, dismiss: dismissMove, skipAll, refresh: refreshMoves } = usePlannerAutoGen();
   useDailyRefresh(); // Mount to activate PODCAST_GENERATION_COMPLETED → refresh subscription
   const { reviewCount } = useReview();
+  const { questions } = useQuestions();
   const [showAutoMoves, setShowAutoMoves] = useState(true);
   const [showAllSuggestions, setShowAllSuggestions] = useState(false);
   const totalSuggestions = autoMoves.length + suggestedChunks.length;
@@ -328,6 +390,25 @@ export function PlannerScreen() {
     skipAll();
     suggestedChunks.forEach(chunk => deleteChunk(chunk.id));
     toast('Suggestions cleared');
+  };
+
+  const handleRegenerateChunk = async (chunkId: string) => {
+    const chunk = [...continueChunks, ...suggestedChunks].find((c) => c.id === chunkId);
+    if (!chunk) return;
+    await conceptFeedService.generateMorePosts(questions);
+    const postId = chunk.linkedConceptIds.length > 0
+      ? (conceptFeedService.findClosestPost(chunk.linkedConceptIds, chunk.type === 'compare') ?? null)?.id
+      : null;
+    if (postId) {
+      plannerService.updateChunkLinkedPost(chunkId, postId);
+    } else {
+      toast('No post found after regeneration', 'info');
+    }
+  };
+
+  const handleRegenerateMove = async (_moveId: string) => {
+    await conceptFeedService.generateMorePosts(questions);
+    refreshMoves();
   };
 
   return (
@@ -483,10 +564,11 @@ export function PlannerScreen() {
                     toast('Navigation failed — check move configuration', 'error');
                   }
                 }}
+                onRegenerate={handleRegenerateMove}
               />
             ))}
             {suggestedChunks.map((chunk) => (
-              <ChunkCard key={chunk.id} chunk={chunk} onStatusChange={updateChunkStatus} onDelete={deleteChunk} />
+              <ChunkCard key={chunk.id} chunk={chunk} onStatusChange={updateChunkStatus} onDelete={deleteChunk} onRegenerate={handleRegenerateChunk} />
             ))}
             {!showAllSuggestions && remainingAfterSlice > 0 && (
               <button

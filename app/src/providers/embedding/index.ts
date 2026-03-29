@@ -99,8 +99,9 @@ async function localEmbed(text: string, config: EmbeddingConfig): Promise<number
 
 export async function embedText(text: string, config: EmbeddingConfig): Promise<number[]> {
   switch (config.provider) {
-    case 'google': return googleEmbed(text, config);
-    case 'local':  return localEmbed(text, config);
-    default:       return openAIEmbed(text, config);
+    case 'google':   return googleEmbed(text, config);
+    case 'local':    return localEmbed(text, config);
+    case 'lmstudio': return openAIEmbed(text, config);
+    default:         return openAIEmbed(text, config);
   }
 }

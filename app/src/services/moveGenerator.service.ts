@@ -4,33 +4,45 @@
  * Transforms ranked concept nodes into typed PlannedMove objects.
  * Each concept gets one move type based on its learning status:
  *
- *   review    — concept has flashcards due for review
- *   deepdive  — concept has related posts to explore
- *   connection — concept has related nodes to connect
- *   podcast   — weak area; AI podcast would reinforce it
+ *   review   — concept has flashcards due for review
+ *   read     — concept has a related feed post to explore
+ *   compare  — concept has a connection post linking it to another concept
+ *   podcast  — weak area; AI podcast would reinforce it
  */
 
 import type { Question, TrajectorySignal, PlannedMove, PlannedMoveType } from '../types';
 import { flashcardService } from './flashcard.service';
+import { conceptFeedService } from './concept-feed.service';
 import { today } from '../lib/date';
 
 // ── Move type determination ────────────────────────────────────────────────
 
-function decideMoveType(concept: Question, signals: TrajectorySignal): PlannedMoveType {
+function decideMoveType(
+  concept: Question,
+  signals: TrajectorySignal,
+): { moveType: PlannedMoveType; linkedPostId?: string } {
   // If it's a weak area, suggest a podcast to deepen understanding.
-  if (signals.weakAreas.includes(concept.id)) return 'podcast';
+  if (signals.weakAreas.includes(concept.id)) return { moveType: 'podcast' };
 
   // If flashcard is due or concept hasn't been reviewed recently, suggest review.
   const allCards = flashcardService.getAll();
   const conceptCards = allCards.filter((c) => c.nodeId === concept.id);
   const hasDueCard = conceptCards.some((c) => c.reviewSchedule.nextReviewDate <= today());
-  if (hasDueCard) return 'review';
+  if (hasDueCard) return { moveType: 'review' };
 
-  // If concept has related nodes, suggest exploring connections.
-  if (concept.relatedQuestionIds.length > 0) return 'connection';
+  // If concept has related nodes, try to find a connection post.
+  if (concept.relatedQuestionIds.length > 0) {
+    const conceptIds = [concept.id, ...concept.relatedQuestionIds];
+    const connectionPost = conceptFeedService.findClosestPost(conceptIds, true);
+    if (connectionPost) return { moveType: 'compare', linkedPostId: connectionPost.id };
+  }
 
-  // Otherwise suggest a deep dive via the feed post.
-  return 'deepdive';
+  // Try to find a feed post for this concept.
+  const feedPost = conceptFeedService.findClosestPost([concept.id, ...concept.relatedQuestionIds]);
+  if (feedPost) return { moveType: 'read', linkedPostId: feedPost.id };
+
+  // Fall back to review if no posts are available.
+  return { moveType: 'review' };
 }
 
 // ── Reason generation ──────────────────────────────────────────────────────
@@ -49,11 +61,11 @@ function buildReason(
       return daysSinceReview !== null && daysSinceReview > 0
         ? `Time to review: ${daysSinceReview} day${daysSinceReview !== 1 ? 's' : ''} ago`
         : 'Flashcard due for review';
-    case 'deepdive':
+    case 'read':
       return score >= 70
         ? 'High relevance to your current learning path'
         : 'Explore this concept further';
-    case 'connection':
+    case 'compare':
       return `${concept.relatedQuestionIds.length} related concept${concept.relatedQuestionIds.length !== 1 ? 's' : ''} to connect`;
     case 'podcast':
       return 'This area needs reinforcement — listen to solidify';
@@ -63,10 +75,10 @@ function buildReason(
 // ── Time estimates ─────────────────────────────────────────────────────────
 
 const MOVE_TIME_MS: Record<PlannedMoveType, number> = {
-  review: 5 * 60 * 1000,       // 5 min
-  deepdive: 10 * 60 * 1000,    // 10 min
-  connection: 7 * 60 * 1000,   // 7 min
-  podcast: 15 * 60 * 1000,     // 15 min
+  review: 5 * 60 * 1000,    // 5 min
+  read: 10 * 60 * 1000,     // 10 min
+  compare: 7 * 60 * 1000,   // 7 min
+  podcast: 15 * 60 * 1000,  // 15 min
 };
 
 // ── Linked resource ────────────────────────────────────────────────────────
@@ -74,14 +86,15 @@ const MOVE_TIME_MS: Record<PlannedMoveType, number> = {
 function buildLinkedResource(
   moveType: PlannedMoveType,
   concept: Question,
+  linkedPostId?: string,
 ): PlannedMove['linkedResource'] {
   switch (moveType) {
     case 'review':
       return { type: 'review', id: concept.id };
-    case 'deepdive':
-      return { type: 'post', id: concept.id };
-    case 'connection':
-      return { type: 'question', id: concept.id };
+    case 'read':
+      return linkedPostId ? { type: 'post', id: linkedPostId } : { type: 'review', id: concept.id };
+    case 'compare':
+      return linkedPostId ? { type: 'post', id: linkedPostId } : undefined;
     case 'podcast':
       return { type: 'question', id: concept.id };
   }
@@ -110,7 +123,7 @@ export function generateMoves(
   const now = Date.now();
 
   return rankedConcepts.map(({ concept, score }) => {
-    const moveType = decideMoveType(concept, signals);
+    const { moveType, linkedPostId } = decideMoveType(concept, signals);
     const reason = buildReason(moveType, concept, score);
 
     return {
@@ -122,7 +135,7 @@ export function generateMoves(
       relevanceScore: score,
       reason,
       targetTime: MOVE_TIME_MS[moveType],
-      linkedResource: buildLinkedResource(moveType, concept),
+      linkedResource: buildLinkedResource(moveType, concept, linkedPostId),
       isAutoGenerated: true,
       createdAt: now,
     };

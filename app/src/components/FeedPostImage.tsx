@@ -46,17 +46,20 @@ function AspectBox({
   minHeight,
   children,
   style,
+  className,
 }: {
   aspectPadding?: string;
   minHeight: number;
   children?: React.ReactNode;
   style?: React.CSSProperties;
+  className?: string;
 }) {
   if (aspectPadding) {
     // padding-bottom % is relative to width → creates exact aspect ratio.
     // height: 0 ensures the box height comes entirely from padding, not content.
     return (
       <div
+        className={className}
         style={{
           width: '100%',
           height: 0,
@@ -74,6 +77,7 @@ function AspectBox({
   }
   return (
     <div
+      className={className}
       style={{
         width: '100%',
         minHeight,

@@ -1,8 +1,8 @@
 {
-  "version": "1.29.0",
-  "timestamp": "2026-03-26T17:03:26.957Z",
+  "version": "1.30.0",
+  "timestamp": "2026-03-27T22:47:51.360Z",
   "files": {
-    "get-shit-done/VERSION": "46ff3be92ef80d0b6ff3000eb4310ec5e08b6e5ab34dbc021f082ba70f707bb3",
+    "get-shit-done/VERSION": "539402d2694f8bdccbced843d22a2efdea47865e66833e92d06d2bfedee9ce02",
     "get-shit-done/bin/gsd-tools.cjs": "af10545eae9b4339a12dee0b30048830f52788e62aefb3cba489d67c3236ab74",
     "get-shit-done/bin/lib/commands.cjs": "95a7ff9eda6a8099aa26dbc4b3cc97d1d8c414bf106540b274c7e871dd73fdb7",
     "get-shit-done/bin/lib/config.cjs": "81939c753ec935de151a81c7df2a53dad2f279bf2369c1d64a380a6220257bbf",

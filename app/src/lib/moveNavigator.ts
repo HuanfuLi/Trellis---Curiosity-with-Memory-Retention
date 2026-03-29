@@ -16,13 +16,13 @@ const MOVE_TYPE_ROUTES = {
     screen: 'review',
     paramKey: 'conceptId', // ReviewScreen loads flashcards for this concept
   },
-  deepdive: {
-    screen: 'posts', // Navigate to PostDetailScreen for learning posts
+  read: {
+    screen: 'posts', // Navigate to PostDetailScreen for a feed post
     paramKey: 'postId',
   },
-  connection: {
-    screen: 'ask', // Navigate to QuestionDetailScreen
-    paramKey: 'questionId',
+  compare: {
+    screen: 'posts', // Navigate to PostDetailScreen for a connection post
+    paramKey: 'postId',
   },
   podcast: {
     screen: 'podcast', // Navigate to PodcastScreen
@@ -132,10 +132,6 @@ export function buildMoveNavigationPath(
       // ReviewScreen doesn't use URL params — context passed via state
       return '/review';
 
-    case 'ask':
-      // QuestionDetailScreen uses :id URL param
-      return `/ask/${linkedResource.id}`;
-
     case 'posts':
       // PostDetailScreen uses :id URL param
       return `/posts/${linkedResource.id}`;
@@ -202,7 +198,6 @@ export function getMoveDestination(move: PlannedMove): string {
 
   const screenLabels: Record<string, string> = {
     review: 'Review Screen',
-    ask: 'Question Detail',
     posts: 'Post Detail',
     podcast: 'Podcast Screen',
   };
