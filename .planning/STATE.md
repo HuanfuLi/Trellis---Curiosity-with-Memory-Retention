@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
-status: Phase 14 Complete
-stopped_at: Phase 14 fully verified and complete
-last_updated: "2026-03-29T20:00:00.000Z"
+status: Executing Phase 14
+stopped_at: Completed 14-04-PLAN.md (UAT Gap Closure — classifyAndAnchor in askStreaming)
+last_updated: "2026-03-29T20:14:19.350Z"
 progress:
   total_phases: 8
-  completed_phases: 5
-  total_plans: 13
-  completed_plans: 13
+  completed_phases: 4
+  total_plans: 11
+  completed_plans: 10
 ---
 
 # Project State: Milestone 1.1
@@ -35,7 +35,7 @@ Phase 9 - Image Regeneration & Error Handling (next to start)
 - **Phase 11:** Planner Retry & Milestone Card Variety (COMPLETE)
 - **Phase 12:** Portal Navigation & Rich Moves Linking (12-01-PLAN.md — COMPLETE, 12-02-PLAN.md — COMPLETE)
 - **Phase 13:** Planner Redesign (13-01-PLAN.md — COMPLETE)
-- **Phase 14:** Knowledge Graph Classification & Anchor Nodes (14-01-PLAN.md — COMPLETE, 14-02-PLAN.md — COMPLETE, 14-03-PLAN.md — COMPLETE)
+- **Phase 14:** Knowledge Graph Classification & Anchor Nodes (14-01-PLAN.md — COMPLETE, 14-02-PLAN.md — COMPLETE, 14-03-PLAN.md — COMPLETE, 14-04-PLAN.md — COMPLETE)
 
 ## Latest Decisions
 
@@ -73,8 +73,14 @@ Phase 9 - Image Regeneration & Error Handling (next to start)
 ## Last Session
 
 Completed Phase 14 Plan 02 (14-02-PLAN.md) — Second Classification Call & Anchor Creation
-**Stopped At:** Completed 14-03-PLAN.md (Anchor-Based Mindmap Rendering)
+**Stopped At:** Completed 14-04-PLAN.md (UAT Gap Closure — classifyAndAnchor in askStreaming)
 **Date:** 2026-03-29
+
+## Latest Decisions (Phase 14-04)
+
+- [Phase 14-04] classifyAndAnchor imported directly in useQuestions.ts — no circular dependency since useQuestions.ts is not in canonical-knowledge.service.ts import chain
+- [Phase 14-04] questionService.getAll() called at classification time in askStreaming for freshest snapshot (includes just-saved question)
+- [Phase 14-04] Fire-and-forget pattern with .catch(console.warn) mirrors question.service.ts ask() exactly
 
 ## Latest Decisions (Phase 14-03)
 
