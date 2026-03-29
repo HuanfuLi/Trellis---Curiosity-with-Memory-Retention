@@ -417,11 +417,14 @@ export async function classifyAndAnchor(
     treeContext,
     '',
     'Instructions:',
-    '- branchLabel: a broad sub-discipline (e.g., "Psychology", "Computer Science", "Physics", "Economics", "Biology")',
-    '- clusterLabel: a topic grouping that holds multiple related concepts (e.g., "Memory", "Machine Learning", "Thermodynamics") — NOT the specific concept itself',
-    '- anchorName: a clean noun/concept name (e.g., "Transformer", "Spaced Repetition", "Entropy") — the specific concept this question is about',
+    '- branchLabel: a TOP-LEVEL academic discipline (e.g., "Psychology", "Computer Science", "Physics", "Economics", "Biology", "Mathematics", "Philosophy"). This is the broadest category — always a recognized academic field.',
+    '- clusterLabel: a domain, theory, or sub-field WITHIN that discipline (e.g., "Learning Theory", "Machine Learning", "Thermodynamics", "Behavioral Economics", "Cognitive Development"). Must be more specific than branchLabel but broader than the individual concept.',
+    '- anchorName: a specific concept or phenomenon (e.g., "Spaced Repetition", "Transformer", "Entropy", "Loss Aversion"). This is the narrowest label — the concrete idea the question is about.',
+    '- anchorName must NEVER duplicate clusterLabel. If they would be the same, make clusterLabel broader (e.g., clusterLabel="Memory & Retention", anchorName="Spaced Repetition").',
     '- anchorId: if an existing anchor matches this concept, provide its id; otherwise omit',
     '- Reuse existing branches and clusters when the question fits. Create new ones only when truly needed.',
+    '',
+    'Example: "Why does spaced repetition work?" → branchLabel:"Psychology", clusterLabel:"Learning Theory", anchorName:"Spaced Repetition"',
     '',
     'Respond ONLY with JSON:',
     '{"briefAnswer":"<=30 word answer for self-context","keyword":"single most descriptive keyword","rootLabel":"Knowledge","branchLabel":"...","clusterLabel":"...","anchorName":"...","anchorId":"optional-existing-anchor-id"}',
@@ -526,7 +529,7 @@ export async function classifyAndAnchor(
     }
 
     // --- Patch Q&A with labels and anchor attachment ---
-    const shortSummary = question.shortSummary || question.summary || question.answer.slice(0, 200);
+    const shortSummary = result.briefAnswer || question.shortSummary || question.summary || question.answer.slice(0, 200);
     const summaryEntry = `[${question.id}] ${shortSummary.slice(0, 200)}`;
 
     // Patch the Q&A node with classification labels and anchor parentId
