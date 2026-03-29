@@ -45,6 +45,15 @@ const MOVE_TYPE_CONFIG: Record<PlannedMoveType, {
   },
 };
 
+// ── Priority badge helper ──────────────────────────────────────────────────
+
+function getPriorityBadge(score: number): { emoji: string; label: string; bg: string } {
+  if (score >= 75) return { emoji: '🔴', label: 'WEAK AREA', bg: 'color-mix(in srgb, #ef4444 12%, transparent)' };
+  if (score >= 60) return { emoji: '🟠', label: 'OVERDUE', bg: 'color-mix(in srgb, #f97316 12%, transparent)' };
+  if (score >= 45) return { emoji: '🟡', label: 'ACTIVE', bg: 'color-mix(in srgb, #eab308 12%, transparent)' };
+  return { emoji: '⚪', label: 'EXPLORE', bg: 'var(--surface-variant)' };
+}
+
 // ── Score bar component ────────────────────────────────────────────────────
 
 function ScoreBar({ score, color }: { score: number; color: string }) {
@@ -92,32 +101,46 @@ interface MoveCardProps {
 
 export function MoveCard({ move, onAccept, onDismiss, onNavigate }: MoveCardProps) {
   const config = MOVE_TYPE_CONFIG[move.moveType];
+  const badge = getPriorityBadge(move.relevanceScore);
   const navigate = useNavigate();
 
-  const handleAddClick = () => {
-    // Call existing onAccept for planner state update
-    onAccept(move.id);
-
-    // Attempt navigation after state is queued
-    // Use setTimeout to allow state update to flush first
-    setTimeout(() => {
-      void navigateToMove(move, navigate, {
-        fromScreen: 'planner',
-        replace: false,
-      }).then((success) => {
-        onNavigate?.(success);
-      });
-    }, 50);
+  const handleCardClick = () => {
+    void navigateToMove(move, navigate, {
+      fromScreen: 'planner',
+      replace: false,
+    }).then((success) => {
+      onNavigate?.(success);
+    });
   };
 
   return (
-    <Card style={{
-      borderLeft: `3px solid ${config.color}`,
-      padding: '14px 16px',
-      marginBottom: '10px',
-    }}>
+    <Card
+      onClick={handleCardClick}
+      style={{
+        borderLeft: `3px solid ${config.color}`,
+        padding: '14px 16px',
+        marginBottom: '10px',
+        cursor: 'pointer',
+      }}
+    >
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
+          {/* Priority badge */}
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: '5px',
+            padding: '3px 8px', borderRadius: '8px',
+            backgroundColor: badge.bg,
+            marginBottom: '8px',
+          }}>
+            <span style={{ fontSize: '0.7rem' }}>{badge.emoji}</span>
+            <span style={{
+              fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.07em',
+              textTransform: 'uppercase', color: 'var(--foreground)',
+            }}>
+              {badge.label}
+            </span>
+          </div>
+
           {/* Type label */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '5px' }}>
             <span style={{ color: config.color, display: 'flex' }}>{config.icon}</span>
@@ -160,19 +183,19 @@ export function MoveCard({ move, onAccept, onDismiss, onNavigate }: MoveCardProp
         {/* Actions */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flexShrink: 0 }}>
           <button
-            onClick={handleAddClick}
+            onClick={(e) => { e.stopPropagation(); onAccept(move.id); }}
             title="Add to Planner"
             className="active-squish"
             style={{
               padding: '5px 10px', borderRadius: '10px', fontSize: '0.75rem',
-              fontWeight: 600, backgroundColor: config.color, color: 'white',
+              fontWeight: 600, backgroundColor: 'var(--primary-40)', color: 'white',
               border: 'none', whiteSpace: 'nowrap',
             }}
           >
             Add
           </button>
           <button
-            onClick={() => onDismiss(move.id)}
+            onClick={(e) => { e.stopPropagation(); onDismiss(move.id); }}
             title="Dismiss"
             className="active-squish"
             style={{

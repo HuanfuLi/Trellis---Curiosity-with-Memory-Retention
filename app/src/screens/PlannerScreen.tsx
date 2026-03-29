@@ -246,7 +246,11 @@ export function PlannerScreen() {
   useDailyRefresh(); // Mount to activate PODCAST_GENERATION_COMPLETED → refresh subscription
   const { reviewCount } = useReview();
   const [showAutoMoves, setShowAutoMoves] = useState(true);
+  const [showAllSuggestions, setShowAllSuggestions] = useState(false);
   const totalSuggestions = autoMoves.length + suggestedChunks.length;
+  const TOP_N = 5;
+  const visibleAutoMoves = showAllSuggestions ? autoMoves : autoMoves.slice(0, TOP_N);
+  const remainingAfterSlice = totalSuggestions - visibleAutoMoves.length - suggestedChunks.length;
 
   const [checkInInput, setCheckInInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -463,7 +467,7 @@ export function PlannerScreen() {
           <EmptySectionHint text="No suggestions right now — tap refresh to check for new moves." />
         ) : (
           <>
-            {autoMoves.map((move) => (
+            {visibleAutoMoves.map((move) => (
               <MoveCard
                 key={move.id}
                 move={move}
@@ -479,6 +483,36 @@ export function PlannerScreen() {
             {suggestedChunks.map((chunk) => (
               <ChunkCard key={chunk.id} chunk={chunk} onStatusChange={updateChunkStatus} onDelete={deleteChunk} />
             ))}
+            {!showAllSuggestions && remainingAfterSlice > 0 && (
+              <button
+                onClick={() => setShowAllSuggestions(true)}
+                style={{
+                  width: '100%', padding: '10px 16px', borderRadius: '12px',
+                  backgroundColor: 'var(--surface-variant)', color: 'var(--primary-40)',
+                  border: '1px solid var(--border)', fontSize: '0.82rem', fontWeight: 500,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  gap: '4px', marginBottom: '8px',
+                }}
+              >
+                <ChevronDown size={14} />
+                Show all {totalSuggestions} suggestions
+              </button>
+            )}
+            {showAllSuggestions && totalSuggestions > TOP_N && (
+              <button
+                onClick={() => setShowAllSuggestions(false)}
+                style={{
+                  width: '100%', padding: '10px 16px', borderRadius: '12px',
+                  backgroundColor: 'var(--surface-variant)', color: 'var(--muted-foreground)',
+                  border: '1px solid var(--border)', fontSize: '0.82rem', fontWeight: 500,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  gap: '4px', marginBottom: '8px',
+                }}
+              >
+                <ChevronUp size={14} />
+                Show less
+              </button>
+            )}
             {autoMoves.length > 0 && (
               <button
                 onClick={handleSkipAll}
