@@ -46,14 +46,14 @@ function buildMindElixirData(nodes: Question[]): MindElixirData {
       topic: branch.branchLabel,
       expanded: true,
       children: branch.clusters.map((cluster) => ({
-        id: `cluster-${root.rootLabel}-${branch.branchLabel}-${cluster.clusterLabel}`,
+        id: cluster.clusterEntity?.id ?? `cluster-${root.rootLabel}-${branch.branchLabel}-${cluster.clusterLabel}`,
         topic: cluster.clusterLabel,
         expanded: true,
         children: [
           // Anchor nodes as leaves (with collapsed Q&A children)
           ...cluster.anchors.map(({ anchor, qaChildren }) => ({
             id: anchor.id,
-            topic: `${truncate(anchor.title || anchor.content, 50)}${qaChildren.length > 0 ? ` (${qaChildren.length})` : ''}`,
+            topic: truncate(anchor.title || anchor.content, 50),
             expanded: false,
             children: qaChildren.map((qa) => ({
               id: qa.id,
@@ -643,13 +643,28 @@ export function GraphScreen() {
           {selectedNode && (
             <div
               onClick={() => {
-                // Don't navigate to ask/:id for anchor nodes (they have no conversation)
-                if (!selectedNode.isAnchorNode) navigate(`/ask/${selectedNode.id}`);
+                if (selectedNode.isClusterNode) {
+                  navigate(`/cluster/${selectedNode.id}`);
+                } else if (selectedNode.isAnchorNode) {
+                  navigate(`/anchor/${selectedNode.id}`);
+                } else {
+                  navigate(`/ask/${selectedNode.id}`);
+                }
               }}
-              style={{ padding: '16px', borderRadius: 'var(--radius-xl)', backgroundColor: 'var(--surface-variant)', border: '1px solid var(--border)', animation: 'fade-in 0.2s ease', cursor: selectedNode.isAnchorNode ? 'default' : 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' }}
-              onPointerEnter={(e) => { if (!selectedNode.isAnchorNode) { e.currentTarget.style.transform = 'scale(1.01)'; e.currentTarget.style.boxShadow = 'var(--shadow-2)'; } }}
+              style={{ padding: '16px', borderRadius: 'var(--radius-xl)', backgroundColor: 'var(--surface-variant)', border: '1px solid var(--border)', animation: 'fade-in 0.2s ease', cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' }}
+              onPointerEnter={(e) => { e.currentTarget.style.transform = 'scale(1.01)'; e.currentTarget.style.boxShadow = 'var(--shadow-2)'; }}
               onPointerLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
             >
+              {selectedNode.isClusterNode && (
+                <p style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--primary-40)', marginBottom: '4px' }}>
+                  KNOWLEDGE CLUSTER — {(() => {
+                    const childAnchorCount = nodes.filter(
+                      n => n.isAnchorNode === true && n.clusterNodeId === selectedNode.id
+                    ).length;
+                    return `${childAnchorCount} concepts, ${selectedNode.qaCount || 0} Q&As`;
+                  })()}
+                </p>
+              )}
               {selectedNode.isAnchorNode && (
                 <p style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--primary-40)', marginBottom: '4px' }}>
                   CONCEPT ANCHOR — {selectedNode.qaCount || 0} Q&As
@@ -663,8 +678,24 @@ export function GraphScreen() {
                   <X size={16} />
                 </button>
               </div>
-              <p style={{ fontSize: '0.8rem', color: 'var(--muted-foreground)', lineHeight: 1.5 }}>{selectedNode.summary}</p>
-              {selectedNode.placementReason && (
+              {selectedNode.isClusterNode ? (() => {
+                const childAnchors = nodes.filter(
+                  n => n.isAnchorNode === true && n.clusterNodeId === selectedNode.id
+                );
+                if (childAnchors.length > 0) {
+                  const anchorNames = childAnchors.slice(0, 4).map(a => a.title || a.content).join(', ');
+                  const suffix = childAnchors.length > 4 ? ` +${childAnchors.length - 4} more` : '';
+                  return (
+                    <p style={{ fontSize: '0.8rem', color: 'var(--muted-foreground)', lineHeight: 1.5 }}>
+                      {anchorNames}{suffix}
+                    </p>
+                  );
+                }
+                return null;
+              })() : (
+                <p style={{ fontSize: '0.8rem', color: 'var(--muted-foreground)', lineHeight: 1.5 }}>{selectedNode.summary}</p>
+              )}
+              {!selectedNode.isClusterNode && selectedNode.placementReason && (
                 <p style={{ fontSize: '0.75rem', color: 'var(--primary-40)', lineHeight: 1.45, marginTop: '8px' }}>
                   {selectedNode.placementReason}
                 </p>
@@ -680,12 +711,10 @@ export function GraphScreen() {
                 <p style={{ fontSize: '0.72rem', color: 'var(--muted-foreground)' }}>
                   {selectedNode.relatedQuestionIds.length} connections
                 </p>
-                {!selectedNode.isAnchorNode && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: 'var(--primary-40)', fontWeight: 600 }}>
-                    <span>View details</span>
-                    <ChevronRight size={14} />
-                  </div>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: 'var(--primary-40)', fontWeight: 600 }}>
+                  <span>View details</span>
+                  <ChevronRight size={14} />
+                </div>
               </div>
             </div>
           )}
