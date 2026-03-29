@@ -182,9 +182,9 @@
 - GRAPH-05: Q&A attachment via parentId + append-only anchor nodeSummary
 - GRAPH-06: Mindmap renders anchors only with Mind-Elixir expand/retract
 
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 - [x] 14-01-PLAN.md — Strip knowledgeDecision from first call, strip IngestionDecision labels, add anchor type fields
-- [ ] 14-02-PLAN.md — Second classification LLM call, anchor creation, Q&A attachment logic
+- [x] 14-02-PLAN.md — Second classification LLM call, anchor creation, Q&A attachment logic
 - [ ] 14-03-PLAN.md — Mindmap renders anchor nodes only with Mind-Elixir expand/retract
 
 **Success Criteria:**

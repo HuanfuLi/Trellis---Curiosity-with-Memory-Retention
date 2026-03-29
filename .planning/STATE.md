@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
 status: Executing Phase 14
-stopped_at: Completed 14-01-PLAN.md (Type Foundation & Two-Call Split)
-last_updated: "2026-03-29T19:17:09.566Z"
+stopped_at: Completed 14-02-PLAN.md (Second Classification Call & Anchor Creation)
+last_updated: "2026-03-29T19:22:00.000Z"
 progress:
   total_phases: 8
   completed_phases: 3
   total_plans: 10
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State: Milestone 1.1
@@ -35,7 +35,7 @@ Phase 9 - Image Regeneration & Error Handling (next to start)
 - **Phase 11:** Planner Retry & Milestone Card Variety (COMPLETE)
 - **Phase 12:** Portal Navigation & Rich Moves Linking (12-01-PLAN.md — COMPLETE, 12-02-PLAN.md — COMPLETE)
 - **Phase 13:** Planner Redesign (13-01-PLAN.md — COMPLETE)
-- **Phase 14:** Knowledge Graph Classification & Anchor Nodes (14-01-PLAN.md — COMPLETE)
+- **Phase 14:** Knowledge Graph Classification & Anchor Nodes (14-01-PLAN.md — COMPLETE, 14-02-PLAN.md — COMPLETE)
 
 ## Latest Decisions
 
@@ -72,9 +72,17 @@ Phase 9 - Image Regeneration & Error Handling (next to start)
 
 ## Last Session
 
-Completed Phase 13 Plan 01 (13-01-PLAN.md) — Planner Redesign: Thread Removal, Signal Extraction Fix, Weak Area Detection, Priority Badges
-**Stopped At:** Completed 14-01-PLAN.md (Type Foundation & Two-Call Split)
-**Date:** 2026-03-28
+Completed Phase 14 Plan 02 (14-02-PLAN.md) — Second Classification Call & Anchor Creation
+**Stopped At:** Completed 14-02-PLAN.md (Second Classification Call & Anchor Creation)
+**Date:** 2026-03-29
+
+## Latest Decisions (Phase 14-02)
+
+- [Phase 14-02] classifyAndAnchor lazy-imports questionService via dynamic import to prevent circular dependency
+- [Phase 14-02] Second classification call fire-and-forget after flagged check — labels patched asynchronously
+- [Phase 14-02] Anchor creation writes directly to localStorage (same echolearn_questions key) to avoid re-entrant ask() logic
+- [Phase 14-02] loadStore() called fresh at classifyAndAnchor invocation time for most current snapshot
+- [Phase 14-02] Anchor-first resolution: by anchorId → by name+cluster match → create new
 
 ## Latest Decisions (Phase 14-01)
 
