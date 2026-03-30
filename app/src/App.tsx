@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { createBrowserRouter, RouterProvider, Navigate, Outlet, ScrollRestoration, useNavigate } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate, Outlet, ScrollRestoration, useNavigate, useLocation } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 import { Loader2 } from 'lucide-react';
@@ -29,6 +29,8 @@ import { toast } from './lib/toast';
 
 function RootLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isHome = location.pathname === '/home';
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   // Guard against starting a new recording while one is already active
@@ -96,12 +98,22 @@ function RootLayout() {
         }}
       />
       {/* paddingTop clears the status bar; paddingBottom clears the bottom nav + home indicator */}
+      {/* HomeScreen is always mounted (keep-alive) — toggled via display so DOM/scroll/state are preserved */}
       <div style={{
         paddingTop: 'var(--safe-area-top)',
         paddingBottom: 'calc(80px + var(--safe-area-bottom))',
+        display: isHome ? undefined : 'none',
       }}>
-        <Outlet />
+        <HomeScreen />
       </div>
+      {!isHome && (
+        <div style={{
+          paddingTop: 'var(--safe-area-top)',
+          paddingBottom: 'calc(80px + var(--safe-area-bottom))',
+        }}>
+          <Outlet />
+        </div>
+      )}
       <ScrollRestoration />
       <BottomNavigation
         onAskLongPress={() => void handleAskLongPress()}
@@ -170,7 +182,7 @@ const router = createBrowserRouter([
     element: <RootLayout />,
     children: [
       { index: true, element: <HomeRedirect /> },
-      { path: 'home', element: <PageTransition><HomeScreen /></PageTransition> },
+      { path: 'home', element: null },
       { path: 'posts/:id', element: <PageTransition><PostDetailScreen /></PageTransition> },
       { path: 'ask', element: <PageTransition><AskScreen /></PageTransition> },
       { path: 'ask/:id', element: <PageTransition><QuestionDetailScreen /></PageTransition> },

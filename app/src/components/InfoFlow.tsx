@@ -36,16 +36,14 @@ interface ConceptCardProps {
   feedIndex?: number;
   isActive: boolean;
   onOpen: (postId: string, post: DailyPost) => void;
-  onReadyChange?: (ready: boolean) => void;
 }
 
-function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen, onReadyChange }: ConceptCardProps) {
+function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen }: ConceptCardProps) {
   const badge = CONCEPT_BADGE_META[post.sourceType] ?? FALLBACK_BADGE;
 
   // ── Image generation state ──────────────────────────────────────────────────
   const [image, setImage] = useState<GeneratedImage | null>(null);
-  const [, setImageLoading] = useState(true);
-  const [, setImageError] = useState<string | null>(null);
+  const [imageLoading, setImageLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -54,18 +52,13 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen, onRead
     const prompt = buildImagePrompt(post);
 
     setImageLoading(true);
-    setImageError(null);
 
     void imageGenerationService.generateImage(post.id, prompt, style).then((result) => {
       if (cancelled) return;
       if (result.success && result.data) {
         setImage(result.data);
-        setImageError(null);
-      } else {
-        setImageError(result.error?.message ?? 'Image generation failed');
       }
       setImageLoading(false);
-      onReadyChange?.(true);
     });
 
     return () => { cancelled = true; };
@@ -124,15 +117,13 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen, onRead
           overflow: 'hidden',
         }}
       >
-        {/* Image-forward header — show image or nothing (error handled in detail page) */}
-        {image && (
-          <FeedPostImage
-            imageData={image}
-            isLoading={false}
-            error={null}
-            aspectPadding="100%"
-          />
-        )}
+        {/* Image-forward header — skeleton while loading, image when ready */}
+        <FeedPostImage
+          imageData={image}
+          isLoading={imageLoading}
+          error={null}
+          aspectPadding="100%"
+        />
 
         <div style={{ padding: '0 20px' }}>
           <p
@@ -549,8 +540,34 @@ interface InlineInfoFlowProps {
   isLoadingMore?: boolean;
 }
 
+// Track post IDs that have already been rendered in this session so we only
+// animate genuinely new posts, not posts that were already visible before
+// the user navigated away and came back.
+const _seenPostIds = new Set<string>();
+
 export function InlineInfoFlow({ items, onOpenConnection, showConnectionScores = false, onOpenPost, onLoadMore, isLoadingMore }: InlineInfoFlowProps) {
-  const [readyPosts, setReadyPosts] = useState<Set<string>>(() => new Set());
+  // On first render, mark all current items as "already seen" so they
+  // don't animate. Only items added AFTER mount will animate.
+  const [newPostIds] = useState<Set<string>>(() => {
+    const incoming = new Set<string>();
+    for (const item of items) {
+      const id = item.kind === 'concept' ? item.post.id : item.kind === 'connection' ? `conn-${item.questionA.id}-${item.questionB.id}` : item.kind === 'milestone' ? item.item.id : '';
+      if (id && !_seenPostIds.has(id)) {
+        incoming.add(id);
+      }
+      if (id) _seenPostIds.add(id);
+    }
+    return incoming;
+  });
+
+  // Mark any items that arrive after mount as new (for animation on load-more)
+  useEffect(() => {
+    for (const item of items) {
+      const id = item.kind === 'concept' ? item.post.id : item.kind === 'connection' ? `conn-${item.questionA.id}-${item.questionB.id}` : item.kind === 'milestone' ? item.item.id : '';
+      if (id) _seenPostIds.add(id);
+    }
+  }, [items]);
+
   const conceptCount = items.filter((item) => item.kind === 'concept').length;
   const connectionCount = items.filter((item) => item.kind === 'connection').length;
 
@@ -603,10 +620,12 @@ export function InlineInfoFlow({ items, onOpenConnection, showConnectionScores =
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {items.map((item, index) => {
-            const isConceptLoading = item.kind === 'concept' && !readyPosts.has(item.post.id);
+            const itemId = item.kind === 'concept' ? item.post.id : item.kind === 'connection' ? `conn-${item.questionA.id}-${item.questionB.id}` : item.kind === 'milestone' ? item.item.id : '';
+            const shouldAnimate = newPostIds.has(itemId);
             return (
             <div
               key={index}
+              data-feed-id={itemId}
               style={{
                 borderRadius: 'var(--radius-xl)',
                 backgroundColor: item.kind === 'milestone' ? 'transparent' : 'var(--card)',
@@ -619,18 +638,14 @@ export function InlineInfoFlow({ items, onOpenConnection, showConnectionScores =
                 boxShadow: item.kind === 'milestone' ? 'var(--shadow-3)' : 'var(--shadow-2)',
                 overflow: 'hidden',
                 minHeight: item.kind === 'concept' ? '320px' : item.kind === 'milestone' ? '200px' : '280px',
-                display: isConceptLoading ? 'none' : undefined,
               }}
             >
               {item.kind === 'concept' ? (
                 <ConceptCard
                   post={item.post}
                   feedIndex={index}
-                  isActive={true}
+                  isActive={shouldAnimate}
                   onOpen={onOpenPost}
-                  onReadyChange={(ready) => {
-                    if (ready) setReadyPosts((prev) => new Set(prev).add(item.post.id));
-                  }}
                 />
               ) : item.kind === 'connection' ? (
                 <ConnectionCard
@@ -644,7 +659,7 @@ export function InlineInfoFlow({ items, onOpenConnection, showConnectionScores =
                   onOpenConnection={onOpenConnection}
                 />
               ) : (
-                <MilestoneCard item={item.item} isActive={true} />
+                <MilestoneCard item={item.item} isActive={shouldAnimate} />
               )}
             </div>
             );

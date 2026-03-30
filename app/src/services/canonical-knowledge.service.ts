@@ -1,4 +1,5 @@
 import type {
+  AppEvent,
   CandidateContextPack,
   ClassificationResult,
   DailyReviewMap,
@@ -8,6 +9,8 @@ import type {
   KnowledgeNode,
   LLMConfig,
   Question,
+  ReorganizationResult,
+  ServiceResult,
   StructuralSignalType,
 } from '../types/index.ts';
 import { cosine } from '../providers/embedding/index.ts';
@@ -777,4 +780,387 @@ export function buildReflectionTree(questions: Question[]): Array<{
       })),
     })),
   }));
+}
+
+// ─── Mindmap Reorganization ──────────────────────────────────────────────────
+
+const REORG_SNAPSHOT_KEY = 'echolearn_reorg_snapshot';
+const STORAGE_KEY = 'echolearn_questions';
+
+// Module-level state so reorganization status persists across navigation
+let _reorgInProgress = false;
+
+export function isReorgInProgress(): boolean {
+  return _reorgInProgress;
+}
+
+/**
+ * Extract the first balanced JSON object from a string.
+ * Handles: extra trailing braces, markdown wrappers, leading text.
+ * Respects braces inside JSON string literals (skips quoted content).
+ */
+function extractBalancedJson(raw: string): string | null {
+  const start = raw.indexOf('{');
+  if (start === -1) return null;
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < raw.length; i++) {
+    const ch = raw[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') depth++;
+    else if (ch === '}') { depth--; if (depth === 0) return raw.slice(start, i + 1); }
+  }
+  return null;
+}
+
+/**
+ * Compact structural snapshot for revert — stores only structural nodes and
+ * QA→hierarchy mappings, NOT full QA content. Avoids localStorage quota issues.
+ */
+interface ReorgSnapshot {
+  structuralNodes: Question[];
+  qaPatches: Record<string, {
+    rootLabel?: string;
+    branchLabel?: string;
+    clusterLabel?: string;
+    parentId?: string;
+    clusterNodeId?: string;
+    placementReason?: string;
+  }>;
+}
+
+export function hasReorgBackup(): boolean {
+  return localStorage.getItem(REORG_SNAPSHOT_KEY) !== null;
+}
+
+export function revertReorganization(): ServiceResult<void> {
+  const snapshotRaw = localStorage.getItem(REORG_SNAPSHOT_KEY);
+  if (!snapshotRaw) {
+    return { success: false, error: { code: 'NO_BACKUP', message: 'No previous structure to revert to.', retryable: false } };
+  }
+
+  try {
+    const snapshot = JSON.parse(snapshotRaw) as ReorgSnapshot;
+    const storeRaw = localStorage.getItem(STORAGE_KEY);
+    const store: Question[] = storeRaw ? JSON.parse(storeRaw) as Question[] : [];
+
+    // Remove current anchor/cluster nodes (created by reorganization)
+    const filtered = store.filter((q) => !q.isAnchorNode && !q.isClusterNode);
+
+    // Revert QA structural fields to pre-reorg values
+    for (const q of filtered) {
+      const patch = snapshot.qaPatches[q.id];
+      if (patch) {
+        q.rootLabel = patch.rootLabel;
+        q.branchLabel = patch.branchLabel;
+        q.clusterLabel = patch.clusterLabel;
+        q.parentId = patch.parentId;
+        q.clusterNodeId = patch.clusterNodeId;
+        q.placementReason = patch.placementReason;
+      }
+    }
+
+    // Re-add old structural nodes
+    const restored = [...snapshot.structuralNodes, ...filtered];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(restored));
+    localStorage.removeItem(REORG_SNAPSHOT_KEY);
+    return { success: true };
+  } catch {
+    return { success: false, error: { code: 'REVERT_ERROR', message: 'Failed to parse revert snapshot.', retryable: false } };
+  }
+}
+
+export async function reorganizeMindmap(
+  llmConfig: LLMConfig,
+): Promise<ServiceResult<{ anchorCount: number; clusterCount: number }>> {
+  if (_reorgInProgress) {
+    return { success: false, error: { code: 'IN_PROGRESS', message: 'Reorganization already in progress.', retryable: false } };
+  }
+
+  _reorgInProgress = true;
+  const { eventBus } = await import('../lib/event-bus.ts');
+  eventBus.emit({ type: 'REORG_STARTED' });
+
+  try {
+    return await _doReorganize(llmConfig, eventBus);
+  } finally {
+    _reorgInProgress = false;
+  }
+}
+
+async function _doReorganize(
+  llmConfig: LLMConfig,
+  eventBus: { emit: (event: AppEvent) => void },
+): Promise<ServiceResult<{ anchorCount: number; clusterCount: number }>> {
+  const { questionService } = await import('./question.service.ts');
+  const allQuestions = questionService.getAll();
+
+  // Collect only real QA nodes (not anchors, clusters, or flagged)
+  const qaNodes = allQuestions.filter(
+    (q) => !q.isAnchorNode && !q.isClusterNode && q.flagged !== true,
+  );
+
+  if (qaNodes.length < 2) {
+    eventBus.emit({ type: 'REORG_FAILED', payload: { error: 'Need at least 2 Q&As to reorganize.' } });
+    return { success: false, error: { code: 'TOO_FEW', message: 'Need at least 2 Q&As to reorganize.', retryable: false } };
+  }
+
+  // Build compact QA manifest for the LLM
+  const qaManifest = qaNodes.map((q) => ({
+    id: q.id,
+    s: (q.shortSummary || q.summary || q.answer || '').slice(0, 200),
+    k: q.keywords.slice(0, 3),
+  }));
+
+  const systemPrompt = [
+    'You are a knowledge organization assistant. Given a list of Q&A items, organize them into a coherent academic knowledge hierarchy.',
+    '',
+    'Structure policy (strictly follow):',
+    '- rootLabel: always "Knowledge"',
+    '- branchLabel: a TOP-LEVEL academic discipline (e.g., "Psychology", "Computer Science", "Physics", "Economics", "Biology", "Mathematics", "Philosophy")',
+    '- clusterLabel: a domain, theory, or sub-field WITHIN that discipline (e.g., "Learning Theory", "Machine Learning", "Thermodynamics")',
+    '- anchorName: a specific concept or phenomenon (e.g., "Spaced Repetition", "Transformer Architecture", "Entropy"). Must NEVER duplicate clusterLabel.',
+    '- keyword: a single most descriptive keyword for the anchor concept',
+    '- qaIds: array of Q&A item IDs that belong under this anchor concept',
+    '',
+    'Rules:',
+    '- Every Q&A ID from the input must appear in exactly ONE anchor\'s qaIds array. Do not omit or duplicate any ID.',
+    '- Group related Q&As under the same anchor when they discuss the same concept.',
+    '- Create separate anchors for distinct concepts, even if they share a cluster.',
+    '- Prefer fewer, well-organized branches and clusters over many fragmented ones.',
+    '- Each anchor must have at least 1 qaId.',
+    '',
+    'Respond ONLY with valid JSON (no markdown, no explanation, no trailing characters):',
+    '{"hierarchy":[{"rootLabel":"Knowledge","branches":[{"branchLabel":"...","clusters":[{"clusterLabel":"...","anchors":[{"anchorName":"...","keyword":"...","qaIds":["id1","id2"]}]}]}]}]}',
+  ].join('\n');
+
+  const userMessage = JSON.stringify(qaManifest);
+
+  try {
+    const raw = await chatCompletion(
+      [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
+      llmConfig,
+      { maxTokens: 8192 },
+    );
+
+    // Parse JSON — try direct parse first, then balanced-brace extraction
+    let result: ReorganizationResult;
+    try {
+      result = JSON.parse(raw) as ReorganizationResult;
+    } catch {
+      const balanced = extractBalancedJson(raw);
+      if (!balanced) {
+        console.warn('[EchoLearn] Reorg: could not extract JSON from LLM response:', raw.slice(0, 500));
+        const msg = 'Could not find valid JSON in LLM response.';
+        eventBus.emit({ type: 'REORG_FAILED', payload: { error: msg } });
+        return { success: false, error: { code: 'PARSE_ERROR', message: msg, retryable: true } };
+      }
+      try {
+        result = JSON.parse(balanced) as ReorganizationResult;
+      } catch (parseErr) {
+        console.warn('[EchoLearn] Reorg: balanced extraction still invalid JSON:', balanced.slice(0, 500), parseErr);
+        const msg = 'Invalid JSON in LLM response.';
+        eventBus.emit({ type: 'REORG_FAILED', payload: { error: msg } });
+        return { success: false, error: { code: 'PARSE_ERROR', message: msg, retryable: true } };
+      }
+    }
+
+    if (!result.hierarchy || !Array.isArray(result.hierarchy)) {
+      const msg = 'LLM response missing hierarchy array.';
+      eventBus.emit({ type: 'REORG_FAILED', payload: { error: msg } });
+      return { success: false, error: { code: 'PARSE_ERROR', message: msg, retryable: true } };
+    }
+
+    // Validate: collect all qaIds from the response
+    const assignedIds = new Set<string>();
+    const qaIdSet = new Set(qaNodes.map((q) => q.id));
+
+    for (const root of result.hierarchy) {
+      for (const branch of root.branches ?? []) {
+        for (const cluster of branch.clusters ?? []) {
+          for (const anchor of cluster.anchors ?? []) {
+            for (const qaId of anchor.qaIds ?? []) {
+              if (qaIdSet.has(qaId) && !assignedIds.has(qaId)) {
+                assignedIds.add(qaId);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Handle missing QA IDs — assign them to a fallback anchor
+    const missingIds = qaNodes.filter((q) => !assignedIds.has(q.id)).map((q) => q.id);
+    if (missingIds.length > 0) {
+      if (result.hierarchy.length === 0) {
+        result.hierarchy.push({ rootLabel: 'Knowledge', branches: [] });
+      }
+      const firstRoot = result.hierarchy[0];
+      let generalBranch = firstRoot.branches.find((b) => b.branchLabel === 'General');
+      if (!generalBranch) {
+        generalBranch = { branchLabel: 'General', clusters: [] };
+        firstRoot.branches.push(generalBranch);
+      }
+      let uncatCluster = generalBranch.clusters.find((c) => c.clusterLabel === 'Uncategorized');
+      if (!uncatCluster) {
+        uncatCluster = { clusterLabel: 'Uncategorized', anchors: [] };
+        generalBranch.clusters.push(uncatCluster);
+      }
+      uncatCluster.anchors.push({
+        anchorName: 'Unclassified Items',
+        keyword: 'general',
+        qaIds: missingIds,
+      });
+    }
+
+    // Save compact structural snapshot BEFORE making changes (for revert)
+    const oldStructuralNodes = allQuestions.filter((q) => q.isAnchorNode === true || q.isClusterNode === true);
+    const qaPatches: ReorgSnapshot['qaPatches'] = {};
+    for (const q of qaNodes) {
+      qaPatches[q.id] = {
+        rootLabel: q.rootLabel,
+        branchLabel: q.branchLabel,
+        clusterLabel: q.clusterLabel,
+        parentId: q.parentId,
+        clusterNodeId: q.clusterNodeId,
+        placementReason: q.placementReason,
+      };
+    }
+    const snapshot: ReorgSnapshot = { structuralNodes: oldStructuralNodes, qaPatches };
+    try {
+      localStorage.setItem(REORG_SNAPSHOT_KEY, JSON.stringify(snapshot));
+    } catch {
+      console.warn('[EchoLearn] Reorg: could not save revert snapshot (storage quota). Revert will not be available.');
+    }
+
+    // Build the new store
+    const qaById = new Map(qaNodes.map((q) => [q.id, q]));
+    const newStore: Question[] = [];
+    let anchorCount = 0;
+    let clusterCount = 0;
+    const now = Date.now();
+
+    // Keep flagged questions as-is (they're excluded from reorganization)
+    const flaggedQuestions = allQuestions.filter((q) => q.flagged === true);
+    newStore.push(...flaggedQuestions);
+
+    for (const root of result.hierarchy) {
+      const rootLabel = root.rootLabel || 'Knowledge';
+
+      for (const branch of root.branches ?? []) {
+        const branchLabel = branch.branchLabel || 'General concepts';
+
+        for (const cluster of branch.clusters ?? []) {
+          const clusterLabel = cluster.clusterLabel || 'Open questions';
+
+          const clusterNodeId = `cluster-${now}-${clusterCount}-${Math.random().toString(36).slice(2, 7)}`;
+          let clusterQaTotal = 0;
+          const anchorNodes: Question[] = [];
+
+          for (const anchor of cluster.anchors ?? []) {
+            const anchorName = anchor.anchorName || clusterLabel;
+            const anchorNodeId = `anchor-${now}-${anchorCount}-${Math.random().toString(36).slice(2, 7)}`;
+            const anchorQaIds = (anchor.qaIds ?? []).filter((id) => qaById.has(id));
+
+            const summaryEntries = anchorQaIds.map((id) => {
+              const q = qaById.get(id)!;
+              const shortSummary = q.shortSummary || q.summary || q.answer || '';
+              return `[${id}] ${shortSummary.slice(0, 200)}`;
+            });
+
+            const anchorNode: Question = {
+              id: anchorNodeId,
+              timestamp: now,
+              date: new Date().toISOString().slice(0, 10),
+              content: anchorName,
+              answer: '',
+              summary: anchorName,
+              title: anchorName,
+              keywords: anchor.keyword ? [anchor.keyword] : [],
+              relatedQuestionIds: [],
+              categoryIds: [],
+              reviewSchedule: { nextReviewDate: '9999-12-31', reviewCount: 0, easeFactor: 2.5 },
+              createdAt: now,
+              aliases: [],
+              sourcePrompts: [],
+              sourceQuestionIds: [],
+              rootLabel,
+              branchLabel,
+              clusterLabel,
+              nodeSummary: summaryEntries.join('\n'),
+              isAnchorNode: true,
+              qaCount: anchorQaIds.length,
+              clusterNodeId,
+            };
+
+            anchorNodes.push(anchorNode);
+            clusterQaTotal += anchorQaIds.length;
+
+            for (const qaId of anchorQaIds) {
+              const qa = qaById.get(qaId)!;
+              newStore.push({
+                ...qa,
+                rootLabel,
+                branchLabel,
+                clusterLabel,
+                parentId: anchorNodeId,
+                clusterNodeId,
+                placementReason: `Reorganized under ${branchLabel} > ${clusterLabel} > ${anchorName}`,
+              });
+              qaById.delete(qaId);
+            }
+
+            anchorCount++;
+          }
+
+          const clusterNode: Question = {
+            id: clusterNodeId,
+            timestamp: now,
+            date: new Date().toISOString().slice(0, 10),
+            content: clusterLabel,
+            answer: '',
+            summary: clusterLabel,
+            title: clusterLabel,
+            keywords: [],
+            relatedQuestionIds: [],
+            categoryIds: [],
+            reviewSchedule: { nextReviewDate: '9999-12-31', reviewCount: 0, easeFactor: 2.5 },
+            createdAt: now,
+            aliases: [],
+            sourcePrompts: [],
+            sourceQuestionIds: [],
+            rootLabel,
+            branchLabel,
+            clusterLabel,
+            nodeSummary: '',
+            isClusterNode: true,
+            qaCount: clusterQaTotal,
+          };
+
+          newStore.push(clusterNode);
+          newStore.push(...anchorNodes);
+          clusterCount++;
+        }
+      }
+    }
+
+    // Atomic write
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(newStore));
+
+    eventBus.emit({ type: 'REORG_COMPLETED', payload: { anchorCount, clusterCount } });
+    return { success: true, data: { anchorCount, clusterCount } };
+  } catch (err) {
+    // Remove snapshot on failure — nothing was changed
+    localStorage.removeItem(REORG_SNAPSHOT_KEY);
+    const message = err instanceof Error ? err.message : 'Reorganization failed unexpectedly.';
+    eventBus.emit({ type: 'REORG_FAILED', payload: { error: message } });
+    return { success: false, error: { code: 'LLM_ERROR', message, retryable: true } };
+  }
 }

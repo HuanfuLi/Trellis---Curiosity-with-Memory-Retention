@@ -262,12 +262,18 @@ export function SettingsScreen() {
 
   const handleClearAllData = () => {
     if (!confirm('Delete ALL data?\n\nThis removes every question, flashcard, session, planner entry, and podcast. Settings are kept.\n\nThis cannot be undone.')) return;
+    // Clear all echolearn_ keys from localStorage (except settings)
     const keys = Object.keys(localStorage).filter((k) => k.startsWith('echolearn_') && k !== 'echolearn_settings');
     for (const k of keys) localStorage.removeItem(k);
     // Explicitly set an empty array so flashcardService doesn't auto-re-seed on next load
     localStorage.setItem('echolearn_flashcards', '[]');
-    // Explicitly clear the concept feed post cache
+    // Clear sessionStorage (connection post cache, etc.)
+    const sessionKeys = Object.keys(sessionStorage).filter((k) => k.startsWith('echolearn_'));
+    for (const k of sessionKeys) sessionStorage.removeItem(k);
+    // Clear the concept feed post cache
     conceptFeedService.clearCache();
+    // Clear cached images from IndexedDB
+    void imageGenerationService.clearImageCache();
     // Clear SQLite tables (Android native) — fire-and-forget before reload
     void clearAllTables().finally(() => {
       toast('All data cleared — reloading…', 'success');
@@ -861,12 +867,16 @@ export function SettingsScreen() {
             size="sm"
             variant="secondary"
             onClick={async () => {
-              await mockSettingsService.set('podcast', {
+              const result = await mockSettingsService.set('podcast', {
                 autoGenerate: podcastAutoGenerate,
                 sleepTime: podcastSleepTime,
                 advanceMinutes: parseInt(podcastAdvance) || 60,
               });
-              toast('Podcast settings saved.', 'success');
+              if (result.success) {
+                toast('Podcast settings saved.', 'success');
+              } else {
+                toast(result.error?.message || 'Failed to save settings.', 'error');
+              }
             }}
           >
             Save

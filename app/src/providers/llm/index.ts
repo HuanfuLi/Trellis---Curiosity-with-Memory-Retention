@@ -23,11 +23,16 @@ const STREAM_TIMEOUT_MS = 120_000;    // 120 s for full streaming response
 
 // ─── Routing ──────────────────────────────────────────────────────────────────
 
-export async function chatCompletion(messages: ChatMessage[], config: LLMConfig): Promise<string> {
+export interface CompletionOptions {
+  maxTokens?: number;
+}
+
+export async function chatCompletion(messages: ChatMessage[], config: LLMConfig, options?: CompletionOptions): Promise<string> {
+  const maxTokens = options?.maxTokens ?? 4096;
   switch (config.provider) {
-    case 'claude':   return claudeCompletion(messages, config);
-    case 'gemini':   return geminiCompletion(messages, config);
-    default:         return openAICompletion(messages, config); // openai | local | lmstudio
+    case 'claude':   return claudeCompletion(messages, config, maxTokens);
+    case 'gemini':   return geminiCompletion(messages, config, maxTokens);
+    default:         return openAICompletion(messages, config, maxTokens); // openai | local | lmstudio
   }
 }
 
@@ -75,10 +80,10 @@ async function localPost(
   return fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: timeoutSignal(COMPLETION_TIMEOUT_MS) });
 }
 
-async function openAICompletion(messages: ChatMessage[], config: LLMConfig): Promise<string> {
+async function openAICompletion(messages: ChatMessage[], config: LLMConfig, maxTokens = 4096): Promise<string> {
   const isLocal = config.provider === 'local' || config.provider === 'lmstudio';
   const url = `${openAIBaseUrl(config)}/v1/chat/completions`;
-  const body = { model: config.model, messages, max_tokens: 4096, stream: false };
+  const body = { model: config.model, messages, max_tokens: maxTokens, stream: false };
 
   const response = isLocal
     ? await localPost(url, body)
@@ -119,7 +124,7 @@ async function* openAIStream(messages: ChatMessage[], config: LLMConfig): AsyncG
 
 // ─── Claude ──────────────────────────────────────────────────────────────────
 
-async function claudeCompletion(messages: ChatMessage[], config: LLMConfig): Promise<string> {
+async function claudeCompletion(messages: ChatMessage[], config: LLMConfig, maxTokens = 4096): Promise<string> {
   const system = messages.find((m) => m.role === 'system')?.content;
   const userMessages = messages
     .filter((m) => m.role !== 'system')
@@ -133,7 +138,7 @@ async function claudeCompletion(messages: ChatMessage[], config: LLMConfig): Pro
       'anthropic-version': '2023-06-01',
       'anthropic-dangerous-direct-browser-access': 'true',
     },
-    body: JSON.stringify({ model: config.model, max_tokens: 4096, system, messages: userMessages }),
+    body: JSON.stringify({ model: config.model, max_tokens: maxTokens, system, messages: userMessages }),
     signal: timeoutSignal(COMPLETION_TIMEOUT_MS),
   });
   if (!response.ok) {
@@ -176,7 +181,7 @@ async function* claudeStream(messages: ChatMessage[], config: LLMConfig): AsyncG
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
-function toGeminiPayload(messages: ChatMessage[]) {
+function toGeminiPayload(messages: ChatMessage[], maxTokens = 4096) {
   const system = messages.find((m) => m.role === 'system')?.content;
   const contents = messages
     .filter((m) => m.role !== 'system')
@@ -187,16 +192,16 @@ function toGeminiPayload(messages: ChatMessage[]) {
   return {
     contents,
     ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
-    generationConfig: { maxOutputTokens: 4096 },
+    generationConfig: { maxOutputTokens: maxTokens },
   };
 }
 
-async function geminiCompletion(messages: ChatMessage[], config: LLMConfig): Promise<string> {
+async function geminiCompletion(messages: ChatMessage[], config: LLMConfig, maxTokens = 4096): Promise<string> {
   const url = `${GEMINI_BASE}/models/${config.model}:generateContent?key=${config.apiKey ?? ''}`;
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(toGeminiPayload(messages)),
+    body: JSON.stringify(toGeminiPayload(messages, maxTokens)),
     signal: timeoutSignal(COMPLETION_TIMEOUT_MS),
   });
   if (!response.ok) {

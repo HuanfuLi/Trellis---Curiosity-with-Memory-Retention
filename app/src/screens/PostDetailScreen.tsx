@@ -418,14 +418,18 @@ export function PostDetailScreen() {
         </div>
       )}
 
-      {/* Carousel — shown when images exist, retry button when failed */}
+      {/* Carousel — reserve 350px while loading to prevent layout shift */}
       {carouselImages.length > 0 ? (
         <PostCarousel
           images={carouselImages}
           isLoading={isLoadingCarousel}
           onIndexChange={(index) => { /* Future: analytics or preload */ void index; }}
         />
-      ) : !isLoadingCarousel && post && (
+      ) : isLoadingCarousel ? (
+        <div style={{ height: '350px', borderRadius: 'var(--radius-xl)', backgroundColor: 'var(--surface-variant)', marginBottom: '14px', animation: 'pulse 1.5s ease-in-out infinite' }}>
+          <style>{`@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
+        </div>
+      ) : post && (
         <button
           onClick={() => void handleRetryImage()}
           disabled={isRetryingImage}

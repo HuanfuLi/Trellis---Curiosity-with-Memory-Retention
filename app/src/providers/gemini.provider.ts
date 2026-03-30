@@ -122,6 +122,9 @@ export class GeminiProvider implements IImageProvider {
           generationConfig: {
             // TEXT must be included alongside IMAGE — the API rejects IMAGE alone.
             responseModalities: ['TEXT', 'IMAGE'],
+            // Use lowest resolution (512px) to reduce storage and token cost.
+            // Options: '512' (Flash only), '1K' (default), '2K', '4K'.
+            imageConfig: { imageSize: '512' },
           },
         }),
         signal: controller.signal,

@@ -6,6 +6,7 @@ import { chatStream } from '../providers/llm';
 import { today } from '../lib/date';
 import { buildCandidateContextPack, classifyAndAnchor, formatCandidateContextPack } from '../services/canonical-knowledge.service';
 import { evaluateQuestion as filterQuestion, type QuestionFilterContext } from '../services/question-filter.service';
+import { eventBus } from '../lib/event-bus';
 
 interface UseQuestionsReturn {
   questions: Question[];
@@ -34,6 +35,13 @@ export function useQuestions(): UseQuestionsReturn {
       setIsLoading(false);
     };
     load();
+
+    // Sync with questions created by OTHER hook instances (e.g. AskScreen's
+    // useQuestions adds a question, HomeScreen's instance needs to know).
+    const unsub = eventBus.subscribe('QUESTION_ASKED', (event) => {
+      setQuestions((prev) => [event.payload, ...prev.filter((q) => q.id !== event.payload.id)]);
+    });
+    return unsub;
   }, []);
 
   const ask = useCallback(async (content: string): Promise<Question | null> => {

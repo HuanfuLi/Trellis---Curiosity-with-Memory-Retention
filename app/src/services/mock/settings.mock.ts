@@ -87,11 +87,12 @@ function load(): AppSettings {
   }
 }
 
-function save(settings: AppSettings): void {
+function save(settings: AppSettings): boolean {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    return true;
   } catch {
-    // ignore storage errors
+    return false;
   }
 }
 
@@ -108,7 +109,9 @@ export const mockSettingsService = {
   async set<K extends keyof AppSettings>(key: K, value: AppSettings[K]): Promise<ServiceResult<void>> {
     const settings = load();
     settings[key] = value;
-    save(settings);
+    if (!save(settings)) {
+      return { success: false, error: { code: 'DATABASE_ERROR', message: 'Storage quota exceeded. Free up space and try again.', retryable: false } };
+    }
     return { success: true };
   },
 

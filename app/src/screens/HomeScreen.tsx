@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useNavigate, type NavigateOptions } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { BookOpen, CheckSquare, Headphones } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -17,9 +17,6 @@ import { eventBus } from '../lib/event-bus';
 import { today, getGreeting } from '../lib/date';
 import { toast } from '../lib/toast';
 import { Header, HEADER_HEIGHT } from '../components/ui/Header';
-
-// Module-level scroll position — survives remounts but not full page refreshes
-let savedScrollTop = 0;
 
 const MILESTONE_POOL: BlindboxItem[] = [
   { id: 'm-0', type: 'milestone', emoji: '🔥', headline: 'Momentum looks like curiosity', body: 'The more often you open ideas from different angles, the easier it becomes to stay in motion without forcing yourself.' },
@@ -44,18 +41,6 @@ export function HomeScreen() {
   // without re-creating the callback (which would reset scroll listeners).
   const questionsRef = useRef<Question[]>(questions);
   questionsRef.current = questions;
-
-  const saveScrollAndNavigate = useCallback((path: string, options?: NavigateOptions) => {
-    if (containerRef.current) savedScrollTop = containerRef.current.scrollTop;
-    navigate(path, options);
-  }, [navigate]);
-
-  // Restore scroll position when returning to HomeScreen
-  useEffect(() => {
-    if (containerRef.current && savedScrollTop > 0) {
-      containerRef.current.scrollTop = savedScrollTop;
-    }
-  }, []);
 
   const t = today();
   const todayPodcast = getPodcastForDate(t);
@@ -100,7 +85,9 @@ export function HomeScreen() {
     };
   }, [questions, questionsLoading]);
 
-  // Load handler — called on intentional pull-and-release gesture
+  // Load handler — called on intentional pull-and-release gesture.
+  // Generates posts AND their images before adding to the feed so cards
+  // appear fully ready (no skeleton → image pop-in).
   const handleLoad = useCallback(async () => {
     if (isLoadingMoreRef.current) return;
     isLoadingMoreRef.current = true;
@@ -108,6 +95,16 @@ export function HomeScreen() {
     try {
       const newPosts = await infiniteScrollService.loadNextBatch(questionsRef.current, 10);
       if (newPosts.length > 0) {
+        // Pre-generate images for all new posts before showing them
+        const { inferImageStyle, buildImagePrompt } = await import('../services/postFormatting.service');
+        const { imageGenerationService } = await import('../services/imageGeneration.service');
+        await Promise.allSettled(
+          newPosts.map((post) => {
+            const style = inferImageStyle(post);
+            const prompt = buildImagePrompt(post);
+            return imageGenerationService.generateImage(post.id, prompt, style);
+          }),
+        );
         setDailyPosts((prev) => [...prev, ...newPosts]);
       } else {
         toast('No more posts to generate right now', 'info');
@@ -329,7 +326,7 @@ export function HomeScreen() {
     // cached post ID is used; otherwise we navigate to the canonical conn-* ID and let
     // PostDetailScreen stream the essay using the connectionMeta passed via state.
     const postId = card?.connectionPostId ?? `conn-${idA}-${idB}`;
-    saveScrollAndNavigate(`/posts/${postId}`, {
+    navigate(`/posts/${postId}`, {
       state: {
         connectionMeta: {
           questionA: qA,
@@ -362,7 +359,7 @@ export function HomeScreen() {
 
             {/* Flashcard Card */}
           <button
-            onClick={() => saveScrollAndNavigate('/review')}
+            onClick={() => navigate('/review')}
             className="active-squish"
             style={{ textAlign: 'left', background: 'none', padding: 0 }}
           >
@@ -387,7 +384,7 @@ export function HomeScreen() {
 
           {/* Planner Card */}
           <button
-            onClick={() => saveScrollAndNavigate('/planner')}
+            onClick={() => navigate('/planner')}
             className="active-squish"
             style={{ textAlign: 'left', background: 'none', padding: 0 }}
           >
@@ -412,7 +409,7 @@ export function HomeScreen() {
 
           {/* Podcast Card — full width */}
           <button
-            onClick={() => saveScrollAndNavigate('/podcast')}
+            onClick={() => navigate('/podcast')}
             className="active-squish"
             style={{ gridColumn: '1 / -1', textAlign: 'left', background: 'none', padding: 0 }}
           >
@@ -453,7 +450,7 @@ export function HomeScreen() {
               onOpenConnection={handleOpenConnection}
               showConnectionScores={mockSettingsService.getSync().embeddingDebug.showScores}
               onOpenPost={(postId, post) => {
-                saveScrollAndNavigate(`/posts/${postId}`, { state: { post } });
+                navigate(`/posts/${postId}`, { state: { post } });
               }}
             />
           </div>

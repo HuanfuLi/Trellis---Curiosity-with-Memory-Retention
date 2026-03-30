@@ -389,6 +389,23 @@ export interface ClassificationResult {
   anchorId?: string;
 }
 
+export interface ReorganizationResult {
+  hierarchy: Array<{
+    rootLabel: string;
+    branches: Array<{
+      branchLabel: string;
+      clusters: Array<{
+        clusterLabel: string;
+        anchors: Array<{
+          anchorName: string;
+          keyword: string;
+          qaIds: string[];
+        }>;
+      }>;
+    }>;
+  }>;
+}
+
 export interface ReviewMapLeaf {
   nodeId: string;
   label: string;
@@ -547,7 +564,13 @@ export type ErrorCode =
   | 'RETRIES_EXHAUSTED'
   | 'VALIDATION_ERROR'
   | 'NOT_CONFIGURED'
-  | 'UNKNOWN_ERROR';
+  | 'UNKNOWN_ERROR'
+  | 'NO_BACKUP'
+  | 'REVERT_ERROR'
+  | 'IN_PROGRESS'
+  | 'TOO_FEW'
+  | 'PARSE_ERROR'
+  | 'LLM_ERROR';
 
 export interface AskResult {
   question: Question;
@@ -577,4 +600,7 @@ export type AppEvent =
   | { type: 'SESSION_CREATED'; payload: ChatSession }
   | { type: 'SESSION_UPDATED'; payload: { id: string } }
   | { type: 'FLASHCARDS_CREATED'; payload: { sessionId: string; count: number } }
-  | { type: 'AUTO_GEN_UPDATED'; payload: { moves: unknown[]; count: number } };
+  | { type: 'AUTO_GEN_UPDATED'; payload: { moves: unknown[]; count: number } }
+  | { type: 'REORG_STARTED' }
+  | { type: 'REORG_COMPLETED'; payload: { anchorCount: number; clusterCount: number } }
+  | { type: 'REORG_FAILED'; payload: { error: string } };

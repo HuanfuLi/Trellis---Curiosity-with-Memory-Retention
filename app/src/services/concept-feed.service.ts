@@ -6,6 +6,7 @@ import { plannerService } from './planner.service.ts';
 import { graphService } from './graph.service.ts';
 
 const STORAGE_KEY = 'echolearn_daily_posts';
+const CONNECTION_POSTS_KEY = 'echolearn_connection_posts';
 const MAX_POSTS = 4;
 const CONTEXT_LIMIT = 10;
 
@@ -171,6 +172,35 @@ function saveCache(cache: CachedDailyPosts): void {
   } catch {
     // ignore cache persistence failures
   }
+}
+
+// ─── Persistent connection post store ────────────────────────────────────────
+// Connection posts are stored in sessionStorage (separate 5MB quota from
+// localStorage) so they survive daily cache invalidation and don't compete
+// with the main store for localStorage quota.
+
+function loadConnectionPosts(): Record<string, DailyPost> {
+  try {
+    const raw = sessionStorage.getItem(CONNECTION_POSTS_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) as Record<string, DailyPost>;
+  } catch {
+    return {};
+  }
+}
+
+function saveConnectionPostToStore(post: DailyPost): void {
+  try {
+    const store = loadConnectionPosts();
+    store[post.id] = post;
+    sessionStorage.setItem(CONNECTION_POSTS_KEY, JSON.stringify(store));
+  } catch {
+    // ignore storage failures
+  }
+}
+
+function getConnectionPostFromStore(id: string): DailyPost | null {
+  return loadConnectionPosts()[id] ?? null;
 }
 
 function truncate(text: string, max: number): string {
@@ -613,8 +643,10 @@ export const conceptFeedService = {
    */
   getPostById(id: string): DailyPost | null {
     const cached = loadCache();
-    if (!cached) return null;
-    return cached.posts.find((post) => post.id === id) ?? null;
+    const fromCache = cached?.posts.find((post) => post.id === id) ?? null;
+    if (fromCache) return fromCache;
+    // Fall back to sessionStorage-based connection post store
+    return getConnectionPostFromStore(id);
   },
 
   getCachedDailyPosts(): DailyPost[] {
@@ -773,7 +805,10 @@ export const conceptFeedService = {
       origin: 'ai',
     };
 
-    // Append to cache without affecting feed assembly (connection posts are filtered out of feed)
+    // Persist to independent connection post store (survives cache invalidation)
+    saveConnectionPostToStore(post);
+
+    // Also append to daily cache for backward compatibility
     const cached = loadCache();
     const existing = cached?.posts ?? [];
     const withoutOld = existing.filter((p) => p.id !== postId);

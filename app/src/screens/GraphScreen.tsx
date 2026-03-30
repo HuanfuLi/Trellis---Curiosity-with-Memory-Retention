@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import MindElixir from 'mind-elixir';
 import 'mind-elixir/style';
 import type { MindElixirData, MindElixirInstance, NodeObj } from 'mind-elixir';
-import { ArrowLeft, RefreshCw, GitBranch, Plus, X, ChevronRight } from 'lucide-react';
+import { ArrowLeft, RefreshCw, GitBranch, Plus, X, ChevronRight, Undo2 } from 'lucide-react';
 import type { Question } from '../types';
 import { graphService } from '../services/graph.service';
 import { toast } from '../lib/toast';
 import { Header, HEADER_HEIGHT } from '../components/ui/Header';
-import { buildAnchorReflectionTree } from '../services/canonical-knowledge.service';
+import { buildAnchorReflectionTree, reorganizeMindmap, revertReorganization, hasReorgBackup, isReorgInProgress } from '../services/canonical-knowledge.service';
+import { mockSettingsService } from '../services/mock/settings.mock';
+import { eventBus } from '../lib/event-bus';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -624,16 +626,41 @@ export function GraphScreen() {
   const [edges, setEdges] = useState<GraphEdge[]>([]);
   const [unlinked, setUnlinked] = useState<Question[]>([]);
   const [selectedNode, setSelectedNode] = useState<Question | null>(null);
+  const [reorganizing, setReorganizing] = useState(isReorgInProgress);
+  const [showReorgConfirm, setShowReorgConfirm] = useState(false);
+  const [showRevertConfirm, setShowRevertConfirm] = useState(false);
+  const [canRevert, setCanRevert] = useState(hasReorgBackup);
 
   const reload = useCallback(() => {
     void graphService.getGraph().then(({ nodes: n, edges: e }) => {
       setNodes(n);
       setEdges(e);
       setUnlinked(graphService.getUnlinkedNodes());
+      setCanRevert(hasReorgBackup());
+      setReorganizing(isReorgInProgress());
     });
   }, []);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // Subscribe to reorganization events so state updates even if user navigated away and back
+  useEffect(() => {
+    const unsub1 = eventBus.subscribe('REORG_COMPLETED', (event) => {
+      setReorganizing(false);
+      setSelectedNode(null);
+      toast(`Map reorganized: ${event.payload.clusterCount} clusters, ${event.payload.anchorCount} concepts`, 'success');
+      reload();
+    });
+    const unsub2 = eventBus.subscribe('REORG_FAILED', (event) => {
+      setReorganizing(false);
+      toast(event.payload.error || 'Reorganization failed', 'error');
+      setCanRevert(hasReorgBackup());
+    });
+    const unsub3 = eventBus.subscribe('REORG_STARTED', () => {
+      setReorganizing(true);
+    });
+    return () => { unsub1(); unsub2(); unsub3(); };
+  }, [reload]);
 
   const handleLink = useCallback(
     async (sourceId: string, targetId: string) => {
@@ -652,6 +679,27 @@ export function GraphScreen() {
     [nodes, reload],
   );
 
+  const handleReorganize = useCallback(() => {
+    setShowReorgConfirm(false);
+    toast('Reorganizing your knowledge map...', 'info');
+
+    const settings = mockSettingsService.getSync();
+    // Fire-and-forget — events handle state updates across navigation
+    void reorganizeMindmap(settings.llm);
+  }, []);
+
+  const handleRevert = useCallback(() => {
+    setShowRevertConfirm(false);
+    const result = revertReorganization();
+    if (result.success) {
+      toast('Map reverted to previous structure', 'success');
+      setSelectedNode(null);
+      reload();
+    } else {
+      toast(result.error?.message || 'Revert failed', 'error');
+    }
+  }, [reload]);
+
   // Scroll to top whenever the view switches so Repair doesn't inherit
   // the map's scroll position and vice-versa.
   const containerRef = useRef<HTMLDivElement>(null);
@@ -660,33 +708,127 @@ export function GraphScreen() {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [view]);
 
+  const hasQaNodes = nodes.some((n) => !n.isAnchorNode && !n.isClusterNode && n.flagged !== true);
+
   return (
     <div ref={containerRef} style={{ padding: `${HEADER_HEIGHT + 8}px 16px 16px`, maxWidth: '448px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* Reorganize confirmation dialog */}
+      {showReorgConfirm && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 300, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+          <div style={{ backgroundColor: 'var(--surface)', borderRadius: 'var(--radius-xl)', padding: '24px', width: '100%', maxWidth: '340px', boxShadow: 'var(--shadow-3)' }}>
+            <p style={{ fontWeight: 700, fontSize: '1.05rem', marginBottom: '6px' }}>Reorganize Map</p>
+            <p style={{ fontSize: '0.85rem', color: 'var(--muted-foreground)', marginBottom: '16px', lineHeight: 1.5 }}>
+              This will reorganize your entire knowledge map using AI. Your Q&As, review schedules, and flashcards will be preserved — only the hierarchy structure will change.
+              {'\n\n'}You can revert to the current structure afterwards if needed.
+            </p>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={() => setShowReorgConfirm(false)} style={{ flex: 1, padding: '10px', borderRadius: '100px', border: '1px solid var(--border)', backgroundColor: 'transparent', color: 'var(--muted-foreground)', fontSize: '0.875rem', cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button onClick={handleReorganize} style={{ flex: 1, padding: '10px', borderRadius: '100px', backgroundColor: 'var(--primary-40)', color: 'white', fontWeight: 600, fontSize: '0.875rem', border: 'none', cursor: 'pointer' }}>
+                Reorganize
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Revert confirmation dialog */}
+      {showRevertConfirm && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 300, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+          <div style={{ backgroundColor: 'var(--surface)', borderRadius: 'var(--radius-xl)', padding: '24px', width: '100%', maxWidth: '340px', boxShadow: 'var(--shadow-3)' }}>
+            <p style={{ fontWeight: 700, fontSize: '1.05rem', marginBottom: '6px' }}>Revert Map</p>
+            <p style={{ fontSize: '0.85rem', color: 'var(--muted-foreground)', marginBottom: '16px', lineHeight: 1.5 }}>
+              Revert to the previous map structure? This will undo the last reorganization.
+            </p>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={() => setShowRevertConfirm(false)} style={{ flex: 1, padding: '10px', borderRadius: '100px', border: '1px solid var(--border)', backgroundColor: 'transparent', color: 'var(--muted-foreground)', fontSize: '0.875rem', cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button onClick={handleRevert} style={{ flex: 1, padding: '10px', borderRadius: '100px', backgroundColor: 'var(--primary-40)', color: 'white', fontWeight: 600, fontSize: '0.875rem', border: 'none', cursor: 'pointer' }}>
+                Revert
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Header
-        title="Knowledge Graph"
+        title="Mind Map"
         right={
-          unlinked.length > 0 && view === 'map' ? (
-            <button
-              onClick={() => setView('inbox')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 14px',
-                borderRadius: '100px',
-                backgroundColor: 'var(--primary-40)',
-                color: 'white',
-                fontWeight: 600,
-                fontSize: '0.8rem',
-                border: 'none',
-                cursor: 'pointer',
-                boxShadow: 'var(--shadow-1)',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              <Plus size={14} />
-              Repair {unlinked.length}
-            </button>
+          view === 'map' ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {canRevert && (
+                <button
+                  onClick={() => setShowRevertConfirm(true)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '8px 12px',
+                    borderRadius: '100px',
+                    backgroundColor: 'transparent',
+                    color: 'var(--muted-foreground)',
+                    fontWeight: 600,
+                    fontSize: '0.8rem',
+                    border: '1px solid var(--border)',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  <Undo2 size={14} />
+                  Revert
+                </button>
+              )}
+              {hasQaNodes && (
+                <button
+                  onClick={() => !reorganizing && setShowReorgConfirm(true)}
+                  disabled={reorganizing}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '8px 12px',
+                    borderRadius: '100px',
+                    backgroundColor: 'var(--surface-variant)',
+                    color: 'var(--foreground)',
+                    fontWeight: 600,
+                    fontSize: '0.8rem',
+                    border: '1px solid var(--border)',
+                    cursor: reorganizing ? 'not-allowed' : 'pointer',
+                    whiteSpace: 'nowrap',
+                    opacity: reorganizing ? 0.6 : 1,
+                  }}
+                >
+                  <RefreshCw size={14} style={reorganizing ? { animation: 'spin 1.5s linear infinite' } : undefined} />
+                  {reorganizing ? 'Reorganizing...' : 'Reorganize'}
+                  {reorganizing && <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>}
+                </button>
+              )}
+              {unlinked.length > 0 && (
+                <button
+                  onClick={() => setView('inbox')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 14px',
+                    borderRadius: '100px',
+                    backgroundColor: 'var(--primary-40)',
+                    color: 'white',
+                    fontWeight: 600,
+                    fontSize: '0.8rem',
+                    border: 'none',
+                    cursor: 'pointer',
+                    boxShadow: 'var(--shadow-1)',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  <Plus size={14} />
+                  Repair {unlinked.length}
+                </button>
+              )}
+            </div>
           ) : undefined
         }
       />
