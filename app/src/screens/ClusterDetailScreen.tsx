@@ -166,7 +166,7 @@ export function ClusterDetailScreen() {
           }}
         >
           <BookOpen size={16} />
-          Review Flashcards
+          Flashcards
         </button>
         <button
           onClick={handleGeneratePost}
