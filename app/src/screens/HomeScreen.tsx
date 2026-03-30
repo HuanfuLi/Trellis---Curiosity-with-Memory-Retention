@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, type NavigateOptions } from 'react-router-dom';
 import { BookOpen, CheckSquare, Headphones } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -45,7 +45,7 @@ export function HomeScreen() {
   const questionsRef = useRef<Question[]>(questions);
   questionsRef.current = questions;
 
-  const saveScrollAndNavigate = useCallback((path: string, options?: Parameters<typeof navigate>[1]) => {
+  const saveScrollAndNavigate = useCallback((path: string, options?: NavigateOptions) => {
     if (containerRef.current) savedScrollTop = containerRef.current.scrollTop;
     navigate(path, options);
   }, [navigate]);

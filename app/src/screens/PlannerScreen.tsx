@@ -12,6 +12,8 @@ import { useDailyRefresh } from '../state/useDailyRefresh';
 import { useReview } from '../state/useReview';
 import { useQuestions } from '../state/useQuestions';
 import { toast } from '../lib/toast';
+import { transcribeAudio } from '../providers/stt';
+import { mockSettingsService } from '../services/mock/settings.mock';
 import { Header, HEADER_HEIGHT } from '../components/ui/Header';
 import { MoveCard } from '../components/MoveCard';
 import { Capacitor } from '@capacitor/core';
@@ -361,9 +363,7 @@ export function PlannerScreen() {
         stream.getTracks().forEach((t) => t.stop());
         if (audioChunksRef.current.length > 0) {
           try {
-            const { transcribeAudio } = await import('../providers/stt');
             const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-            const { mockSettingsService } = await import('../services/mock/settings.mock');
             const text = await transcribeAudio(blob, mockSettingsService.getSync().tts);
             setCheckInInput((prev) => (prev ? prev + ' ' : '') + text);
           } catch {

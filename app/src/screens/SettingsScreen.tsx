@@ -18,6 +18,7 @@ import { clearAllTables } from '../services/db.service';
 import { conceptFeedService } from '../services/concept-feed.service';
 import { plannerService } from '../services/planner.service';
 import { questionService } from '../services/question.service';
+import { embedText } from '../providers/embedding';
 
 function SectionHeader({ icon, title }: { icon: React.ReactNode; title: string }) {
   return (
@@ -205,7 +206,7 @@ export function SettingsScreen() {
     };
     const start = Date.now();
     try {
-      const vec = await import('../providers/embedding').then((m) => m.embedText('test', config));
+      const vec = await embedText('test', config);
       const latencyMs = Date.now() - start;
       setTestResult((prev) => ({
         ...prev,

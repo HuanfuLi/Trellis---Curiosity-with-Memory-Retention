@@ -66,7 +66,7 @@ export function PostDetailScreen() {
   const [isRetryingImage, setIsRetryingImage] = useState(false);
 
   // Essay generation state (connection posts only)
-  const [essayStreaming, setEssayStreaming] = useState('');
+  const [, setEssayStreaming] = useState('');
   const [isGeneratingEssay, setIsGeneratingEssay] = useState(false);
   const [essayError, setEssayError] = useState<string | null>(null);
   const generateAbortRef = useRef(false);

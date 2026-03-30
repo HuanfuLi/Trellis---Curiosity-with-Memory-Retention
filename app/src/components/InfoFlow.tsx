@@ -44,8 +44,8 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen, onRead
 
   // ── Image generation state ──────────────────────────────────────────────────
   const [image, setImage] = useState<GeneratedImage | null>(null);
-  const [imageLoading, setImageLoading] = useState(true);
-  const [imageError, setImageError] = useState<string | null>(null);
+  const [, setImageLoading] = useState(true);
+  const [, setImageError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,23 +71,6 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen, onRead
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [post.id]);
-
-  const handleRetryImage = () => {
-    const style = inferImageStyle(post);
-    const prompt = buildImagePrompt(post);
-    setImage(null);
-    setImageLoading(true);
-    setImageError(null);
-    void imageGenerationService.generateImage(post.id, prompt, style).then((result) => {
-      if (result.success && result.data) {
-        setImage(result.data);
-        setImageError(null);
-      } else {
-        setImageError(result.error?.message ?? 'Image generation failed');
-      }
-      setImageLoading(false);
-    });
-  };
 
   // ── End image state ─────────────────────────────────────────────────────────
 
