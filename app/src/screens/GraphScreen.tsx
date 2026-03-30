@@ -90,6 +90,55 @@ function buildMindElixirData(nodes: Question[]): MindElixirData {
 
 // ─── EchoLearn theme for mind-elixir ─────────────────────────────────────────
 
+/** CSS overrides injected once for sub-node rects and touch-friendly expand buttons */
+let styleInjected = false;
+function injectMindMapStyles() {
+  if (styleInjected) return;
+  styleInjected = true;
+  const style = document.createElement('style');
+  style.textContent = `
+    /* ── Sub-node (cluster / leaf) enclosed in rounded rects ── */
+    .map-container me-parent me-tpc {
+      background-color: var(--bgcolor);
+      border: 1.5px solid var(--panel-border-color);
+      border-radius: 18px;
+    }
+
+    /* ── Expand / collapse: compact visual, large touch target ────────
+       The visible dot is 20px with a subtle border. An invisible
+       ::before pseudo-element extends the tap area to 44×44px
+       (WCAG 2.5.8).  Both main-branch and sub-branch buttons are
+       normalised to sit below the node so placement is consistent. */
+
+    /* Reset the library's divergent positioning for main-branch epd */
+    .map-container me-main > me-wrapper > me-parent > me-epd {
+      top: 100%;
+      transform: translateY(-50%);
+    }
+
+    .map-container me-parent me-epd {
+      width: 28px;
+      height: 28px;
+      opacity: 1;
+      border-radius: 50%;
+      background-color: var(--panel-bgcolor);
+      border: 1.5px solid var(--panel-border-color);
+      background-size: 18px 18px;
+      position: absolute;
+      z-index: 9;
+    }
+    .map-container me-parent me-epd.minus {
+      opacity: 0.7;
+    }
+    @media (hover: none) {
+      .map-container me-parent me-epd.minus {
+        opacity: 1;
+      }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 function buildTheme() {
   const isDark = document.documentElement.classList.contains('dark') ||
     window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -97,30 +146,34 @@ function buildTheme() {
   return {
     name: 'EchoLearn',
     type: (isDark ? 'dark' : 'light') as 'dark' | 'light',
-    // Branch colours map to EchoLearn's node palette
-    palette: ['#66BB6A', '#FF7043', '#AB47BC', '#FFA726', '#42A5F5'],
+    // Soft, distinct branch colours — 10 hues for clear visual separation
+    palette: [
+      '#ea76cb', '#dd7878', '#e64553', '#fe640b',
+      '#df8e1d', '#40a02b', '#209fb5', '#1e66f5', '#7287fd',
+    ],
     cssVar: {
-      '--node-gap-x': '20px',
-      '--node-gap-y': '10px',
-      '--main-gap-x': '52px',
-      '--main-gap-y': '14px',
+      '--node-gap-x': '24px',
+      '--node-gap-y': '12px',
+      '--main-gap-x': '60px',
+      '--main-gap-y': '18px',
       '--main-color': '#ffffff',
-      '--main-bgcolor': '#4CAF50',
-      '--main-bgcolor-transparent': 'rgba(76,175,80,0)',
-      '--color': isDark ? '#e0e0e0' : '#1a1a1a',
-      '--bgcolor': isDark ? '#2e2e2e' : '#ffffff',
-      '--selected': '#4CAF50',
-      '--accent-color': '#4CAF50',
+      '--main-bgcolor': isDark ? '#209fb5' : '#1e8da6',
+      '--main-bgcolor-transparent': isDark ? 'rgba(32,159,181,0)' : 'rgba(30,141,166,0)',
+      '--color': isDark ? '#cdd6f4' : '#333333',
+      '--bgcolor': isDark ? '#1e1e2e' : '#f8f9fc',
+      '--selected': '#209fb5',
+      '--accent-color': '#209fb5',
       '--root-color': '#ffffff',
-      '--root-bgcolor': '#388E3C',
+      '--root-bgcolor': isDark ? '#1a8a9e' : '#0d7d8f',
       '--root-border-color': 'transparent',
-      '--root-radius': '12px',
-      '--main-radius': '8px',
-      '--topic-padding': '7px 14px',
-      '--panel-color': isDark ? '#e0e0e0' : '#1a1a1a',
-      '--panel-bgcolor': isDark ? '#2e2e2e' : '#ffffff',
-      '--panel-border-color': isDark ? '#444444' : '#e0e0e0',
-      '--map-padding': '40px',
+      '--root-radius': '24px',
+      '--main-radius': '20px',
+      // 44px min touch target height for mobile accessibility (WCAG 2.5.8)
+      '--topic-padding': '10px 18px',
+      '--panel-color': isDark ? '#cdd6f4' : '#333333',
+      '--panel-bgcolor': isDark ? '#1e1e2e' : '#ffffff',
+      '--panel-border-color': isDark ? '#45475a' : '#dde0e9',
+      '--map-padding': '32px',
     },
   };
 }
@@ -149,6 +202,8 @@ function MasterMap({ nodes, edges, onNodeClick }: MasterMapProps) {
 
     // Populate nodeMap synchronously before creating listeners
     nodeMapRef.current = Object.fromEntries(nodes.map((n) => [n.id, n]));
+
+    injectMindMapStyles();
 
     if (instanceRef.current) {
       instanceRef.current.destroy();
