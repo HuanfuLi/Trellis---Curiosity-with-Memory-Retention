@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { setToastHandler } from '../../lib/toast';
 
 interface ToastMessage {
@@ -16,8 +16,17 @@ const typeColors = {
 export function ToastContainer() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
+  // Track recent messages to suppress rapid duplicates (same text within 2s)
+  const recentRef = useRef<Map<string, number>>(new Map());
+
   const addToast = useCallback((msg: { message: string; type: ToastMessage['type'] }) => {
-    const id = Date.now().toString();
+    const now = Date.now();
+    const key = `${msg.type}:${msg.message}`;
+    const lastShown = recentRef.current.get(key) ?? 0;
+    if (now - lastShown < 2000) return; // Suppress duplicate within 2s
+    recentRef.current.set(key, now);
+
+    const id = now.toString();
     setToasts((prev) => [...prev, { ...msg, id }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));

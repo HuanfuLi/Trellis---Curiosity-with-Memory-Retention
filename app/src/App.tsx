@@ -26,6 +26,8 @@ import { PageTransition } from './components/PageTransition';
 import { startVoiceRecording, stopVoiceRecording, MicPermissionDeniedError } from './lib/voice-recorder';
 import { transcribeAudio } from './providers/stt';
 import { toast } from './lib/toast';
+import { startScheduler, stopScheduler } from './services/scheduler.service';
+import { scheduleNativeNotifications } from './services/scheduler.native';
 
 function RootLayout() {
   const navigate = useNavigate();
@@ -204,6 +206,11 @@ export default function App() {
     void hydratePlannerFromSQLite();
     // Bootstrap image generation providers with keys from user settings.
     bootstrapImageGeneration();
+    // Start foreground scheduler (60s poll + app resume checks)
+    startScheduler();
+    // Schedule native OS notifications for podcast/review reminders
+    void scheduleNativeNotifications();
+    return () => { stopScheduler(); };
   }, []);
 
   // Keep theme in sync when the OS switches between light/dark while app is open

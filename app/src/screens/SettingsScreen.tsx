@@ -17,6 +17,7 @@ import { applyTheme } from '../lib/theme';
 import { clearAllTables } from '../services/db.service';
 import { conceptFeedService } from '../services/concept-feed.service';
 import { plannerService } from '../services/planner.service';
+import { scheduleNativeNotifications } from '../services/scheduler.native';
 import { questionService } from '../services/question.service';
 import { embedText } from '../providers/embedding';
 
@@ -870,10 +871,11 @@ export function SettingsScreen() {
               const result = await mockSettingsService.set('podcast', {
                 autoGenerate: podcastAutoGenerate,
                 sleepTime: podcastSleepTime,
-                advanceMinutes: parseInt(podcastAdvance) || 60,
+                advanceMinutes: Number.isNaN(parseInt(podcastAdvance)) ? 60 : parseInt(podcastAdvance),
               });
               if (result.success) {
                 toast('Podcast settings saved.', 'success');
+                void scheduleNativeNotifications(); // Reschedule with new times
               } else {
                 toast(result.error?.message || 'Failed to save settings.', 'error');
               }
@@ -912,6 +914,7 @@ export function SettingsScreen() {
                 reminderTime: reviewReminderTime,
               });
               toast('Review settings saved.', 'success');
+              void scheduleNativeNotifications(); // Reschedule with new times
             }}
           >
             Save

@@ -25,7 +25,13 @@ class SQLiteBackend implements DBBackend {
 
   async init() {
     const { CapacitorSQLite } = await import('@capacitor-community/sqlite');
-    await CapacitorSQLite.createConnection({ database: 'echolearn', version: 1, encrypted: false, mode: 'no-encryption' });
+    // createConnection throws if connection already exists (e.g. hot reload, race).
+    // Catch and reuse the existing connection.
+    try {
+      await CapacitorSQLite.createConnection({ database: 'echolearn', version: 1, encrypted: false, mode: 'no-encryption' });
+    } catch {
+      // Connection already exists — that's fine, reuse it
+    }
     await CapacitorSQLite.open({ database: 'echolearn' });
     this.db = (CapacitorSQLite as unknown as { getConnection: (name: string) => import('@capacitor-community/sqlite').SQLiteDBConnection }).getConnection('echolearn');
     await this._runMigrations();
