@@ -40,16 +40,6 @@ interface CachedDailyPosts {
   connectionCards?: ConnectionCardData[];
 }
 
-function computePlannerFingerprint(): string {
-  const recentSignals = plannerService.getRecentSignals();
-  return JSON.stringify({
-    confusion: recentSignals.confusion,
-    curiosity: recentSignals.curiosity,
-    connections: recentSignals.connections,
-    revisitIntent: recentSignals.revisitIntent,
-  });
-}
-
 const VALID_SOURCE_TYPES = new Set<DailyPost['sourceType']>(['recent', 'related', 'resurfaced', 'starter', 'mixed', 'connection']);
 
 export const STARTER_POSTS: DailyPost[] = [
@@ -221,11 +211,12 @@ function titleFor(question: Question): string {
 }
 
 function computeFingerprint(questions: Question[]): string {
-  const questionFingerprint = questions
+  // Only question IDs determine cache validity — planner signals influence
+  // generation content but should not invalidate cached posts on restart.
+  return questions
     .slice(0, CONTEXT_LIMIT)
     .map((question) => `${question.id}:${question.createdAt}`)
     .join('|');
-  return `${questionFingerprint}::planner:${computePlannerFingerprint()}`;
 }
 
 export function buildDailyKnowledgeContext(questions: Question[]): DailyKnowledgeContext {
@@ -608,6 +599,16 @@ export const conceptFeedService = {
       return cached.posts.filter((p) => p.sourceType !== 'connection');
     }
 
+    // If the cache has posts for today but just the fingerprint changed (e.g. new
+    // question added), re-stamp the fingerprint and keep existing posts — only
+    // regenerate when there are truly no posts for today.
+    const hasPostsForToday = cached?.date === date && cached.posts.length > 0;
+
+    if (hasPostsForToday && cached.fingerprint !== fingerprint) {
+      saveCache({ ...cached, fingerprint });
+      return cached.posts.filter((p) => p.sourceType !== 'connection');
+    }
+
     let generated: ParsedGeneration = { posts: [], connectionCards: [] };
     try {
       generated = await generateDailyPostsWithLLM(questions, date);
@@ -653,6 +654,33 @@ export const conceptFeedService = {
 
   getCachedDailyPosts(): DailyPost[] {
     return (loadCache()?.posts ?? []).filter((p) => p.sourceType !== 'connection');
+  },
+
+  /** Delete a single post by ID from both the daily cache and the connection store. */
+  deletePost(id: string): boolean {
+    let deleted = false;
+    const cached = loadCache();
+    if (cached) {
+      const before = cached.posts.length;
+      cached.posts = cached.posts.filter((p) => p.id !== id);
+      if (cached.posts.length < before) {
+        saveCache(cached);
+        deleted = true;
+      }
+    }
+    // Also try the connection post sessionStorage store
+    try {
+      const raw = sessionStorage.getItem(CONNECTION_POSTS_KEY);
+      if (raw) {
+        const arr = JSON.parse(raw) as DailyPost[];
+        const filtered = arr.filter((p) => p.id !== id);
+        if (filtered.length < arr.length) {
+          sessionStorage.setItem(CONNECTION_POSTS_KEY, JSON.stringify(filtered));
+          deleted = true;
+        }
+      }
+    } catch { /* ignore */ }
+    return deleted;
   },
 
   /** Explicitly clear the post cache (e.g. after "Clear All Data"). */

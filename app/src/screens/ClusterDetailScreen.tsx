@@ -1,10 +1,14 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, BookOpen, FileText, ChevronRight } from 'lucide-react';
 import { Card } from '../components/ui/Card';
+import { ConceptCard } from '../components/ConceptCard';
 import { Markdown } from '../components/Markdown';
+import { DetailMenu } from '../components/DetailMenu';
 import { useQuestions } from '../state/useQuestions';
+import { questionService } from '../services/question.service';
 import { flashcardService } from '../services/flashcard.service';
 import { Header, HEADER_HEIGHT } from '../components/ui/Header';
+import { toast } from '../lib/toast';
 
 export function ClusterDetailScreen() {
   const { id } = useParams<{ id: string }>();
@@ -19,9 +23,9 @@ export function ClusterDetailScreen() {
       <div style={{ padding: '24px 16px', maxWidth: '448px', margin: '0 auto' }}>
         <button
           onClick={() => navigate(-1)}
-          style={{ color: 'var(--primary-40)', background: 'none', border: 'none', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}
+          style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
         >
-          <ArrowLeft size={20} /> Back
+          <ArrowLeft size={20} />
         </button>
         <p style={{ color: 'var(--muted-foreground)' }}>Cluster not found.</p>
       </div>
@@ -88,24 +92,34 @@ export function ClusterDetailScreen() {
 
   return (
     <div style={{ padding: `${HEADER_HEIGHT + 8}px 16px 96px`, maxWidth: '448px', margin: '0 auto' }}>
-      <Header title="Knowledge Cluster" />
-
-      {/* Back */}
-      <button
-        onClick={() => navigate(-1)}
-        style={{
-          color: 'var(--primary-40)',
-          background: 'none',
-          border: 'none',
-          marginBottom: '16px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          padding: 0,
-        }}
-      >
-        <ArrowLeft size={20} /> Back
-      </button>
+      <Header
+        title="Knowledge Cluster"
+        centered
+        left={
+          <button
+            onClick={() => navigate(-1)}
+            style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
+          >
+            <ArrowLeft size={20} />
+          </button>
+        }
+        right={
+          <DetailMenu
+            deleteLabel="this cluster and all its contents"
+            onDelete={async () => {
+              for (const qa of allQaChildren) {
+                await questionService.delete(qa.id);
+              }
+              for (const anchor of childAnchors) {
+                await questionService.delete(anchor.id);
+              }
+              await questionService.delete(cluster.id);
+              toast('Cluster deleted', 'success');
+              navigate(-1);
+            }}
+          />
+        }
+      />
 
       {/* Breadcrumb: Root > Branch (cluster IS current level) */}
       <div
@@ -261,58 +275,13 @@ export function ClusterDetailScreen() {
               const anchorQaCount = questions.filter(
                 (q) => q.parentId === anchor.id && !q.isAnchorNode && !q.isClusterNode,
               ).length;
-              const summaryPreview = (() => {
-                const first =
-                  (anchor.nodeSummary || '')
-                    .split(/\n(?=\[)/)[0]
-                    ?.replace(/^\[.*?\]\s*/, '')
-                    .split(/\n\n/)[0]
-                    ?.trim() || '';
-                return first.length > 120 ? first.slice(0, 117) + '...' : first;
-              })();
               return (
-                <Card
+                <ConceptCard
                   key={anchor.id}
+                  question={anchor}
                   onClick={() => navigate(`/anchor/${anchor.id}`)}
-                  style={{ cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' }}
-                  onPointerEnter={(e) => {
-                    e.currentTarget.style.transform = 'scale(1.01)';
-                    e.currentTarget.style.boxShadow = 'var(--shadow-2)';
-                  }}
-                  onPointerLeave={(e) => {
-                    e.currentTarget.style.transform = 'scale(1)';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
-                >
-                  <p style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '4px', color: 'var(--foreground)' }}>
-                    {anchor.title || anchor.content}
-                  </p>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)', marginBottom: '4px' }}>
-                    {anchorQaCount} Q&As
-                  </p>
-                  {summaryPreview && (
-                    <div style={{ fontSize: '0.8rem', color: 'var(--muted-foreground)', lineHeight: 1.4 }}>
-                      <Markdown>{summaryPreview}</Markdown>
-                    </div>
-                  )}
-                  <div
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginTop: '6px' }}
-                  >
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        fontSize: '0.72rem',
-                        color: 'var(--primary-40)',
-                        fontWeight: 600,
-                      }}
-                    >
-                      <span>View details</span>
-                      <ChevronRight size={12} />
-                    </div>
-                  </div>
-                </Card>
+                  subtitle={`${anchorQaCount} Q&As`}
+                />
               );
             })}
           </div>

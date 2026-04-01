@@ -123,6 +123,11 @@ export function useQuestions(): UseQuestionsReturn {
         // Persist the flagged status back to store if it changed
         if (question.flagged !== rawQuestion.flagged) {
           questionService.patchQuestion(question.id, { flagged: question.flagged });
+          // Re-broadcast with the correct flagged status so other useQuestions instances
+          // (e.g. HomeScreen) replace their copy before feed re-generation runs.
+          // buildAndSave already fired QUESTION_ASKED without flagged set, so any
+          // hook that received that event will still have the unflagged version.
+          eventBus.emit({ type: 'QUESTION_ASKED', payload: question });
         }
 
         // ── Second classification call (Phase 14) ──────────────────────────────

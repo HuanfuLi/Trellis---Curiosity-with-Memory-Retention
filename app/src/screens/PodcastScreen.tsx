@@ -5,12 +5,14 @@ import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { ProgressBar } from '../components/ui/ProgressBar';
 import { Button } from '../components/ui/Button';
+import { ConceptCard } from '../components/ConceptCard';
 import { usePodcast } from '../state/usePodcast';
 import { today, formatDateLabel, isToday } from '../lib/date';
 import { toast } from '../lib/toast';
 import { questionService } from '../services/question.service';
 import { podcastService } from '../services/podcast.service';
 import { parseMoveNavigationState } from '../lib/moveNavigator';
+import { eventBus } from '../lib/event-bus';
 import type { DailyPodcast, Question } from '../types';
 
 export function PodcastScreen() {
@@ -49,29 +51,36 @@ export function PodcastScreen() {
     ? (podcasts.find((p) => p.id === selectedId) ?? null)
     : (todayPodcast ?? podcasts[0] ?? null);
 
-  // Load concepts for Knowledge Today
-  useEffect(() => {
-    let cancelled = false;
-    async function loadConcepts() {
-      setConceptsLoading(true);
-      const todayDate = today();
-      const podConceptIds = podcastService.getTodayConceptIds(todayDate);
+  // Load concepts for Knowledge Today — always live SM-2 due list + Planner additions
+  const loadConcepts = useCallback(async () => {
+    setConceptsLoading(true);
+    const todayDate = today();
 
-      if (podConceptIds.length > 0) {
-        // Load questions matching podcast's questionIds
-        const allQ = questionService.getAll();
-        const idSet = new Set(podConceptIds);
-        setTodayConcepts(allQ.filter((q) => idSet.has(q.id)));
-      } else {
-        // No podcast yet — show what would be included (due for review)
-        const dueResult = await questionService.getDueForReview(todayDate);
-        if (!cancelled) setTodayConcepts(dueResult.data ?? []);
-      }
-      if (!cancelled) setConceptsLoading(false);
+    // Always start from the live SM-2 due list
+    const dueResult = await questionService.getDueForReview(todayDate);
+    const dueConcepts = dueResult.data ?? [];
+    const dueIds = new Set(dueConcepts.map((q) => q.id));
+
+    // Merge any Planner-added concepts that aren't already in the SM-2 list
+    const plannerIds = podcastService.getTodayConceptIds(todayDate);
+    const extraIds = plannerIds.filter((id) => !dueIds.has(id));
+    if (extraIds.length > 0) {
+      const allQ = questionService.getAll();
+      const extraIdSet = new Set(extraIds);
+      const extras = allQ.filter((q) => extraIdSet.has(q.id));
+      setTodayConcepts([...dueConcepts, ...extras]);
+    } else {
+      setTodayConcepts(dueConcepts);
     }
-    loadConcepts();
-    return () => { cancelled = true; };
-  }, [todayPodcast?.questionIds?.length]);
+    setConceptsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void loadConcepts();
+    // Re-load when new questions are asked so the list updates dynamically
+    const unsub = eventBus.subscribe('QUESTION_ASKED', () => { void loadConcepts(); });
+    return unsub;
+  }, [loadConcepts]);
 
   // Handle incoming concept insertion from Planner
   useEffect(() => {
@@ -101,11 +110,14 @@ export function PodcastScreen() {
     if (!insertConcept) return;
     const added = podcastService.addConceptToPodcast(today(), insertConcept.id);
     if (added) {
-      setTodayConcepts((prev) => [...prev, insertConcept]);
+      void loadConcepts();
       toast('Concept added to today\'s podcast. Regenerate to update the script.', 'success');
     } else {
-      // No podcast exists yet — generate one first, then it will include this concept
-      toast('No podcast exists yet. Generate today\'s podcast first.', 'info');
+      // No podcast — add directly to the live list; it'll be included at generation
+      setTodayConcepts((prev) =>
+        prev.some((c) => c.id === insertConcept.id) ? prev : [...prev, insertConcept],
+      );
+      toast('Concept added to review list.', 'success');
     }
     setInsertConcept(null);
   };
@@ -231,9 +243,9 @@ export function PodcastScreen() {
         >
           <button
             onClick={() => setShowScript(false)}
-            style={{ color: 'var(--primary-40)', background: 'none', display: 'flex', alignItems: 'center', gap: '8px', padding: 0 }}
+            style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
           >
-            <ArrowLeft size={20} /> Back
+            <ArrowLeft size={20} />
           </button>
           <div style={{ flex: 1 }} />
           <p style={{ fontSize: '0.875rem', color: 'var(--muted-foreground)' }}>
@@ -256,9 +268,9 @@ export function PodcastScreen() {
       <div style={{ padding: '24px 16px 96px', maxWidth: '448px', margin: '0 auto' }}>
         <button
           onClick={() => setShowAllPodcasts(false)}
-          style={{ color: 'var(--primary-40)', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '8px', padding: 0, marginBottom: '24px', cursor: 'pointer' }}
+          style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center', marginBottom: '24px' }}
         >
-          <ArrowLeft size={20} /> Back
+          <ArrowLeft size={20} />
         </button>
         <h2 style={{ marginBottom: '16px' }}>All Podcasts</h2>
 
@@ -363,17 +375,10 @@ export function PodcastScreen() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
         <button
-          onClick={() => {
-            // If arrived from planner with concept insertion, go back to planner
-            if (moveState?.fromScreen === 'planner') {
-              navigate('/planner');
-            } else {
-              navigate(-1);
-            }
-          }}
-          style={{ color: 'var(--primary-40)', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '8px', padding: 0, cursor: 'pointer' }}
+          onClick={() => navigate(-1)}
+          style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
         >
-          <ArrowLeft size={20} /> Back
+          <ArrowLeft size={20} />
         </button>
         <button
           onClick={() => setShowAllPodcasts(true)}
@@ -506,7 +511,7 @@ export function PodcastScreen() {
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => generatePodcast(selected.date)}
+                onClick={() => generatePodcast(selected.date, todayConcepts.map((c) => c.id))}
                 style={{ gap: '6px' } as React.CSSProperties}
               >
                 <RefreshCw size={14} /> Regenerate audio
@@ -539,12 +544,16 @@ export function PodcastScreen() {
       )}
 
       {/* Generate Today's Podcast */}
-      {!todayPodcast && (
+      {(!todayPodcast || todayPodcast.status === 'pending' || todayPodcast.status === 'failed') && (
         <Card style={{ marginBottom: '24px', textAlign: 'center' }}>
           <Radio size={32} color="var(--primary-40)" style={{ margin: '0 auto 12px' }} />
-          <h4 style={{ marginBottom: '8px' }}>No podcast for today</h4>
+          <h4 style={{ marginBottom: '8px' }}>
+            {todayPodcast?.status === 'failed' ? 'Podcast generation failed' : 'No podcast for today'}
+          </h4>
           <p style={{ fontSize: '0.875rem', color: 'var(--muted-foreground)', marginBottom: '16px' }}>
-            Generate a podcast reviewing your due concepts.
+            {todayPodcast?.status === 'failed'
+              ? (todayPodcast.error ?? 'Something went wrong. Try again.')
+              : 'Generate a podcast reviewing your due concepts.'}
           </p>
           {isGenerating ? (
             <div>
@@ -552,8 +561,8 @@ export function PodcastScreen() {
               <p style={{ fontSize: '0.875rem', color: 'var(--muted-foreground)' }}>Generating... {generationProgress}%</p>
             </div>
           ) : (
-            <Button onClick={() => generatePodcast(today())} fullWidth>
-              Generate Today's Podcast
+            <Button onClick={() => generatePodcast(today(), todayConcepts.map((c) => c.id))} fullWidth>
+              {todayPodcast?.status === 'failed' ? 'Retry Generation' : 'Generate Today\'s Podcast'}
             </Button>
           )}
         </Card>
@@ -596,49 +605,12 @@ export function PodcastScreen() {
             const ef = concept.reviewSchedule?.easeFactor ?? 2.5;
             const isWeak = ef < 2.0 && (concept.reviewSchedule?.reviewCount ?? 0) > 0;
             return (
-              <Card
+              <ConceptCard
                 key={concept.id}
-                style={{
-                  padding: '12px 16px',
-                  borderLeft: isWeak ? '3px solid #ef4444' : '3px solid var(--primary-40)',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: '0.9rem', fontWeight: 600, lineHeight: 1.35, marginBottom: '3px' }}>
-                      {concept.title ?? concept.content.slice(0, 60)}
-                    </p>
-                    <p style={{ fontSize: '0.78rem', color: 'var(--muted-foreground)', lineHeight: 1.4 }}>
-                      {concept.summary?.slice(0, 100)}{(concept.summary?.length ?? 0) > 100 ? '...' : ''}
-                    </p>
-                  </div>
-                  {isWeak && (
-                    <span style={{
-                      flexShrink: 0, fontSize: '0.65rem', fontWeight: 700,
-                      color: '#ef4444', backgroundColor: 'color-mix(in srgb, #ef4444 12%, transparent)',
-                      padding: '2px 8px', borderRadius: '100px', letterSpacing: '0.05em',
-                      textTransform: 'uppercase',
-                    }}>Weak</span>
-                  )}
-                </div>
-                {concept.keywords.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px' }}>
-                    {concept.keywords.slice(0, 3).map((kw) => (
-                      <span
-                        key={kw}
-                        style={{
-                          fontSize: '0.68rem', color: 'var(--muted-foreground)',
-                          backgroundColor: 'var(--surface-variant)',
-                          padding: '2px 8px', borderRadius: '100px',
-                          border: '1px solid var(--border)',
-                        }}
-                      >
-                        {kw}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </Card>
+                question={concept}
+                onClick={() => navigate(`/ask/${concept.id}`)}
+                badge={isWeak ? { label: 'Weak', color: '#ef4444' } : undefined}
+              />
             );
           })}
         </div>

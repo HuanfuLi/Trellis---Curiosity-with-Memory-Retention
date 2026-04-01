@@ -172,9 +172,9 @@ export function ConnectionPostScreen() {
       }}>
         <button
           onClick={() => navigate(-1)}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--foreground)', display: 'flex', padding: '4px' }}
+          style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
         >
-          <ArrowLeft size={22} />
+          <ArrowLeft size={20} />
         </button>
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted-foreground)', marginBottom: '1px' }}>

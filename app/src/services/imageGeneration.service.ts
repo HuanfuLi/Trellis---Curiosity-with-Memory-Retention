@@ -257,6 +257,17 @@ class ImageGenerationService {
   }
 
   /**
+   * Synchronously check whether a cached image exists for this postId + style
+   * by inspecting localStorage metadata (no IndexedDB round-trip).
+   */
+  hasCachedImage(postId: string, style: ImageStyle): boolean {
+    const cacheKey = this._cacheKey(postId, style);
+    const meta = this._loadMeta();
+    const entry = meta[cacheKey];
+    return !!entry && Date.now() <= entry.expiresAt;
+  }
+
+  /**
    * Return stats about the current image cache.
    */
   getCacheStats(): CacheStats {

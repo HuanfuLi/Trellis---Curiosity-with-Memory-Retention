@@ -5,7 +5,6 @@ import { ArrowLeft, Pin, BookOpen, Trash2, Check, X, GitBranch } from 'lucide-re
 import { Flashcard } from '../components/Flashcard';
 import { Confetti } from '../components/Confetti';
 import { ProgressBar } from '../components/ui/ProgressBar';
-import { Button } from '../components/ui/Button';
 import { useReview } from '../state/useReview';
 import { toast } from '../lib/toast';
 import type { DailyReviewMap, FlashCard, StructuralSignalType } from '../types';
@@ -378,9 +377,9 @@ export function ReviewScreen() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
           <button
             onClick={() => setShowLibrary(false)}
-            style={{ color: 'var(--primary-40)', background: 'none', display: 'flex', alignItems: 'center', gap: '8px', padding: 0 }}
+            style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
           >
-            <ArrowLeft size={20} /> All Done
+            <ArrowLeft size={20} />
           </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--muted-foreground)', fontSize: '0.875rem' }}>
             <BookOpen size={16} />
@@ -478,9 +477,9 @@ export function ReviewScreen() {
         <Confetti active={showConfetti} />
         <button
           onClick={() => navigate(-1)}
-          style={{ color: 'var(--primary-40)', background: 'none', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px', padding: 0 }}
+          style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center', marginBottom: '24px' }}
         >
-          <ArrowLeft size={20} /> Back
+          <ArrowLeft size={20} />
         </button>
 
         {/* Summary card */}
@@ -515,7 +514,6 @@ export function ReviewScreen() {
             </div>
           )}
 
-          <Button onClick={() => navigate(-1)} fullWidth>Back</Button>
         </div>
 
         {/* All Flashcards button */}
@@ -526,25 +524,25 @@ export function ReviewScreen() {
               width: '100%',
               padding: '16px',
               borderRadius: 'var(--radius-xl)',
-              backgroundColor: 'var(--surface-variant)',
+              backgroundColor: 'var(--primary-40)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: '10px',
-              color: 'var(--foreground)',
-              fontWeight: 500,
+              color: 'white',
+              fontWeight: 600,
               fontSize: '0.9375rem',
               border: 'none',
               cursor: 'pointer',
             }}
           >
-            <BookOpen size={18} color="var(--primary-40)" />
+            <BookOpen size={18} />
             All Flashcards
             <span
               style={{
                 padding: '2px 8px',
                 borderRadius: '999px',
-                backgroundColor: 'var(--primary-40)',
+                backgroundColor: 'rgba(255, 255, 255, 0.25)',
                 color: 'white',
                 fontSize: '0.8rem',
                 fontWeight: 600,
@@ -577,9 +575,9 @@ export function ReviewScreen() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
           <button
             onClick={() => navigate(-1)}
-            style={{ color: 'var(--primary-40)', background: 'none', display: 'flex', alignItems: 'center', gap: '8px', padding: 0 }}
+            style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
           >
-            <ArrowLeft size={20} /> Back
+            <ArrowLeft size={20} />
           </button>
           <span style={{ fontSize: '0.875rem', color: 'var(--muted-foreground)' }}>
             {reviewed} / {total} reviewed

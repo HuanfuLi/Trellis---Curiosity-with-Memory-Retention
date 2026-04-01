@@ -223,12 +223,16 @@ function MasterMap({ nodes, edges, onNodeClick }: MasterMapProps) {
       theme: buildTheme(),
     });
 
+    // Hide until scaled to prevent full-size "Knowledge" flash
+    containerRef.current.style.visibility = 'hidden';
+
     mei.init(buildMindElixirData(nodes));
 
     // Zoom to 50% and centre after the layout has been painted
     setTimeout(() => {
       mei.scale(0.5);
       mei.toCenter();
+      if (containerRef.current) containerRef.current.style.visibility = 'visible';
     }, 0);
 
     // mind-elixir does NOT fire a bus event for regular node clicks.
@@ -482,9 +486,9 @@ function CardStackInbox({ unlinked, allNodes, onLink, onCreateDomain, onClose }:
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
         <button
           onClick={onClose}
-          style={{ color: 'var(--primary-40)', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '8px', padding: 0, cursor: 'pointer' }}
+          style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
         >
-          <ArrowLeft size={20} /> Back
+          <ArrowLeft size={20} />
         </button>
         <button onClick={refreshRecommendations} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '100px', border: '1px solid var(--border)', backgroundColor: 'var(--surface-variant)', color: 'var(--foreground)', fontSize: '0.8rem', cursor: 'pointer' }}>
           <RefreshCw size={14} /> Shuffle
@@ -617,13 +621,18 @@ function CardStackInbox({ unlinked, allNodes, onLink, onCreateDomain, onClose }:
   );
 }
 
+// ─── Module-level cache (survives unmount, no flicker on re-visit) ───────────
+
+let cachedNodes: Question[] | null = null;
+let cachedEdges: GraphEdge[] | null = null;
+
 // ─── Graph Screen ─────────────────────────────────────────────────────────────
 
 export function GraphScreen() {
   const navigate = useNavigate();
   const [view, setView] = useState<'map' | 'inbox'>('map');
-  const [nodes, setNodes] = useState<Question[]>([]);
-  const [edges, setEdges] = useState<GraphEdge[]>([]);
+  const [nodes, setNodes] = useState<Question[]>(cachedNodes ?? []);
+  const [edges, setEdges] = useState<GraphEdge[]>(cachedEdges ?? []);
   const [unlinked, setUnlinked] = useState<Question[]>([]);
   const [selectedNode, setSelectedNode] = useState<Question | null>(null);
   const [reorganizing, setReorganizing] = useState(isReorgInProgress);
@@ -633,6 +642,8 @@ export function GraphScreen() {
 
   const reload = useCallback(() => {
     void graphService.getGraph().then(({ nodes: n, edges: e }) => {
+      cachedNodes = n;
+      cachedEdges = e;
       setNodes(n);
       setEdges(e);
       setUnlinked(graphService.getUnlinkedNodes());

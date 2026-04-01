@@ -10,7 +10,7 @@ interface UsePodcastReturn {
   generationProgress: number;
   error: ServiceError | null;
   getPodcastForDate: (date: string) => DailyPodcast | undefined;
-  generatePodcast: (date: string) => Promise<void>;
+  generatePodcast: (date: string, conceptIds?: string[]) => Promise<void>;
   deletePodcast: (podcastId: string) => Promise<void>;
   getAudioPath: (podcastId: string) => string | null;
   reload: () => Promise<void>;
@@ -77,11 +77,11 @@ export function usePodcast(): UsePodcastReturn {
     [podcasts],
   );
 
-  const generatePodcast = useCallback(async (date: string) => {
+  const generatePodcast = useCallback(async (date: string, conceptIds?: string[]) => {
     setIsGenerating(true);
     setGenerationProgress(0);
     setError(null);
-    const result = await podcastService.generatePodcast(date);
+    const result = await podcastService.generatePodcast(date, conceptIds);
     if (result.success && result.data) {
       setPodcasts((prev) => {
         const exists = prev.find((p) => p.id === result.data!.id);

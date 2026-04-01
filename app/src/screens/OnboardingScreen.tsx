@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Brain, Key, Zap, Shield, Smartphone, Cloud, Lock } from 'lucide-react';
+import { ArrowLeft, Brain, Key, Zap, Shield, Smartphone, Cloud, Lock } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { useSettings } from '../state/useSettings';
 import type { LLMConfig } from '../types';
@@ -126,9 +126,9 @@ export function OnboardingScreen() {
           <div>
             <button
               onClick={() => setStep('welcome')}
-              style={{ color: 'var(--primary-40)', background: 'none', border: 'none', marginBottom: '24px', padding: 0 }}
+              style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center', marginBottom: '24px' }}
             >
-              ← Back
+              <ArrowLeft size={20} />
             </button>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
               <Shield size={24} color="var(--primary-40)" />
@@ -204,9 +204,9 @@ export function OnboardingScreen() {
           <div>
             <button
               onClick={() => setStep('consent')}
-              style={{ color: 'var(--primary-40)', background: 'none', border: 'none', marginBottom: '24px', padding: 0 }}
+              style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center', marginBottom: '24px' }}
             >
-              ← Back
+              <ArrowLeft size={20} />
             </button>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
               <Key size={24} color="var(--primary-40)" />

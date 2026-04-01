@@ -1,4 +1,4 @@
-import type { DailyPodcast, ServiceResult } from '../types';
+import type { DailyPodcast, Question, ServiceResult } from '../types';
 import { eventBus } from '../lib/event-bus';
 import { toast } from '../lib/toast';
 import { mockSettingsService } from './mock/settings.mock';
@@ -147,7 +147,7 @@ export const podcastService = {
     return { success: true, data: sorted.slice(0, limit) };
   },
 
-  async generatePodcast(date: string): Promise<ServiceResult<DailyPodcast>> {
+  async generatePodcast(date: string, conceptIds?: string[]): Promise<ServiceResult<DailyPodcast>> {
     const existing = loadStore().find((p) => p.date === date);
 
     // Only skip if podcast is ready AND audio blob is available (in-memory or restored from dataUri)
@@ -158,9 +158,16 @@ export const podcastService = {
     const id = existing?.id ?? newPodcastId();
     const settings = mockSettingsService.getSync();
 
-    // Load concepts due for review today (SM-2 schedule), fall back to 5 most recent
-    const dueResult = await questionService.getDueForReview(date);
-    let questions = dueResult.data ?? [];
+    // Use provided concept IDs (from Knowledge Today list) or fall back to SM-2 due list
+    let questions: Question[];
+    if (conceptIds && conceptIds.length > 0) {
+      const allQ = questionService.getAll();
+      const idSet = new Set(conceptIds);
+      questions = allQ.filter((q) => idSet.has(q.id));
+    } else {
+      const dueResult = await questionService.getDueForReview(date);
+      questions = dueResult.data ?? [];
+    }
     if (questions.length === 0) {
       const recentResult = await questionService.getRecent(5);
       questions = recentResult.data ?? [];

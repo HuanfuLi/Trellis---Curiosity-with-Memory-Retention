@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, Loader2, MessageSquare, RefreshCw } from 'lucide-react';
+import { DetailMenu } from '../components/DetailMenu';
 import type { ChatSession, DailyPost, GeneratedImage, Question, SessionMessage } from '../types';
 import { useQuestions } from '../state/useQuestions';
 import { conceptFeedService } from '../services/concept-feed.service';
@@ -302,9 +303,8 @@ export function PostDetailScreen() {
     const discMeta = discoverMetaRef.current;
     return (
       <div style={{ padding: '16px 16px 104px', maxWidth: '448px', margin: '0 auto' }}>
-        <button onClick={() => navigate(-1)} style={{ background: 'none', padding: '4px 2px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px', fontSize: '0.95rem' }}>
-          <ArrowLeft size={18} />
-          Back
+        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center', marginBottom: '14px' }}>
+          <ArrowLeft size={20} />
         </button>
 
         {/* Connection concept pills */}
@@ -365,9 +365,8 @@ export function PostDetailScreen() {
   if (!post) {
     return (
       <div style={{ padding: '24px 16px', maxWidth: '448px', margin: '0 auto' }}>
-        <button onClick={() => navigate('/home')} style={{ background: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <ArrowLeft size={18} />
-          Back to Home
+        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}>
+          <ArrowLeft size={20} />
         </button>
         <h2 style={{ marginTop: '24px', marginBottom: '8px' }}>Post not found</h2>
         <p style={{ color: 'var(--muted-foreground)' }}>This post is no longer available in the current daily feed.</p>
@@ -392,10 +391,19 @@ export function PostDetailScreen() {
           Suggested move: {moveState.move.title}
         </div>
       )}
-      <button onClick={() => navigate(-1)} style={{ background: 'none', padding: '4px 2px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px', fontSize: '0.95rem' }}>
-        <ArrowLeft size={18} />
-        {moveState ? 'Back' : 'Back to Home'}
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}>
+          <ArrowLeft size={20} />
+        </button>
+        <DetailMenu
+          deleteLabel="this post"
+          onDelete={() => {
+            conceptFeedService.deletePost(post!.id);
+            toast('Post deleted', 'success');
+            navigate(-1);
+          }}
+        />
+      </div>
 
       {/* Concept pills — shown for connection posts */}
       {isConnectionPost && meta && (

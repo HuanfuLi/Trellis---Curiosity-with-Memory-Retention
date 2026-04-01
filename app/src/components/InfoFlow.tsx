@@ -42,17 +42,18 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen }: Conc
   const badge = CONCEPT_BADGE_META[post.sourceType] ?? FALLBACK_BADGE;
 
   // ── Image generation state ──────────────────────────────────────────────────
+  // Check localStorage metadata synchronously to avoid a blank frame when the
+  // image is already cached (common after pull-to-load pre-generates images).
   const [image, setImage] = useState<GeneratedImage | null>(null);
-  const [imageResolved, setImageResolved] = useState(false);
+  const [imageResolved, setImageResolved] = useState(
+    () => imageGenerationService.hasCachedImage(post.id, inferImageStyle(post)),
+  );
 
   useEffect(() => {
     let cancelled = false;
 
     const style = inferImageStyle(post);
     const prompt = buildImagePrompt(post);
-
-    setImageResolved(false);
-    setImage(null);
 
     void imageGenerationService.generateImage(post.id, prompt, style).then((result) => {
       if (cancelled) return;

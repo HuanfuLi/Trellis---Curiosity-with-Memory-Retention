@@ -3,8 +3,11 @@ import { ArrowLeft, Calendar, Tag, Play } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Markdown } from '../components/Markdown';
+import { DetailMenu } from '../components/DetailMenu';
 import { useQuestions } from '../state/useQuestions';
+import { questionService } from '../services/question.service';
 import { formatDate } from '../lib/date';
+import { toast } from '../lib/toast';
 import { parseMoveNavigationState } from '../lib/moveNavigator';
 
 export function QuestionDetailScreen() {
@@ -30,9 +33,9 @@ export function QuestionDetailScreen() {
       <div style={{ padding: '24px 16px', maxWidth: '448px', margin: '0 auto' }}>
         <button
           onClick={() => navigate(-1)}
-          style={{ color: 'var(--primary-40)', background: 'none', border: 'none', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}
+          style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
         >
-          <ArrowLeft size={20} /> Back
+          <ArrowLeft size={20} />
         </button>
         <p style={{ color: 'var(--muted-foreground)' }}>Question not found.</p>
       </div>
@@ -53,22 +56,23 @@ export function QuestionDetailScreen() {
           Suggested move: {moveState.move.title}
         </div>
       )}
-      {/* Back */}
-      <button
-        onClick={() => navigate(-1)}
-        style={{
-          color: 'var(--primary-40)',
-          background: 'none',
-          border: 'none',
-          marginBottom: '24px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          padding: 0,
-        }}
-      >
-        <ArrowLeft size={20} /> Back
-      </button>
+      {/* Back + Menu */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+        <button
+          onClick={() => navigate(-1)}
+          style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
+        >
+          <ArrowLeft size={20} />
+        </button>
+        <DetailMenu
+          deleteLabel="this question"
+          onDelete={async () => {
+            await questionService.delete(question.id);
+            toast('Question deleted', 'success');
+            navigate(-1);
+          }}
+        />
+      </div>
 
       {/* Meta */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--muted-foreground)', fontSize: '0.875rem', marginBottom: '16px' }}>

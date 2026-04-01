@@ -2,9 +2,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, BookOpen, FileText, ChevronRight } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Markdown } from '../components/Markdown';
+import { DetailMenu } from '../components/DetailMenu';
 import { useQuestions } from '../state/useQuestions';
+import { questionService } from '../services/question.service';
 import { flashcardService } from '../services/flashcard.service';
 import { Header, HEADER_HEIGHT } from '../components/ui/Header';
+import { toast } from '../lib/toast';
 
 export function AnchorDetailScreen() {
   const { id } = useParams<{ id: string }>();
@@ -18,9 +21,9 @@ export function AnchorDetailScreen() {
       <div style={{ padding: '24px 16px', maxWidth: '448px', margin: '0 auto' }}>
         <button
           onClick={() => navigate(-1)}
-          style={{ color: 'var(--primary-40)', background: 'none', border: 'none', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}
+          style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
         >
-          <ArrowLeft size={20} /> Back
+          <ArrowLeft size={20} />
         </button>
         <p style={{ color: 'var(--muted-foreground)' }}>Anchor not found.</p>
       </div>
@@ -70,24 +73,31 @@ export function AnchorDetailScreen() {
 
   return (
     <div style={{ padding: `${HEADER_HEIGHT + 8}px 16px 96px`, maxWidth: '448px', margin: '0 auto' }}>
-      <Header title="Concept Anchor" />
-
-      {/* Back */}
-      <button
-        onClick={() => navigate(-1)}
-        style={{
-          color: 'var(--primary-40)',
-          background: 'none',
-          border: 'none',
-          marginBottom: '16px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          padding: 0,
-        }}
-      >
-        <ArrowLeft size={20} /> Back
-      </button>
+      <Header
+        title="Concept Anchor"
+        centered
+        left={
+          <button
+            onClick={() => navigate(-1)}
+            style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
+          >
+            <ArrowLeft size={20} />
+          </button>
+        }
+        right={
+          <DetailMenu
+            deleteLabel="this anchor and its Q&As"
+            onDelete={async () => {
+              for (const qa of qaChildren) {
+                await questionService.delete(qa.id);
+              }
+              await questionService.delete(anchor.id);
+              toast('Anchor deleted', 'success');
+              navigate(-1);
+            }}
+          />
+        }
+      />
 
       {/* Hierarchy breadcrumb */}
       <div style={{
