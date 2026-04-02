@@ -230,6 +230,44 @@
 
 ---
 
+## Phase 16: Token Optimization
+
+**Goal:** Reduce LLM token consumption via append-only session history (enabling KV-cache hits) and add pluggable token usage monitoring with per-service breakdown in Settings > Developer.
+
+**Status:** Planning complete
+
+**Requirements:**
+- D-01: Restructure askStreaming/ask to send full session history as append-only message array
+- D-02: Remove "3 recent global Q&As" hack from system prompt
+- D-03: Wire session history from existing sessionService (no new storage)
+- D-04: Enable provider-side KV-cache via stable message prefix
+- D-05: No system prompt trimming needed (only Q&A flow changes)
+- D-06: Leave maxTokens defaults as-is (4096/8192)
+- D-07: Token usage tracker in Settings > Developer with per-service breakdown
+- D-08: Parse usage from API responses (not client-side estimation)
+- D-09: Pluggable TokenUsageReporter interface (local now, remote-ready)
+
+**Depends on:** Phase 15
+
+**Plans:** 3 plans
+
+Plans:
+- [ ] 16-01-PLAN.md — Session history wiring for askStreaming and ask (remove global Q&A hack)
+- [ ] 16-02-PLAN.md — Token usage service + provider usage extraction in llm/index.ts
+- [ ] 16-03-PLAN.md — Call site serviceName tagging + Token Usage UI in Settings
+
+**Success Criteria:**
+1. askStreaming and ask send append-only session history enabling KV-cache
+2. "3 recent global Q&As" hack fully removed from both call sites
+3. Knowledge graph candidate context preserved in system prompt
+4. TokenUsageReporter interface is pluggable (local implementation, remote-ready)
+5. All 15 LLM call sites tagged with serviceName for per-service tracking
+6. Settings > Developer shows token usage table with per-service breakdown
+7. maxTokens values unchanged (4096 default, 8192 for reorganization)
+8. No regression in any existing LLM call behavior
+
+---
+
 ## Requirement Traceability
 
 | Phase | Requirements | Count |
@@ -243,9 +281,8 @@
 | Phase 13 | PLANNER-07, PLANNER-08, PLANNER-09, PLANNER-10 | 4 |
 | Phase 14 | GRAPH-01, GRAPH-02, GRAPH-03, GRAPH-04, GRAPH-05, GRAPH-06 | 6 |
 | Phase 15 | CLUSTER-01, CLUSTER-02, CLUSTER-03, CLUSTER-04, CLUSTER-05, CLUSTER-06 | 6 |
-| **Total** | **32 requirements** | **32** |
-
-✓ All requirements mapped. 100% coverage.
+| Phase 16 | D-01, D-02, D-03, D-04, D-05, D-06, D-07, D-08, D-09 | 9 |
+| **Total** | **41 requirements** | **41** |
 
 ---
 
@@ -256,17 +293,8 @@
 - **Phase 9** can proceed in parallel with Phase 10
 - **Phase 10** should complete before Phase 11 (base suggestions before retry logic)
 - **Phase 11** is final polish (card designs, retry UX)
-
-### Phase 16: token optimization
-
-**Goal:** [To be planned]
-**Requirements**: TBD
-**Depends on:** Phase 15
-**Plans:** 0 plans
-
-Plans:
-- [ ] TBD (run /gsd:plan-phase 16 to break down)
+- **Phase 15** must complete before Phase 16 (classifyAndAnchor call sites need to exist)
 
 ---
 
-_Created: 2026-03-26 | v1.1 Roadmap | 5 phases | 18 requirements mapped_
+_Created: 2026-03-26 | v1.1 Roadmap | 10 phases | 41 requirements mapped_
