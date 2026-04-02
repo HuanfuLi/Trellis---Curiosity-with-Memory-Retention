@@ -197,12 +197,14 @@ export function AskScreen() {
             ? { priorQuestion: msgs[lastAiIdx - 1].content, priorAnswer: msgs[lastAiIdx].content }
             : undefined;
 
+          // Exclude the last message (just-appended user message) to avoid duplication
+          const priorMessages = sessionRef.current.messages.slice(0, -1);
           question = await askStreaming(userContent, (accumulated) => {
             lastContent = accumulated;
             if (!controller.signal.aborted) {
               setStreaming({ placeholderId, content: accumulated });
             }
-          }, sessionContext);
+          }, sessionContext, priorMessages);
         }
 
         if (controller.signal.aborted) return;
@@ -641,23 +643,26 @@ export function AskScreen() {
                     <button
                       onClick={() => setConfirmFlagId(null)}
                       title="Cancel"
-                      style={{ padding: '3px 7px', borderRadius: '6px', border: '1px solid var(--border)', background: 'none', cursor: 'pointer', color: 'var(--muted-foreground)', display: 'flex', alignItems: 'center' }}
+                      aria-label="Cancel"
+                      style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: 'none', cursor: 'pointer', color: 'var(--muted-foreground)', display: 'flex', alignItems: 'center' }}
                     >
-                      <X size={12} />
+                      <X size={14} />
                     </button>
                     <button
                       onClick={() => handleFlagConfirm(message.id)}
                       title="Confirm remove"
-                      style={{ padding: '3px 7px', borderRadius: '6px', border: '1px solid #E53935', background: 'none', cursor: 'pointer', color: '#E53935', display: 'flex', alignItems: 'center' }}
+                      aria-label="Confirm remove"
+                      style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--danger)', background: 'none', cursor: 'pointer', color: 'var(--danger)', display: 'flex', alignItems: 'center' }}
                     >
-                      <Check size={12} />
+                      <Check size={14} />
                     </button>
                   </div>
                 ) : (
                   <button
                     onClick={() => setConfirmFlagId(message.id)}
                     title="Flag this response"
-                    style={{ padding: '3px 7px', borderRadius: '6px', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--muted-foreground)', opacity: 0.45, display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.7rem' }}
+                    aria-label="Flag this response"
+                    style={{ padding: '10px', borderRadius: '8px', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--muted-foreground)', opacity: 0.45, display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.7rem' }}
                   >
                     <Flag size={12} />
                   </button>
@@ -721,14 +726,15 @@ export function AskScreen() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  width: '32px',
-                  height: '32px',
+                  width: '44px',
+                  height: '44px',
                   borderRadius: '50%',
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
                   color: 'var(--muted-foreground)',
                 }}
+                aria-label="Close history"
               >
                 <X size={18} />
               </button>

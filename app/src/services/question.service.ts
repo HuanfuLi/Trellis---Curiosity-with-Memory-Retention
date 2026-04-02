@@ -1,4 +1,4 @@
-import type { Question, ServiceResult, AskResult } from '../types/index.ts';
+import type { Question, ServiceResult, AskResult, SessionMessage } from '../types/index.ts';
 import { today } from '../lib/date.ts';
 import { eventBus } from '../lib/event-bus.ts';
 import { toast } from '../lib/toast.ts';
@@ -157,7 +157,7 @@ function findRelated(keywords: string[], store: Question[], embedding?: number[]
 }
 
 export const questionService = {
-  async ask(content: string, sessionContext?: QuestionFilterContext): Promise<ServiceResult<AskResult>> {
+  async ask(content: string, sessionContext?: QuestionFilterContext, sessionHistory?: SessionMessage[]): Promise<ServiceResult<AskResult>> {
     const settings = mockSettingsService.getSync();
     const llmConfig = settings.llm;
 
@@ -186,25 +186,27 @@ export const questionService = {
       }
     }
 
-    const recentContext = store.slice(0, 3);
-    const contextLines = recentContext
-      .map((q) => `Q: ${q.content}\nA: ${q.summary}`)
-      .join('\n');
-
     const systemPrompt = [
       'You are a knowledgeable learning assistant. Answer questions clearly and thoroughly.',
       'Do not generate harmful, illegal, sexually explicit, or deceptive content.',
-      recentContext.length > 0 ? `Recent questions for context:\n${contextLines}` : '',
       'Respond ONLY with JSON:',
       '{"answer":"...","summary":"one sentence","keywords":["kw1","kw2","kw3"],"storyHook":"An intriguing hook (<=15 words) to spark curiosity about this topic.","shortSummary":"A concise <=80 word summary of the core concept explained in the answer."}',
     ]
       .filter(Boolean)
       .join('\n');
 
+    // Convert SessionMessage[] to ChatMessage[] for the LLM (append-only for KV-cache)
+    const historyMessages: { role: 'user' | 'assistant'; content: string }[] =
+      (sessionHistory ?? []).map((m) => ({
+        role: m.type === 'user' ? ('user' as const) : ('assistant' as const),
+        content: m.content,
+      }));
+
     try {
       const raw = await chatCompletion(
         [
           { role: 'system', content: systemPrompt },
+          ...historyMessages,
           { role: 'user', content },
         ],
         llmConfig,
@@ -327,6 +329,10 @@ export const questionService = {
         if (embCfg.isConfigured) {
           void embedText(`${mergedQuestion.content} ${mergedQuestion.answer}`, embCfg)
             .then((vector) => {
+              // Guard: question may have been deleted while embedding was in flight
+              const current = questionService.getAll().find((q) => q.id === mergedQuestion.id);
+              if (!current) return;
+
               questionService.patchQuestion(mergedQuestion.id, { embeddingVector: vector });
               // Update relatedQuestionIds with cosine-ranked candidates now that we have a vector.
               const allQ = questionService.getAll();
@@ -338,8 +344,9 @@ export const questionService = {
                 .slice(0, 3)
                 .map((x) => x.id);
               if (cosineIds.length > 0) {
-                const current = questionService.getAll().find((q) => q.id === mergedQuestion.id);
-                const merged = Array.from(new Set([...(current?.relatedQuestionIds ?? []), ...cosineIds]));
+                const freshQ = questionService.getAll().find((q) => q.id === mergedQuestion.id);
+                if (!freshQ) return;
+                const merged = Array.from(new Set([...(freshQ.relatedQuestionIds ?? []), ...cosineIds]));
                 questionService.patchQuestion(mergedQuestion.id, { relatedQuestionIds: merged });
               }
             })
@@ -396,6 +403,10 @@ export const questionService = {
     if (embeddingConfig.isConfigured) {
       void embedText(`${content} ${answer}`, embeddingConfig)
         .then((vector) => {
+          // Guard: question may have been deleted while embedding was in flight
+          const current = questionService.getAll().find((q) => q.id === question.id);
+          if (!current) return;
+
           questionService.patchQuestion(question.id, { embeddingVector: vector });
           // Re-rank relatedQuestionIds with the richer content+answer vector.
           const allQ = questionService.getAll();
@@ -407,8 +418,9 @@ export const questionService = {
             .slice(0, 3)
             .map((x) => x.id);
           if (cosineIds.length > 0) {
-            const current = questionService.getAll().find((q) => q.id === question.id);
-            const merged = Array.from(new Set([...(current?.relatedQuestionIds ?? []), ...cosineIds]));
+            const freshQ = questionService.getAll().find((q) => q.id === question.id);
+            if (!freshQ) return;
+            const merged = Array.from(new Set([...(freshQ.relatedQuestionIds ?? []), ...cosineIds]));
             questionService.patchQuestion(question.id, { relatedQuestionIds: merged });
           }
         })
