@@ -210,6 +210,7 @@ export const questionService = {
           { role: 'user', content },
         ],
         llmConfig,
+        { serviceName: 'ask' },
       );
 
       let answer: string;

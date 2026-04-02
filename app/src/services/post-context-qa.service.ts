@@ -61,6 +61,7 @@ export const postContextQaService = {
         },
       ],
       settings.llm,
+      { serviceName: 'ask' },
     );
   },
 };

@@ -561,6 +561,7 @@ async function generateDailyPostsWithLLM(questions: Question[], date: string): P
       { role: 'user', content: buildGenerationPrompt(date, context, candidates) },
     ],
     settings.llm,
+    { serviceName: 'posts' },
   );
 
   return parseGeneratedPosts(raw, questions, date, candidates);
@@ -726,6 +727,7 @@ export const conceptFeedService = {
               { role: 'user', content: buildGenerationPrompt(date, context) + avoidClause },
             ],
             settings.llm,
+            { serviceName: 'posts' },
           );
           // Use existingPosts.length as index offset so "more" post IDs never
           // collide with initial post IDs even when the LLM reuses the same
@@ -804,6 +806,7 @@ export const conceptFeedService = {
     yield* chatStream(
       [{ role: 'system', content: system }, { role: 'user', content: prompt }],
       settings.llm,
+      { serviceName: 'posts' },
     );
   },
 
@@ -921,6 +924,7 @@ export const conceptFeedService = {
     yield* chatStream(
       [{ role: 'system', content: system }, { role: 'user', content: prompt }],
       settings.llm,
+      { serviceName: 'posts' },
     );
   },
 

@@ -449,6 +449,7 @@ export async function classifyAndAnchor(
         { role: 'user', content: question.content },
       ],
       llmConfig,
+      { serviceName: 'classification' },
     );
 
     let result: ClassificationResult;
@@ -947,7 +948,7 @@ async function _doReorganize(
         { role: 'user', content: userMessage },
       ],
       llmConfig,
-      { maxTokens: 8192 },
+      { maxTokens: 8192, serviceName: 'classification' },
     );
 
     // Parse JSON — try direct parse first, then balanced-brace extraction

@@ -53,6 +53,7 @@ async function generateSessionTitle(userMessage: string, aiReply: string): Promi
         { role: 'user', content: `Question: ${userMessage}\n\nReply: ${aiReply.slice(0, 400)}` },
       ],
       settings.llm,
+      { serviceName: 'title' },
     );
     const title = raw.trim().replace(/^["']|["']$/g, '').slice(0, 60);
     return title || '';

@@ -81,6 +81,7 @@ async function isOffTopicByLLM(
         { role: 'user', content },
       ],
       llmConfig,
+      { serviceName: 'filter' },
     );
     const trimmed = response.trim().toLowerCase();
     return trimmed.startsWith('yes');

@@ -110,6 +110,7 @@ export function useQuestions(): UseQuestionsReturn {
             { role: 'user', content },
           ],
           llmConfig,
+          { serviceName: 'ask' },
         );
 
         for await (const token of stream) {

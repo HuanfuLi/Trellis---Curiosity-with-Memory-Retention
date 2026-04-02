@@ -206,6 +206,7 @@ export const flashcardService = {
           { role: 'user', content: transcript },
         ],
         settings.llm,
+        { serviceName: 'flashcards' },
       );
 
       const match = raw.match(/\[[\s\S]*\]/);
@@ -216,7 +217,9 @@ export const flashcardService = {
 
       const allQuestions = questionService.getAll();
 
-      const cards: FlashCard[] = parsed.map((item) => {
+      const cards: FlashCard[] = parsed
+        .filter((item) => item && typeof item === 'object' && (item.front || item.back))
+        .map((item) => {
         const front = String(item.front ?? '').slice(0, 120);
         const back = String(item.back ?? '').slice(0, 200);
 

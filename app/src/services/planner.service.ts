@@ -26,7 +26,9 @@ function loadJson<T>(key: string, fallback: T): T {
 function saveJson<T>(key: string, data: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(data));
-  } catch { /* ignore storage errors */ }
+  } catch (err) {
+    console.error(`[Planner] localStorage write failed for ${key}:`, err);
+  }
 }
 
 // ── SQLite write-through helpers ───────────────────────────────────────────
@@ -264,6 +266,7 @@ async function extractSignals(content: string): Promise<CheckInSignals> {
         { role: 'user', content },
       ],
       settings.llm,
+      { serviceName: 'planner' },
     );
 
     const text = response.trim();
@@ -378,6 +381,7 @@ async function generateDiscoverTitle(
         },
       ],
       settings.llm,
+      { serviceName: 'planner' },
     );
     const title = response.trim().replace(/^["']|["']$/g, '');
     return title || `Discover: ${topic}`;

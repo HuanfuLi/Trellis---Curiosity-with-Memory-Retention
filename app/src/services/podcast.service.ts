@@ -206,6 +206,7 @@ export const podcastService = {
               { role: 'user', content: `Create a daily learning recap for:\n${questionLines}` },
             ],
             settings.llm,
+            { serviceName: 'podcast' },
           );
         }
 
