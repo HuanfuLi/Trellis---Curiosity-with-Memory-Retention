@@ -110,9 +110,9 @@ export class GeminiProvider implements IImageProvider {
     const endpoint = `${BASE_URL}/${this.model}:generateContent`;
 
     try {
-      const response = await fetch(`${endpoint}?key=${this.apiKey}`, {
+      const response = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.apiKey },
         body: JSON.stringify({
           contents: [
             {

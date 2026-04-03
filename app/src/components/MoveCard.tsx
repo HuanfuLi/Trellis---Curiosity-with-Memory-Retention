@@ -49,7 +49,7 @@ const MOVE_TYPE_CONFIG: Record<PlannedMoveType, {
 // ── Priority badge helper ──────────────────────────────────────────────────
 
 function getPriorityBadge(score: number): { emoji: string; label: string; bg: string } {
-  if (score >= 75) return { emoji: '🔴', label: 'WEAK AREA', bg: 'color-mix(in srgb, #ef4444 12%, transparent)' };
+  if (score >= 75) return { emoji: '🔴', label: 'WEAK AREA', bg: 'color-mix(in srgb, var(--danger) 12%, transparent)' };
   if (score >= 60) return { emoji: '🟠', label: 'OVERDUE', bg: 'color-mix(in srgb, #f97316 12%, transparent)' };
   if (score >= 45) return { emoji: '🟡', label: 'RECENT', bg: 'color-mix(in srgb, #eab308 12%, transparent)' };
   return { emoji: '⚪', label: 'GOOD', bg: 'var(--surface-variant)' };

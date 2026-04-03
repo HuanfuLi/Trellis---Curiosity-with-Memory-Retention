@@ -197,9 +197,10 @@ class ImageGenerationService {
         await idbSet(cacheKey, payload);
       } catch (err) {
         console.error('[ImageGenerationService] IndexedDB write failed — image will not be cached:', err);
-        continue;
+        continue; // Skip metadata update — no binary to point at
       }
 
+      // Only update metadata after successful IDB write to avoid stale pointers
       meta[cacheKey] = {
         postId,
         style: image.style,

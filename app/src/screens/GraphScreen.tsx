@@ -128,6 +128,14 @@ function injectMindMapStyles() {
       background-size: 18px 18px;
       position: absolute;
       z-index: 9;
+      pointer-events: all;
+    }
+    /* Invisible 44x44px touch target around the 28px dot (WCAG 2.5.8) */
+    .map-container me-parent me-epd::before {
+      content: '';
+      position: absolute;
+      inset: -8px;
+      border-radius: 50%;
     }
     .map-container me-parent me-epd.minus {
       opacity: 0.7;
@@ -248,11 +256,51 @@ function MasterMap({ nodes, edges, onNodeClick }: MasterMapProps) {
     };
     containerRef.current.addEventListener('click', handleClick);
 
+    // Fix: On mobile, the library's drag detection sets `moved = true` on
+    // ANY pointermove (even 1px), then the click handler bails early before
+    // reaching the ME-EPD check. Touch screens nearly always produce micro-
+    // movement, so expand/collapse never fires via click.
+    //
+    // We use touchstart/touchend directly — these fire independently of the
+    // library's pointer capture and drag detection. If the touch started on
+    // an me-epd and ended within a small radius, we treat it as a tap.
+    let epdTouchTarget: HTMLElement | null = null;
+    let epdTouchStartX = 0;
+    let epdTouchStartY = 0;
+    const TAP_THRESHOLD = 10; // px — allow small finger wobble
+
+    const handleTouchStart = (e: TouchEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'ME-EPD' || target.closest?.('me-epd')) {
+        epdTouchTarget = target.tagName === 'ME-EPD' ? target : target.closest('me-epd') as HTMLElement;
+        epdTouchStartX = e.touches[0].clientX;
+        epdTouchStartY = e.touches[0].clientY;
+      } else {
+        epdTouchTarget = null;
+      }
+    };
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (!epdTouchTarget) return;
+      const touch = e.changedTouches[0];
+      const dx = touch.clientX - epdTouchStartX;
+      const dy = touch.clientY - epdTouchStartY;
+      if (dx * dx + dy * dy < TAP_THRESHOLD * TAP_THRESHOLD) {
+        e.preventDefault(); // Prevent delayed click from also firing
+        const tpc = epdTouchTarget.previousElementSibling;
+        if (tpc) mei.expandNode(tpc as unknown as Parameters<typeof mei.expandNode>[0]);
+      }
+      epdTouchTarget = null;
+    };
+    containerRef.current.addEventListener('touchstart', handleTouchStart, { passive: true });
+    containerRef.current.addEventListener('touchend', handleTouchEnd);
+
     instanceRef.current = mei;
     const container = containerRef.current;
 
     return () => {
       container.removeEventListener('click', handleClick);
+      container.removeEventListener('touchstart', handleTouchStart);
+      container.removeEventListener('touchend', handleTouchEnd);
       instanceRef.current?.destroy();
       instanceRef.current = null;
     };
@@ -486,7 +534,7 @@ function CardStackInbox({ unlinked, allNodes, onLink, onCreateDomain, onClose }:
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
         <button
           onClick={onClose}
-          style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
+          style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
         >
           <ArrowLeft size={20} />
         </button>

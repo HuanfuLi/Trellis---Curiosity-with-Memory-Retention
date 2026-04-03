@@ -85,8 +85,9 @@ export function PostDetailScreen() {
   useEffect(() => {
     if (!id) return;
 
-    // Abort any in-progress connection essay generation from a prior navigation.
-    generateAbortRef.current = true;
+    // Reset abort flag for this effect run. The cleanup function from the
+    // *previous* effect run already set this to true, which stopped any
+    // in-flight generation. We now clear it so the new generation can proceed.
     generateAbortRef.current = false;
     setEssayError(null);
     setEssayStreaming('');
@@ -303,7 +304,7 @@ export function PostDetailScreen() {
     const discMeta = discoverMetaRef.current;
     return (
       <div style={{ padding: '16px 16px 104px', maxWidth: '448px', margin: '0 auto' }}>
-        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center', marginBottom: '14px' }}>
+        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center', marginBottom: '14px' }}>
           <ArrowLeft size={20} />
         </button>
 
@@ -342,12 +343,12 @@ export function PostDetailScreen() {
         )}
 
         {essayError ? (
-          <div style={{ padding: '20px', borderRadius: 'var(--radius-xl)', border: '1px solid #E53935', backgroundColor: '#FFEBEE', marginBottom: '16px' }}>
-            <p style={{ color: '#B71C1C', fontWeight: 600, marginBottom: '8px' }}>Generation failed</p>
-            <p style={{ color: '#C62828', fontSize: '0.875rem', marginBottom: '16px' }}>{essayError}</p>
+          <div style={{ padding: '20px', borderRadius: 'var(--radius-xl)', border: '1px solid var(--danger)', backgroundColor: 'var(--danger-light)', marginBottom: '16px' }}>
+            <p style={{ color: 'var(--danger-dark)', fontWeight: 600, marginBottom: '8px' }}>Generation failed</p>
+            <p style={{ color: 'var(--danger-dark)', fontSize: '0.875rem', marginBottom: '16px' }}>{essayError}</p>
             <button
               onClick={() => { setEssayError(null); navigate(0); }}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: 'var(--radius)', backgroundColor: '#E53935', color: 'white', fontWeight: 600, fontSize: '0.875rem', border: 'none', cursor: 'pointer' }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: 'var(--radius)', backgroundColor: 'var(--danger)', color: 'white', fontWeight: 600, fontSize: '0.875rem', border: 'none', cursor: 'pointer' }}
             >
               <RefreshCw size={14} /> Retry
             </button>
@@ -365,7 +366,7 @@ export function PostDetailScreen() {
   if (!post) {
     return (
       <div style={{ padding: '24px 16px', maxWidth: '448px', margin: '0 auto' }}>
-        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}>
+        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}>
           <ArrowLeft size={20} />
         </button>
         <h2 style={{ marginTop: '24px', marginBottom: '8px' }}>Post not found</h2>
@@ -392,7 +393,7 @@ export function PostDetailScreen() {
         </div>
       )}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}>
+        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}>
           <ArrowLeft size={20} />
         </button>
         <DetailMenu

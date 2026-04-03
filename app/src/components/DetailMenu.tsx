@@ -33,7 +33,7 @@ export function DetailMenu({ onDelete, deleteLabel = 'this item' }: DetailMenuPr
         style={{
           background: 'none',
           border: 'none',
-          padding: '6px',
+          padding: '12px',
           cursor: 'pointer',
           color: 'var(--muted-foreground)',
           display: 'flex',
@@ -73,7 +73,7 @@ export function DetailMenu({ onDelete, deleteLabel = 'this item' }: DetailMenuPr
                 alignItems: 'center',
                 gap: '10px',
                 fontSize: '0.875rem',
-                color: '#E53935',
+                color: 'var(--danger)',
                 fontWeight: 500,
               }}
             >
@@ -93,7 +93,7 @@ export function DetailMenu({ onDelete, deleteLabel = 'this item' }: DetailMenuPr
                     padding: '8px 12px',
                     borderRadius: 'var(--radius-xl)',
                     border: 'none',
-                    backgroundColor: '#E53935',
+                    backgroundColor: 'var(--danger)',
                     color: 'white',
                     fontWeight: 600,
                     fontSize: '0.8rem',

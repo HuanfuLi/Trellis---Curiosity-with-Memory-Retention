@@ -43,10 +43,10 @@ async function openAIEmbed(text: string, config: EmbeddingConfig): Promise<numbe
 // ─── Google ───────────────────────────────────────────────────────────────────
 
 async function googleEmbed(text: string, config: EmbeddingConfig): Promise<number[]> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:embedContent?key=${config.apiKey ?? ''}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:embedContent`;
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': config.apiKey ?? '' },
     body: JSON.stringify({ model: `models/${config.model}`, content: { parts: [{ text }] } }),
   });
   if (!response.ok) {

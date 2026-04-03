@@ -39,7 +39,9 @@ function loadMoves(): PlannedMove[] {
 function saveMoves(moves: PlannedMove[]): void {
   try {
     localStorage.setItem(MOVES_KEY, JSON.stringify(moves));
-  } catch { /* ignore storage errors */ }
+  } catch (err) {
+    console.error('[PlannerAutoGen] localStorage write failed:', err);
+  }
 }
 
 function getLastRefreshTime(): number {

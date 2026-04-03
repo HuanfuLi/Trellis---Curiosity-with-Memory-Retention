@@ -13,7 +13,7 @@ interface FlashcardProps {
 }
 
 const ratingConfig = [
-  { value: 1, label: '1', color: '#E53935', description: 'Again' },
+  { value: 1, label: '1', color: 'var(--danger)', description: 'Again' },
   { value: 2, label: '2', color: '#FF8A65', description: 'Hard' },
   { value: 3, label: '3', color: '#FFD54F', description: 'Good' },
   { value: 4, label: '4', color: '#9CCC65', description: 'Easy' },
@@ -56,8 +56,8 @@ export function Flashcard({ front, back, onRate, pinned, onTogglePin }: Flashcar
               position: 'absolute',
               top: '12px',
               right: '12px',
-              width: '32px',
-              height: '32px',
+              width: '44px',
+              height: '44px',
               borderRadius: '50%',
               backgroundColor: pinned ? 'var(--primary-40)' : 'transparent',
               color: pinned ? 'white' : 'var(--muted-foreground)',

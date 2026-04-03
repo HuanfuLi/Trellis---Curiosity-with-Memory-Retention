@@ -126,7 +126,7 @@ export function OnboardingScreen() {
           <div>
             <button
               onClick={() => setStep('welcome')}
-              style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center', marginBottom: '24px' }}
+              style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center', marginBottom: '24px' }}
             >
               <ArrowLeft size={20} />
             </button>
@@ -204,7 +204,7 @@ export function OnboardingScreen() {
           <div>
             <button
               onClick={() => setStep('consent')}
-              style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center', marginBottom: '24px' }}
+              style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center', marginBottom: '24px' }}
             >
               <ArrowLeft size={20} />
             </button>

@@ -13,7 +13,8 @@ import { PlannerScreen } from './screens/PlannerScreen';
 import { ReviewScreen } from './screens/ReviewScreen';
 import { PodcastScreen } from './screens/PodcastScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
-import { GraphScreen } from './screens/GraphScreen';
+import { lazy, Suspense } from 'react';
+const GraphScreen = lazy(() => import('./screens/GraphScreen').then((m) => ({ default: m.GraphScreen })));
 import { PostDetailScreen } from './screens/PostDetailScreen';
 import { AnchorDetailScreen } from './screens/AnchorDetailScreen';
 import { ClusterDetailScreen } from './screens/ClusterDetailScreen';
@@ -23,6 +24,7 @@ import { hydratePlannerFromSQLite } from './services/planner.service';
 import { bootstrapImageGeneration } from './services/imageGeneration.bootstrap';
 import { applyTheme } from './lib/theme';
 import { PageTransition } from './components/PageTransition';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { startVoiceRecording, stopVoiceRecording, MicPermissionDeniedError } from './lib/voice-recorder';
 import { transcribeAudio } from './providers/stt';
 import { toast } from './lib/toast';
@@ -151,7 +153,7 @@ function RootLayout() {
             <>
               <span style={{
                 width: '8px', height: '8px', borderRadius: '50%',
-                backgroundColor: '#E53935', flexShrink: 0,
+                backgroundColor: 'var(--danger)', flexShrink: 0,
                 animation: 'mic-pulse 1.4s ease-in-out infinite',
                 display: 'inline-block',
               }} />
@@ -180,7 +182,7 @@ const router = createBrowserRouter([
   },
   {
     path: '/',
-    element: <RootLayout />,
+    element: <ErrorBoundary><RootLayout /></ErrorBoundary>,
     children: [
       { index: true, element: <HomeRedirect /> },
       { path: 'home', element: null },
@@ -189,11 +191,12 @@ const router = createBrowserRouter([
       { path: 'ask/:id', element: <PageTransition><QuestionDetailScreen /></PageTransition> },
       { path: 'anchor/:id', element: <PageTransition><AnchorDetailScreen /></PageTransition> },
       { path: 'cluster/:id', element: <PageTransition><ClusterDetailScreen /></PageTransition> },
-      { path: 'graph', element: <PageTransition><GraphScreen /></PageTransition> },
+      { path: 'graph', element: <Suspense fallback={null}><PageTransition><GraphScreen /></PageTransition></Suspense> },
       { path: 'planner', element: <PageTransition><PlannerScreen /></PageTransition> },
       { path: 'review', element: <PageTransition><ReviewScreen /></PageTransition> },
       { path: 'podcast', element: <PageTransition><PodcastScreen /></PageTransition> },
       { path: 'settings', element: <PageTransition><SettingsScreen /></PageTransition> },
+      { path: '*', element: <Navigate to="/home" replace /> },
     ],
   },
 ]);

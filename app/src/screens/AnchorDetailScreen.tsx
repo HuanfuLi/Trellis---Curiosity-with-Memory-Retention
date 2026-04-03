@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, BookOpen, FileText, ChevronRight } from 'lucide-react';
 import { Card } from '../components/ui/Card';
+import { Skeleton } from '../components/ui/Skeleton';
 import { Markdown } from '../components/Markdown';
 import { DetailMenu } from '../components/DetailMenu';
 import { useQuestions } from '../state/useQuestions';
@@ -12,7 +13,7 @@ import { toast } from '../lib/toast';
 export function AnchorDetailScreen() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getById, questions } = useQuestions();
+  const { getById, questions, isLoading } = useQuestions();
 
   const anchor = id ? getById(id) : undefined;
 
@@ -21,11 +22,19 @@ export function AnchorDetailScreen() {
       <div style={{ padding: '24px 16px', maxWidth: '448px', margin: '0 auto' }}>
         <button
           onClick={() => navigate(-1)}
-          style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
+          style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
         >
           <ArrowLeft size={20} />
         </button>
-        <p style={{ color: 'var(--muted-foreground)' }}>Anchor not found.</p>
+        {isLoading ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
+            <Skeleton height="1.5rem" width="60%" />
+            <Skeleton height="1rem" width="30%" />
+            <Skeleton height="6rem" />
+          </div>
+        ) : (
+          <p style={{ color: 'var(--muted-foreground)' }}>Anchor not found.</p>
+        )}
       </div>
     );
   }
@@ -79,7 +88,7 @@ export function AnchorDetailScreen() {
         left={
           <button
             onClick={() => navigate(-1)}
-            style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
+            style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
           >
             <ArrowLeft size={20} />
           </button>

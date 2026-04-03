@@ -44,7 +44,7 @@ export async function hydrateFromSQLite(): Promise<void> {
     const rows = await dbQuery<{ id: string; data: string }>('SELECT * FROM questions');
     if (rows.length === 0) return;
 
-    const existing = loadStore();
+    const existing = loadStore({ includeFlagged: true });
     const existingIds = new Set(existing.map((q) => q.id));
     const toAdd: Question[] = [];
     for (const row of rows) {
@@ -72,11 +72,12 @@ function newId(): string {
   return `q-${++idCounter}`;
 }
 
-function loadStore(): Question[] {
+function loadStore(opts?: { includeFlagged?: boolean }): Question[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as Question[];
+    const questions = JSON.parse(raw) as Question[];
+    return opts?.includeFlagged ? questions : questions.filter((q) => !q.flagged);
   } catch {
     return [];
   }
@@ -172,7 +173,7 @@ export const questionService = {
       };
     }
 
-    const store = loadStore();
+    const store = loadStore({ includeFlagged: true });
 
     // Pre-compute query embedding before the LLM call so context candidates can be
     // re-ranked by cosine similarity instead of keyword overlap alone.
@@ -245,7 +246,7 @@ export const questionService = {
       const flagged = await filterQuestion(question, sessionContext);
 
       // Persist the flagged status back to store and SQLite
-      const freshStore = loadStore();
+      const freshStore = loadStore({ includeFlagged: true });
       const idx = freshStore.findIndex((q) => q.id === question.id);
       if (idx !== -1) {
         freshStore[idx] = flagged;
@@ -258,7 +259,7 @@ export const questionService = {
       if (flagged.flagged !== true) {
         // Fire-and-forget: classification + anchor attachment runs asynchronously.
         // The Q&A is already saved; labels will be patched on once the call completes.
-        void classifyAndAnchor(flagged, loadStore(), llmConfig).catch((err: unknown) => {
+        void classifyAndAnchor(flagged, loadStore({ includeFlagged: true }), llmConfig).catch((err: unknown) => {
           console.warn('[EchoLearn] classifyAndAnchor failed:', err instanceof Error ? err.message : err);
         });
       }
@@ -301,7 +302,7 @@ export const questionService = {
       preComputedEmbedding?: number[];
     },
   ): Question {
-    const store = existingQuestions ?? loadStore();
+    const store = existingQuestions ?? loadStore({ includeFlagged: true });
     const summary = meta?.summary ?? extractSummary(answer);
     const keywords = meta?.keywords ?? extractKeywords(answer);
     const decision = decideIngestionOutcome(content, store);
@@ -331,12 +332,12 @@ export const questionService = {
           void embedText(`${mergedQuestion.content} ${mergedQuestion.answer}`, embCfg)
             .then((vector) => {
               // Guard: question may have been deleted while embedding was in flight
-              const current = questionService.getAll().find((q) => q.id === mergedQuestion.id);
+              const current = questionService.getAll({ includeFlagged: true }).find((q) => q.id === mergedQuestion.id);
               if (!current) return;
 
               questionService.patchQuestion(mergedQuestion.id, { embeddingVector: vector });
               // Update relatedQuestionIds with cosine-ranked candidates now that we have a vector.
-              const allQ = questionService.getAll();
+              const allQ = questionService.getAll({ includeFlagged: true });
               const cosineIds = allQ
                 .filter((q) => q.id !== mergedQuestion.id && q.embeddingVector && q.embeddingVector.length > 0)
                 .map((q) => ({ id: q.id, score: cosine(vector, q.embeddingVector!) }))
@@ -345,7 +346,7 @@ export const questionService = {
                 .slice(0, 3)
                 .map((x) => x.id);
               if (cosineIds.length > 0) {
-                const freshQ = questionService.getAll().find((q) => q.id === mergedQuestion.id);
+                const freshQ = questionService.getAll({ includeFlagged: true }).find((q) => q.id === mergedQuestion.id);
                 if (!freshQ) return;
                 const merged = Array.from(new Set([...(freshQ.relatedQuestionIds ?? []), ...cosineIds]));
                 questionService.patchQuestion(mergedQuestion.id, { relatedQuestionIds: merged });
@@ -405,12 +406,12 @@ export const questionService = {
       void embedText(`${content} ${answer}`, embeddingConfig)
         .then((vector) => {
           // Guard: question may have been deleted while embedding was in flight
-          const current = questionService.getAll().find((q) => q.id === question.id);
+          const current = questionService.getAll({ includeFlagged: true }).find((q) => q.id === question.id);
           if (!current) return;
 
           questionService.patchQuestion(question.id, { embeddingVector: vector });
           // Re-rank relatedQuestionIds with the richer content+answer vector.
-          const allQ = questionService.getAll();
+          const allQ = questionService.getAll({ includeFlagged: true });
           const cosineIds = allQ
             .filter((q) => q.id !== question.id && q.embeddingVector && q.embeddingVector.length > 0)
             .map((q) => ({ id: q.id, score: cosine(vector, q.embeddingVector!) }))
@@ -419,7 +420,7 @@ export const questionService = {
             .slice(0, 3)
             .map((x) => x.id);
           if (cosineIds.length > 0) {
-            const freshQ = questionService.getAll().find((q) => q.id === question.id);
+            const freshQ = questionService.getAll({ includeFlagged: true }).find((q) => q.id === question.id);
             if (!freshQ) return;
             const merged = Array.from(new Set([...(freshQ.relatedQuestionIds ?? []), ...cosineIds]));
             questionService.patchQuestion(question.id, { relatedQuestionIds: merged });
@@ -475,18 +476,18 @@ export const questionService = {
   },
 
   async delete(id: string): Promise<ServiceResult<void>> {
-    saveStore(loadStore().filter((q) => q.id !== id));
+    saveStore(loadStore({ includeFlagged: true }).filter((q) => q.id !== id));
     deleteFromSQLite(id);
     eventBus.emit({ type: 'QUESTION_DELETED', payload: { id } });
     return { success: true };
   },
 
-  getAll(): Question[] {
-    return loadStore();
+  getAll(opts?: { includeFlagged?: boolean }): Question[] {
+    return loadStore(opts);
   },
 
   updateReviewSchedule(questionId: string, schedule: Question['reviewSchedule']): void {
-    const store = loadStore();
+    const store = loadStore({ includeFlagged: true });
     const idx = store.findIndex((q) => q.id === questionId);
     if (idx !== -1) {
       store[idx] = { ...store[idx], reviewSchedule: schedule };
@@ -496,7 +497,7 @@ export const questionService = {
   },
 
   updateRelatedIds(questionId: string, relatedQuestionIds: string[]): void {
-    const store = loadStore();
+    const store = loadStore({ includeFlagged: true });
     const idx = store.findIndex((q) => q.id === questionId);
     if (idx !== -1) {
       store[idx] = { ...store[idx], relatedQuestionIds };
@@ -507,7 +508,7 @@ export const questionService = {
 
   /** Merge arbitrary fields onto an existing question (used by graph service for parentId, etc.). */
   patchQuestion(questionId: string, patch: Partial<Question>): void {
-    const store = loadStore();
+    const store = loadStore({ includeFlagged: true });
     const idx = store.findIndex((q) => q.id === questionId);
     if (idx !== -1) {
       store[idx] = { ...store[idx], ...patch };

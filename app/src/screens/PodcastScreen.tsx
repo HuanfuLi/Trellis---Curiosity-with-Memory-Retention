@@ -243,7 +243,7 @@ export function PodcastScreen() {
         >
           <button
             onClick={() => setShowScript(false)}
-            style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
+            style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
           >
             <ArrowLeft size={20} />
           </button>
@@ -268,7 +268,7 @@ export function PodcastScreen() {
       <div style={{ padding: '24px 16px 96px', maxWidth: '448px', margin: '0 auto' }}>
         <button
           onClick={() => setShowAllPodcasts(false)}
-          style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center', marginBottom: '24px' }}
+          style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center', marginBottom: '24px' }}
         >
           <ArrowLeft size={20} />
         </button>
@@ -314,7 +314,7 @@ export function PodcastScreen() {
                           onClick={(e) => { e.stopPropagation(); setConfirmDeletePodcastId(null); }}
                           title="Cancel delete"
                           style={{
-                            width: '28px', height: '28px', borderRadius: '50%',
+                            width: '44px', height: '44px', borderRadius: '50%',
                             backgroundColor: 'transparent', color: 'var(--muted-foreground)',
                             border: '1.5px solid var(--surface-variant)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
@@ -331,9 +331,9 @@ export function PodcastScreen() {
                           }}
                           title="Confirm delete"
                           style={{
-                            width: '28px', height: '28px', borderRadius: '50%',
-                            backgroundColor: 'rgba(220,38,38,0.12)', color: 'rgb(220,38,38)',
-                            border: '1.5px solid rgba(220,38,38,0.3)',
+                            width: '44px', height: '44px', borderRadius: '50%',
+                            backgroundColor: 'color-mix(in srgb, var(--danger) 12%, transparent)', color: 'var(--danger)',
+                            border: '1.5px solid color-mix(in srgb, var(--danger) 30%, transparent)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
                           }}
                         >
@@ -345,7 +345,7 @@ export function PodcastScreen() {
                         onClick={(e) => { e.stopPropagation(); setConfirmDeletePodcastId(pod.id); }}
                         title="Delete podcast"
                         style={{
-                          width: '28px', height: '28px', borderRadius: '50%',
+                          width: '44px', height: '44px', borderRadius: '50%',
                           backgroundColor: 'transparent', color: 'var(--muted-foreground)',
                           border: '1.5px solid var(--surface-variant)',
                           display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
@@ -376,7 +376,7 @@ export function PodcastScreen() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
         <button
           onClick={() => navigate(-1)}
-          style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
+          style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
         >
           <ArrowLeft size={20} />
         </button>
@@ -609,7 +609,7 @@ export function PodcastScreen() {
                 key={concept.id}
                 question={concept}
                 onClick={() => navigate(`/ask/${concept.id}`)}
-                badge={isWeak ? { label: 'Weak', color: '#ef4444' } : undefined}
+                badge={isWeak ? { label: 'Weak', color: 'var(--danger)' } : undefined}
               />
             );
           })}

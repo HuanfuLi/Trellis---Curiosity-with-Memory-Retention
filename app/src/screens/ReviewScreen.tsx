@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, memo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { parseMoveNavigationState } from '../lib/moveNavigator';
 import { ArrowLeft, Pin, BookOpen, Trash2, Check, X, GitBranch } from 'lucide-react';
@@ -14,7 +14,7 @@ import { graphService } from '../services/graph.service';
 
 // ─── Library view ─────────────────────────────────────────────────────────────
 
-function LibraryCard({
+const LibraryCard = memo(function LibraryCard({
   card,
   onTogglePin,
   onDelete,
@@ -26,8 +26,8 @@ function LibraryCard({
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const btnBase: React.CSSProperties = {
-    width: '30px',
-    height: '30px',
+    width: '44px',
+    height: '44px',
     borderRadius: '50%',
     display: 'flex',
     alignItems: 'center',
@@ -120,9 +120,9 @@ function LibraryCard({
                 title="Confirm delete"
                 style={{
                   ...btnBase,
-                  backgroundColor: '#E53935',
+                  backgroundColor: 'var(--danger)',
                   color: 'white',
-                  border: '1.5px solid #E53935',
+                  border: '1.5px solid var(--danger)',
                 }}
               >
                 <Check size={14} />
@@ -152,10 +152,10 @@ function LibraryCard({
       </div>
     </div>
   );
-}
+});
 
 function ReviewMiniMap({ map }: { map: DailyReviewMap }) {
-  const visibleRoots = map.roots
+  const visibleRoots = useMemo(() => map.roots
     .map((root) => ({
       ...root,
       branches: root.branches
@@ -170,7 +170,7 @@ function ReviewMiniMap({ map }: { map: DailyReviewMap }) {
         }))
         .filter((branch) => branch.clusters.length > 0),
     }))
-    .filter((root) => root.branches.length > 0);
+    .filter((root) => root.branches.length > 0), [map]);
 
   return (
     <div
@@ -377,7 +377,7 @@ export function ReviewScreen() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
           <button
             onClick={() => setShowLibrary(false)}
-            style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
+            style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
           >
             <ArrowLeft size={20} />
           </button>
@@ -477,7 +477,7 @@ export function ReviewScreen() {
         <Confetti active={showConfetti} />
         <button
           onClick={() => navigate(-1)}
-          style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center', marginBottom: '24px' }}
+          style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center', marginBottom: '24px' }}
         >
           <ArrowLeft size={20} />
         </button>
@@ -575,7 +575,7 @@ export function ReviewScreen() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
           <button
             onClick={() => navigate(-1)}
-            style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
+            style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
           >
             <ArrowLeft size={20} />
           </button>

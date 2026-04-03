@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, memo } from 'react';
 import { Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import { Markdown } from './Markdown';
 
@@ -26,7 +26,7 @@ interface ChatMessageProps {
   onQuestionOverride?: (questionId: string, shouldSave: boolean) => void;
 }
 
-export function ChatMessage({
+export const ChatMessage = memo(function ChatMessage({
   type,
   content,
   relatedKnowledge,
@@ -370,9 +370,9 @@ export function ChatMessage({
                 gap: '4px',
                 padding: '5px 12px',
                 borderRadius: '20px',
-                border: '1px solid #E53935',
+                border: '1px solid var(--danger)',
                 backgroundColor: 'var(--surface-variant)',
-                color: '#E53935',
+                color: 'var(--danger)',
                 fontSize: '0.78rem',
                 cursor: 'pointer',
               }}
@@ -385,4 +385,4 @@ export function ChatMessage({
       </div>
     </div>
   );
-}
+});

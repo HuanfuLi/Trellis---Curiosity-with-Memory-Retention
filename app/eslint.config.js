@@ -26,6 +26,11 @@ export default defineConfig([
         destructuredArrayIgnorePattern: '^_',
         ignoreRestSiblings: true,
       }],
+      'eqeqeq': ['error', 'always', { null: 'ignore' }],
+      'no-eval': 'error',
+      'no-implied-eval': 'error',
+      // Warn on console usage — allow warn/error for legitimate runtime diagnostics
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
     },
     languageOptions: {
       ecmaVersion: 2020,

@@ -9,7 +9,7 @@ interface ToastMessage {
 
 const typeColors = {
   success: 'var(--primary-40)',
-  error: '#E53935',
+  error: 'var(--danger)',
   info: 'var(--primary-30)',
 };
 

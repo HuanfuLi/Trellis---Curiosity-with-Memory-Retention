@@ -30,7 +30,7 @@ const variantStyles: Record<Variant, React.CSSProperties> = {
     border: '1.5px solid var(--primary-40)',
   },
   danger: {
-    backgroundColor: '#E53935',
+    backgroundColor: 'var(--danger)',
     color: 'white',
   },
 };

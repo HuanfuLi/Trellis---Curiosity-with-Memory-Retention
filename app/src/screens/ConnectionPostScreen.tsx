@@ -172,7 +172,7 @@ export function ConnectionPostScreen() {
       }}>
         <button
           onClick={() => navigate(-1)}
-          style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
+          style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
         >
           <ArrowLeft size={20} />
         </button>
@@ -215,12 +215,12 @@ export function ConnectionPostScreen() {
           <div style={{
             padding: '20px',
             borderRadius: 'var(--radius-xl)',
-            border: '1px solid #E53935',
-            backgroundColor: '#FFEBEE',
+            border: '1px solid var(--danger)',
+            backgroundColor: 'var(--danger-light)',
             marginBottom: '16px',
           }}>
-            <p style={{ color: '#B71C1C', fontWeight: 600, marginBottom: '8px' }}>Generation failed</p>
-            <p style={{ color: '#C62828', fontSize: '0.875rem', marginBottom: '16px' }}>{error}</p>
+            <p style={{ color: 'var(--danger-dark)', fontWeight: 600, marginBottom: '8px' }}>Generation failed</p>
+            <p style={{ color: 'var(--danger-dark)', fontSize: '0.875rem', marginBottom: '16px' }}>{error}</p>
             <button
               onClick={handleRetry}
               style={{
@@ -229,7 +229,7 @@ export function ConnectionPostScreen() {
                 gap: '6px',
                 padding: '8px 16px',
                 borderRadius: 'var(--radius)',
-                backgroundColor: '#E53935',
+                backgroundColor: 'var(--danger)',
                 color: 'white',
                 fontWeight: 600,
                 fontSize: '0.875rem',

@@ -46,8 +46,11 @@ export const infiniteScrollService = {
       // Filter out posts already shown
       const deduplicated = batch.filter((post) => !seenPostIds.has(post.id));
 
-      // Track new post IDs to prevent future duplicates
-      deduplicated.forEach((post) => seenPostIds.add(post.id));
+      // Track new post IDs to prevent future duplicates.
+      // Cap at 500 entries to bound memory in long sessions.
+      deduplicated.forEach((post) => {
+        if (seenPostIds.size < 500) seenPostIds.add(post.id);
+      });
 
       // Increment pagination offset
       offset += limit;

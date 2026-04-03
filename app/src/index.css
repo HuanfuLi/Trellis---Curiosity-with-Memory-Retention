@@ -66,6 +66,11 @@
   --block-icon-active-bg: rgba(45, 45, 45, 0.22);
   --block-input-bg: rgba(255, 255, 255, 0.65);
 
+  /* Danger / error */
+  --danger: #E53935;
+  --danger-light: #FFEBEE;
+  --danger-dark: #B71C1C;
+
   --radius: 1.25rem;
   --radius-xl: 1.75rem;
   --radius-pill: 9999px;
@@ -143,6 +148,11 @@
   --block-border-active: rgba(255, 255, 255, 0.3);
   --block-icon-active-bg: rgba(255, 255, 255, 0.12);
   --block-input-bg: rgba(255, 255, 255, 0.08);
+
+  /* Danger / error */
+  --danger: #EF5350;
+  --danger-light: rgba(239, 83, 80, 0.15);
+  --danger-dark: #E53935;
 
   /* UI controls */
   --switch-background: #333333;

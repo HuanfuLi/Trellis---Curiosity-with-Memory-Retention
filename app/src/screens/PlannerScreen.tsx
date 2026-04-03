@@ -162,7 +162,7 @@ function ChunkCard({
                 title="Start"
                 className="active-squish"
                 style={{
-                  width: '30px', height: '30px', borderRadius: '50%',
+                  width: '44px', height: '44px', borderRadius: '50%',
                   backgroundColor: 'var(--primary-40)', color: 'white',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
@@ -174,7 +174,7 @@ function ChunkCard({
                 title="Save for later"
                 className="active-squish"
                 style={{
-                  width: '30px', height: '30px', borderRadius: '50%',
+                  width: '44px', height: '44px', borderRadius: '50%',
                   backgroundColor: 'var(--surface-variant)', color: 'var(--muted-foreground)',
                   border: '1px solid var(--border)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -187,7 +187,7 @@ function ChunkCard({
                 title="Dismiss"
                 className="active-squish"
                 style={{
-                  width: '30px', height: '30px', borderRadius: '50%',
+                  width: '44px', height: '44px', borderRadius: '50%',
                   backgroundColor: 'var(--surface-variant)', color: 'var(--muted-foreground)',
                   border: '1px solid var(--border)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -204,7 +204,7 @@ function ChunkCard({
                 title="Mark done"
                 className="active-squish"
                 style={{
-                  width: '30px', height: '30px', borderRadius: '50%',
+                  width: '44px', height: '44px', borderRadius: '50%',
                   backgroundColor: 'var(--primary-40)', color: 'white',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
@@ -216,7 +216,7 @@ function ChunkCard({
                 title="Remove"
                 className="active-squish"
                 style={{
-                  width: '30px', height: '30px', borderRadius: '50%',
+                  width: '44px', height: '44px', borderRadius: '50%',
                   backgroundColor: 'var(--surface-variant)', color: 'var(--muted-foreground)',
                   border: '1px solid var(--border)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -233,7 +233,7 @@ function ChunkCard({
                 title="Start"
                 className="active-squish"
                 style={{
-                  width: '30px', height: '30px', borderRadius: '50%',
+                  width: '44px', height: '44px', borderRadius: '50%',
                   backgroundColor: 'var(--primary-40)', color: 'white',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
@@ -245,7 +245,7 @@ function ChunkCard({
                 title="Remove"
                 className="active-squish"
                 style={{
-                  width: '30px', height: '30px', borderRadius: '50%',
+                  width: '44px', height: '44px', borderRadius: '50%',
                   backgroundColor: 'var(--surface-variant)', color: 'var(--muted-foreground)',
                   border: '1px solid var(--border)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -484,8 +484,8 @@ export function PlannerScreen() {
             title={isRecording ? 'Stop recording' : 'Voice input'}
             className="active-squish"
             style={{
-              width: '38px', height: '38px', borderRadius: '12px',
-              backgroundColor: isRecording ? '#E53935' : 'var(--surface-variant)',
+              width: '44px', height: '44px', borderRadius: '12px',
+              backgroundColor: isRecording ? 'var(--danger)' : 'var(--surface-variant)',
               color: isRecording ? 'white' : 'var(--muted-foreground)',
               border: isRecording ? 'none' : '1px solid var(--border)',
               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,

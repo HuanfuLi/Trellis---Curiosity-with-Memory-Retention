@@ -2,6 +2,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Calendar, Tag, Play } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
+import { Skeleton } from '../components/ui/Skeleton';
 import { Markdown } from '../components/Markdown';
 import { DetailMenu } from '../components/DetailMenu';
 import { useQuestions } from '../state/useQuestions';
@@ -14,7 +15,7 @@ export function QuestionDetailScreen() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { getById, questions } = useQuestions();
+  const { getById, questions, isLoading } = useQuestions();
 
   // Extract move navigation context (when navigated from a suggested move)
   const moveState = parseMoveNavigationState(location.state);
@@ -33,11 +34,19 @@ export function QuestionDetailScreen() {
       <div style={{ padding: '24px 16px', maxWidth: '448px', margin: '0 auto' }}>
         <button
           onClick={() => navigate(-1)}
-          style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
+          style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
         >
           <ArrowLeft size={20} />
         </button>
-        <p style={{ color: 'var(--muted-foreground)' }}>Question not found.</p>
+        {isLoading ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
+            <Skeleton height="1rem" width="40%" />
+            <Skeleton height="6rem" />
+            <Skeleton height="8rem" />
+          </div>
+        ) : (
+          <p style={{ color: 'var(--muted-foreground)' }}>Question not found.</p>
+        )}
       </div>
     );
   }
@@ -60,7 +69,7 @@ export function QuestionDetailScreen() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
         <button
           onClick={() => navigate(-1)}
-          style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
+          style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
         >
           <ArrowLeft size={20} />
         </button>
