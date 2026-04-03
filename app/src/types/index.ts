@@ -226,6 +226,9 @@ export interface AppSettings {
   review: ReviewSettings;
   preferences: AppPreferences;
   imageGeneration: ImageGenerationSettings;
+  youtube?: {
+    apiKey: string;
+  };
 }
 
 export interface EmbeddingConfig {
@@ -462,15 +465,25 @@ export interface PostSnapshot {
   quickAskPrompts: string[];
   narrativeMode: PostNarrativeMode;
   contextLabel: string;
-  sourceType: 'recent' | 'related' | 'resurfaced' | 'starter' | 'mixed' | 'connection';
+  sourceType: 'recent' | 'related' | 'resurfaced' | 'starter' | 'mixed' | 'connection' | 'video';
   sourceQuestionIds: string[];
   sourceQuestionTitles: string[];
   keywords: string[];
 }
 
+export interface VideoMetadata {
+  videoId: string;
+  channelTitle: string;
+  thumbnailUrl: string;
+  transcript?: string;
+  summary?: string;
+  duration?: string;
+}
+
 export interface DailyPost extends PostSnapshot {
   generatedAt: number;
   origin: 'ai' | 'fallback';
+  videoMeta?: VideoMetadata;
 }
 
 export interface PostOriginContext {
