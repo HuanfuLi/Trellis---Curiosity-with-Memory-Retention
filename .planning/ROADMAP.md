@@ -309,6 +309,23 @@ Plans:
 
 ---
 
+## Phase 18: Feed Redesign, Short Videos & Text-Art Posts (IN PROGRESS)
+
+**Goal:** Redesign feed with mixed presentation styles (image, text-art, image-less, video, short) and weighted random distribution with user-controllable image generation toggle.
+
+**Status:** Plan 01 COMPLETE (1/? plans)
+
+**Requirements:**
+- MIX-01: PresentationStyle type system and weighted mix function
+- MIX-02: Image generation toggle in Settings
+
+**Plans:**
+| Plan | Name | Status |
+|------|------|--------|
+| 18-01 | Type Extensions & Weighted Mix | COMPLETE |
+
+---
+
 ## Requirement Traceability
 
 | Phase | Requirements | Count |
