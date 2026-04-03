@@ -1,8 +1,8 @@
 # Phase 17: Auto-fetch Online Videos for Posts - Validation
 
 **Created:** 2026-04-01
-**Updated:** 2026-04-03 (Nyquist audit — all testable gaps filled)
-**nyquist_compliant:** partial (2 manual-only UI requirements)
+**Updated:** 2026-04-03 (all gaps resolved — manual UAT passed)
+**nyquist_compliant:** true
 **Source:** 17-RESEARCH.md Validation Architecture
 
 ## Test Framework
@@ -51,12 +51,14 @@
 - [x] `withTimeout helper`: fast resolve returns value; slow promise returns fallback
 - [x] Settings `deepMerge`: youtube field preserved when absent from stored, preserved when present, and object-level spread works
 
-## Manual-Only (UI Components)
+## Manual UAT (UI Components) — PASSED 2026-04-03
 
-| Req | Description | Why Manual |
-|-----|-------------|-----------|
-| D-05 | iframe embed `playsinline=1`, `referrerPolicy="strict-origin"` | UI component rendering, iOS WebView behavior |
-| D-06 | Detail page: embedded player on top + AI summary below | Navigation + layout verification requires running app |
+| Req | Test | Result |
+|-----|------|--------|
+| D-05 | iframe plays inline, no forced fullscreen on mobile | PASS |
+| D-06 | Detail page: YouTubeEmbed at top, AI Summary heading, no carousel/whyCare/takeaway | PASS |
+| — | Video card in feed: thumbnail, play overlay, red "Video" badge | PASS |
+| — | Graceful degradation: no API key → no video cards, no errors | PASS |
 
 ## Validation Audit 2026-04-03
 
@@ -64,4 +66,5 @@
 |--------|-------|
 | Gaps found | 7 |
 | Resolved (automated) | 5 |
-| Escalated (manual-only) | 2 |
+| Resolved (manual UAT) | 2 |
+| Remaining | 0 |
