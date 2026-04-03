@@ -214,6 +214,8 @@ export interface ImageGenerationSettings {
   cacheTtlDays: number;
   /** Provider order preference. 'auto' tries both based on key availability. */
   primaryProvider: ImageProviderPrimary;
+  /** Master toggle for image generation. When false, no API calls attempted. */
+  enabled: boolean;
 }
 
 export interface AppSettings {
@@ -449,6 +451,9 @@ export type PostNarrativeMode =
   | 'mechanism-breakdown'
   | 'starter';
 
+/** Visual presentation style assigned to each feed post by the weighted mix algorithm. */
+export type PresentationStyle = 'image' | 'text-art' | 'image-less' | 'video' | 'short';
+
 export interface FeedTeaser {
   hook: string;
   preview: string;
@@ -465,7 +470,7 @@ export interface PostSnapshot {
   quickAskPrompts: string[];
   narrativeMode: PostNarrativeMode;
   contextLabel: string;
-  sourceType: 'recent' | 'related' | 'resurfaced' | 'starter' | 'mixed' | 'connection' | 'video';
+  sourceType: 'recent' | 'related' | 'resurfaced' | 'starter' | 'mixed' | 'connection' | 'video' | 'short' | 'text-art';
   sourceQuestionIds: string[];
   sourceQuestionTitles: string[];
   keywords: string[];
@@ -484,6 +489,10 @@ export interface DailyPost extends PostSnapshot {
   generatedAt: number;
   origin: 'ai';
   videoMeta?: VideoMetadata;
+  /** ASCII/Unicode text-art content for text-art presentation style. */
+  textArtContent?: string;
+  /** Visual presentation style assigned by the weighted mix algorithm. */
+  presentationStyle?: PresentationStyle;
 }
 
 export interface PostOriginContext {
