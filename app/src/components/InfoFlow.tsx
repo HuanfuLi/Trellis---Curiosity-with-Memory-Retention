@@ -169,7 +169,7 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen }: Conc
           </div>
         )}
 
-        {/* Short video card (D-01, D-02, D-03) */}
+        {/* Short video card (D-01, D-02, D-03) — portrait 9:16 */}
         {isShortPost && post.videoMeta?.videoId && (
           <div
             onClick={(e) => {
@@ -178,17 +178,24 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen }: Conc
                 setShortPlaying(true);
               }
             }}
-            style={{ cursor: shortPlaying ? 'default' : 'pointer', width: '100%' }}
+            style={{
+              cursor: shortPlaying ? 'default' : 'pointer',
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+            }}
           >
             {shortPlaying ? (
               <>
                 <div style={{
                   position: 'relative',
-                  width: '100%',
+                  width: '70%',
+                  maxWidth: '280px',
                   aspectRatio: '9/16',
-                  maxHeight: '480px',
                   overflow: 'hidden',
                   borderRadius: 'var(--radius-xl)',
+                  margin: '0 auto',
                 }}>
                   <iframe
                     src={`https://www.youtube.com/embed/${post.videoMeta.videoId}?playsinline=1&autoplay=1&rel=0`}
@@ -205,6 +212,7 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen }: Conc
                     padding: '12px 20px',
                     lineHeight: 1.5,
                     margin: 0,
+                    textAlign: 'center',
                   }}>
                     {post.videoMeta.summary.split(/[.!?]\s+/).slice(0, 2).join('. ').replace(/\.$/, '') + '.'}
                   </p>
@@ -213,9 +221,9 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen }: Conc
             ) : (
               <div style={{
                 position: 'relative',
-                width: '100%',
+                width: '70%',
+                maxWidth: '280px',
                 aspectRatio: '9/16',
-                maxHeight: '480px',
                 overflow: 'hidden',
                 borderRadius: 'var(--radius-xl)',
               }}>
@@ -276,7 +284,7 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen }: Conc
                   <p style={{
                     color: 'white',
                     fontWeight: 800,
-                    fontSize: '1.2rem',
+                    fontSize: '1.1rem',
                     lineHeight: 1.25,
                     margin: 0,
                     textWrap: 'balance',
@@ -295,7 +303,7 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen }: Conc
             style={{
               width: '100%',
               minHeight: '260px',
-              padding: '24px 20px',
+              padding: '28px 24px',
               boxSizing: 'border-box',
               backgroundColor: '#FFFDE7',
               backgroundImage: 'radial-gradient(circle, #C5CAE9 0.8px, transparent 0.8px)',
@@ -303,23 +311,23 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen }: Conc
               borderRadius: 'var(--radius-xl)',
               display: 'flex',
               flexDirection: 'column',
-              justifyContent: 'center',
-              gap: '12px',
+              justifyContent: 'flex-start',
+              gap: '16px',
             }}
           >
             <p
               style={{
-                fontSize: '1.2rem',
+                fontSize: '1.15rem',
                 fontWeight: 800,
-                lineHeight: 1.25,
+                lineHeight: 1.3,
                 color: '#1A1A1A',
                 textWrap: 'balance',
               }}
             >
               {normalizedHook}
             </p>
-            {post.textArtContent && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {post.textArtContent ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {post.textArtContent.split('\n').filter(Boolean).map((line, i) => (
                   <p
                     key={i}
@@ -334,20 +342,24 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen }: Conc
                   </p>
                 ))}
               </div>
+            ) : (
+              <p style={{ fontSize: '0.9rem', color: '#666', lineHeight: 1.6, margin: 0 }}>
+                {normalizedPreview}
+              </p>
             )}
           </div>
         )}
 
-        {/* AI-generated image header — only rendered when an image was successfully generated */}
-        {!isVideoPost && image && presentationStyle !== 'text-art' && (
+        {/* AI-generated image header — only rendered for image presentation style */}
+        {!isVideoPost && !isShortPost && image && presentationStyle !== 'text-art' && (
           <FeedPostImage
             imageData={image}
             aspectPadding="100%"
           />
         )}
 
-        {/* Hook, channel attribution, and preview -- not rendered for text-art (hook is inside notebook) */}
-        {presentationStyle !== 'text-art' && (
+        {/* Hook, channel attribution, and preview — NOT rendered for text-art (hook inside notebook) or short (hook inside thumbnail overlay) */}
+        {presentationStyle !== 'text-art' && !isShortPost && (
           <div style={{ padding: '0 20px' }}>
             <p
               style={{
@@ -366,8 +378,8 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen }: Conc
                 by {post.videoMeta.channelTitle}
               </p>
             )}
-            {/* Preview only for image-less cards (no image, no text-art, no video/short) -- per D-05, D-06 */}
-            {presentationStyle === 'image-less' && (
+            {/* Preview only for image-less cards (D-05: image+hook only, D-06: no-image gets hook+preview) */}
+            {(presentationStyle === 'image-less' || (!image && !isVideoPost && presentationStyle !== 'image')) && (
               <p style={{ fontSize: '0.9rem', color: 'var(--foreground)', lineHeight: 1.6, opacity: 0.88 }}>
                 {normalizedPreview}
               </p>
