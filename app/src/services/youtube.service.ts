@@ -64,6 +64,14 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Race a promise against a timeout. Returns fallback on timeout (no rejection). */
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export const youtubeService = {
@@ -92,7 +100,13 @@ export const youtubeService = {
       `&relevanceLanguage=en&safeSearch=strict&key=${apiKey}`;
 
     try {
-      const response = await fetch(url);
+      const response = await withTimeout(fetch(url), 10_000, null as unknown as Response);
+      if (!response) {
+        return {
+          success: false,
+          error: { code: 'NETWORK_ERROR', message: 'YouTube API request timed out', retryable: true },
+        };
+      }
 
       if (!response.ok) {
         const errText = await response.text();
@@ -162,18 +176,21 @@ export const youtubeService = {
       let html: string | null = null;
 
       if (Capacitor.isNativePlatform()) {
-        const res = await CapacitorHttp.get({
-          url: videoUrl,
-          headers: { 'Accept-Language': 'en' },
-        });
-        html = typeof res.data === 'string' ? res.data : null;
+        const res = await withTimeout(
+          CapacitorHttp.get({ url: videoUrl, headers: { 'Accept-Language': 'en' } }),
+          15_000,
+          null,
+        );
+        html = res && typeof res.data === 'string' ? res.data : null;
       } else {
         // In browser, CORS will block this; catch and return null
         try {
-          const res = await fetch(videoUrl, {
-            headers: { 'Accept-Language': 'en' },
-          });
-          html = await res.text();
+          const res = await withTimeout(
+            fetch(videoUrl, { headers: { 'Accept-Language': 'en' } }),
+            10_000,
+            null as unknown as Response,
+          );
+          html = res ? await res.text() : null;
         } catch {
           return null;
         }
@@ -212,11 +229,12 @@ export const youtubeService = {
       // Fetch caption XML
       let captionXml: string | null = null;
       if (Capacitor.isNativePlatform()) {
-        const captionRes = await CapacitorHttp.get({
-          url: selectedTrack.baseUrl,
-          headers: { 'Accept-Language': 'en' },
-        });
-        captionXml = typeof captionRes.data === 'string' ? captionRes.data : null;
+        const captionRes = await withTimeout(
+          CapacitorHttp.get({ url: selectedTrack.baseUrl, headers: { 'Accept-Language': 'en' } }),
+          10_000,
+          null,
+        );
+        captionXml = captionRes && typeof captionRes.data === 'string' ? captionRes.data : null;
       } else {
         try {
           const captionRes = await fetch(selectedTrack.baseUrl);

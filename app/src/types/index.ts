@@ -226,7 +226,7 @@ export interface AppSettings {
   review: ReviewSettings;
   preferences: AppPreferences;
   imageGeneration: ImageGenerationSettings;
-  youtube?: {
+  youtube: {
     apiKey: string;
   };
 }

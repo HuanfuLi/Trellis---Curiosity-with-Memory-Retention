@@ -58,14 +58,14 @@ export function HomeScreen() {
       let cancelled = false;
       void conceptFeedService.getDailyPosts(questions).then((posts) => {
         if (!cancelled) setDailyPosts(posts);
-      });
+      }).catch((err) => console.warn('[HomeScreen] feed refresh failed:', err));
       return () => { cancelled = true; };
     };
 
     let cancelled = false;
     void conceptFeedService.getDailyPosts(questions).then((posts) => {
       if (!cancelled) setDailyPosts(posts);
-    });
+    }).catch((err) => console.warn('[HomeScreen] feed generation failed:', err));
     refreshPlannerSummary();
 
     const unsubPlanner = eventBus.subscribe('PLANNER_UPDATED', (event) => {

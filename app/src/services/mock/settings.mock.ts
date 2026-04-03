@@ -59,6 +59,9 @@ const defaultSettings: AppSettings = {
     cacheTtlDays: 30,
     primaryProvider: 'auto' as const,
   },
+  youtube: {
+    apiKey: '',
+  },
 };
 
 function deepMerge(defaults: AppSettings, stored: Partial<AppSettings>): AppSettings {

@@ -568,7 +568,20 @@ async function generateDailyPostsWithLLM(questions: Question[], date: string): P
   return parseGeneratedPosts(raw, questions, date, candidates);
 }
 
-// ─── Video post interleaving ──────────────────────────────────────────────────
+// ─── Video post helpers ──────────────────────────────────────────────────────
+
+/**
+ * Fire-and-forget video generation so the feed is never blocked on YouTube API
+ * or LLM transcript summarization. Results are written to the youtube cache;
+ * they will appear on the next feed access (pull-to-refresh or navigation).
+ */
+let _videoBgRunning = false;
+function _backgroundGenerateVideos(): void {
+  if (_videoBgRunning) return;
+  if (youtubeService.getCachedVideoPosts().length > 0) return; // already cached for today
+  _videoBgRunning = true;
+  youtubeService.generateVideoPosts(3).catch(() => {}).finally(() => { _videoBgRunning = false; });
+}
 
 /**
  * Interleave video posts into AI posts. Inserts a video after every 2nd AI post.
@@ -620,14 +633,11 @@ export const conceptFeedService = {
     const fingerprint = computeFingerprint(questions);
     const cached = loadCache();
     if (cached?.date === date && cached.fingerprint === fingerprint && cached.posts.length > 0) {
-      // Return feed posts only (exclude connection posts from main feed), interleaved with video posts
+      // Return feed posts immediately with any already-cached video posts.
+      // Kick off video generation in the background so videos appear on next refresh.
       const aiPosts = cached.posts.filter((p) => p.sourceType !== 'connection');
-      let videoPosts: DailyPost[] = [];
-      try {
-        videoPosts = await youtubeService.generateVideoPosts(3); // D-03: 3 initial
-      } catch {
-        // YouTube integration is optional — feed works without it
-      }
+      const videoPosts = youtubeService.getCachedVideoPosts();
+      _backgroundGenerateVideos();
       return interleaveVideoPosts(aiPosts, videoPosts);
     }
 
@@ -639,12 +649,8 @@ export const conceptFeedService = {
     if (hasPostsForToday && cached.fingerprint !== fingerprint) {
       saveCache({ ...cached, fingerprint });
       const aiPosts = cached.posts.filter((p) => p.sourceType !== 'connection');
-      let videoPosts: DailyPost[] = [];
-      try {
-        videoPosts = await youtubeService.generateVideoPosts(3); // D-03: 3 initial
-      } catch {
-        // YouTube integration is optional — feed works without it
-      }
+      const videoPosts = youtubeService.getCachedVideoPosts();
+      _backgroundGenerateVideos();
       return interleaveVideoPosts(aiPosts, videoPosts);
     }
 
@@ -672,13 +678,9 @@ export const conceptFeedService = {
     // Cache only AI posts (video posts have their own cache in youtube.service.ts)
     saveCache({ date, fingerprint, posts: allPosts, connectionCards: generated.connectionCards });
 
-    // Generate video posts and interleave (D-04: mix into feed)
-    let videoPosts: DailyPost[] = [];
-    try {
-      videoPosts = await youtubeService.generateVideoPosts(3); // D-03: 3 initial
-    } catch {
-      // YouTube integration is optional — feed works without it
-    }
+    // Return AI posts immediately; generate video posts in background (D-04)
+    const videoPosts = youtubeService.getCachedVideoPosts();
+    _backgroundGenerateVideos();
     return interleaveVideoPosts(allPosts.filter((p) => p.sourceType !== 'connection'), videoPosts);
   },
 
@@ -815,6 +817,7 @@ export const conceptFeedService = {
     }
 
     // Generate more video posts and interleave (D-03: 4 on pull-for-more)
+    // Await here is acceptable — user explicitly triggered "load more" so brief delay is expected
     let moreVideos: DailyPost[] = [];
     try {
       moreVideos = await youtubeService.generateMoreVideoPosts(4); // D-03: 4 on pull-for-more
