@@ -391,12 +391,21 @@ Plans:
 
 **Depends on:** Phase 18
 
-**Plans:** 0 plans
+**Plans:** 4 plans
 
 Canonical refs: `.planning/phases/19-web-search-integration-for-ask-and-feed/19-CONTEXT.md`
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 19 to break down)
+- [ ] 19-01-PLAN.md — Types + web search service (Tavily) + citation extraction + tests
+- [ ] 19-02-PLAN.md — Ask screen: two-pass tool-use + globe toggle + inline citations
+- [ ] 19-03-PLAN.md — Feed: news service + enriched AI posts + news interleaving
+- [ ] 19-04-PLAN.md — News card UI + Settings API key + visual checkpoint
+
+
+
+
+
+
 
 ---
 
