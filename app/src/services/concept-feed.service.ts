@@ -4,6 +4,7 @@ import { today } from '../lib/date.ts';
 import { mockSettingsService } from './mock/settings.mock.ts';
 import { plannerService } from './planner.service.ts';
 import { graphService } from './graph.service.ts';
+import { youtubeService } from './youtube.service';
 
 const STORAGE_KEY = 'echolearn_daily_posts';
 const CONNECTION_POSTS_KEY = 'echolearn_connection_posts';
@@ -40,7 +41,7 @@ interface CachedDailyPosts {
   connectionCards?: ConnectionCardData[];
 }
 
-const VALID_SOURCE_TYPES = new Set<DailyPost['sourceType']>(['recent', 'related', 'resurfaced', 'starter', 'mixed', 'connection']);
+const VALID_SOURCE_TYPES = new Set<DailyPost['sourceType']>(['recent', 'related', 'resurfaced', 'starter', 'mixed', 'connection', 'video']);
 
 export const STARTER_POSTS: DailyPost[] = [
   makeStarterPost(
@@ -567,6 +568,29 @@ async function generateDailyPostsWithLLM(questions: Question[], date: string): P
   return parseGeneratedPosts(raw, questions, date, candidates);
 }
 
+// ─── Video post interleaving ──────────────────────────────────────────────────
+
+/**
+ * Interleave video posts into AI posts. Inserts a video after every 2nd AI post.
+ * Remaining video posts are appended at the end.
+ * Per D-04: video posts mix into the existing feed, not a separate section.
+ */
+function interleaveVideoPosts(aiPosts: DailyPost[], videoPosts: DailyPost[]): DailyPost[] {
+  if (videoPosts.length === 0) return aiPosts;
+  const result: DailyPost[] = [];
+  let vIdx = 0;
+  for (let i = 0; i < aiPosts.length; i++) {
+    result.push(aiPosts[i]);
+    // Insert a video post after every 2nd AI post
+    if ((i + 1) % 2 === 0 && vIdx < videoPosts.length) {
+      result.push(videoPosts[vIdx++]);
+    }
+  }
+  // Append remaining video posts at the end
+  while (vIdx < videoPosts.length) result.push(videoPosts[vIdx++]);
+  return result;
+}
+
 function toPostSnapshot(post: DailyPost): PostSnapshot {
   const { generatedAt, origin, ...snapshot } = post;
   return snapshot;
@@ -596,8 +620,15 @@ export const conceptFeedService = {
     const fingerprint = computeFingerprint(questions);
     const cached = loadCache();
     if (cached?.date === date && cached.fingerprint === fingerprint && cached.posts.length > 0) {
-      // Return feed posts only (exclude connection posts from main feed)
-      return cached.posts.filter((p) => p.sourceType !== 'connection');
+      // Return feed posts only (exclude connection posts from main feed), interleaved with video posts
+      const aiPosts = cached.posts.filter((p) => p.sourceType !== 'connection');
+      let videoPosts: DailyPost[] = [];
+      try {
+        videoPosts = await youtubeService.generateVideoPosts(3); // D-03: 3 initial
+      } catch {
+        // YouTube integration is optional — feed works without it
+      }
+      return interleaveVideoPosts(aiPosts, videoPosts);
     }
 
     // If the cache has posts for today but just the fingerprint changed (e.g. new
@@ -607,7 +638,14 @@ export const conceptFeedService = {
 
     if (hasPostsForToday && cached.fingerprint !== fingerprint) {
       saveCache({ ...cached, fingerprint });
-      return cached.posts.filter((p) => p.sourceType !== 'connection');
+      const aiPosts = cached.posts.filter((p) => p.sourceType !== 'connection');
+      let videoPosts: DailyPost[] = [];
+      try {
+        videoPosts = await youtubeService.generateVideoPosts(3); // D-03: 3 initial
+      } catch {
+        // YouTube integration is optional — feed works without it
+      }
+      return interleaveVideoPosts(aiPosts, videoPosts);
     }
 
     let generated: ParsedGeneration = { posts: [], connectionCards: [] };
@@ -631,8 +669,17 @@ export const conceptFeedService = {
     const preserved = oldPosts.filter((p) => !newIds.has(p.id));
     const allPosts = [...newPosts, ...preserved];
 
+    // Cache only AI posts (video posts have their own cache in youtube.service.ts)
     saveCache({ date, fingerprint, posts: allPosts, connectionCards: generated.connectionCards });
-    return allPosts.filter((p) => p.sourceType !== 'connection');
+
+    // Generate video posts and interleave (D-04: mix into feed)
+    let videoPosts: DailyPost[] = [];
+    try {
+      videoPosts = await youtubeService.generateVideoPosts(3); // D-03: 3 initial
+    } catch {
+      // YouTube integration is optional — feed works without it
+    }
+    return interleaveVideoPosts(allPosts.filter((p) => p.sourceType !== 'connection'), videoPosts);
   },
 
   /** Return cached connection card data for the current session. */
@@ -654,7 +701,10 @@ export const conceptFeedService = {
   },
 
   getCachedDailyPosts(): DailyPost[] {
-    return (loadCache()?.posts ?? []).filter((p) => p.sourceType !== 'connection');
+    const aiPosts = (loadCache()?.posts ?? []).filter((p) => p.sourceType !== 'connection');
+    // Use youtubeService's encapsulated cache reader (not raw localStorage)
+    const videoPosts = youtubeService.getCachedVideoPosts();
+    return interleaveVideoPosts(aiPosts, videoPosts);
   },
 
   /** Delete a single post by ID from both the daily cache and the connection store. */
@@ -757,14 +807,21 @@ export const conceptFeedService = {
 
     newPosts = newPosts.slice(0, count);
 
-    // Append to cache so existing post IDs remain valid
+    // Append to cache so existing post IDs remain valid (AI posts only)
     if (newPosts.length > 0) {
       const allPosts = [...existingPosts, ...newPosts];
       const fingerprint = computeFingerprint(questions);
       saveCache({ date, fingerprint, posts: allPosts, connectionCards: cached?.connectionCards });
     }
 
-    return newPosts;
+    // Generate more video posts and interleave (D-03: 4 on pull-for-more)
+    let moreVideos: DailyPost[] = [];
+    try {
+      moreVideos = await youtubeService.generateMoreVideoPosts(4); // D-03: 4 on pull-for-more
+    } catch {
+      // YouTube integration is optional
+    }
+    return interleaveVideoPosts(newPosts, moreVideos);
   },
 
   /**
