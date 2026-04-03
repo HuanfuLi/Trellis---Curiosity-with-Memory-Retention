@@ -80,9 +80,9 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen }: Conc
 
   // ── End image state ─────────────────────────────────────────────────────────
 
-  // Context label: for video posts show channel name instead of contextLabel
-  const contextLabel = isVideoPost && post.videoMeta?.channelTitle
-    ? post.videoMeta.channelTitle
+  // Context label: for video posts show first source concept/topic instead of channel
+  const contextLabel = isVideoPost && post.sourceQuestionTitles?.length
+    ? post.sourceQuestionTitles[0]
     : post.contextLabel;
   const normalizedContextLabel = normalizePlainText(contextLabel);
   const normalizedTitle = normalizePlainText(post.title);
@@ -206,6 +206,11 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen }: Conc
           >
             {normalizedHook}
           </p>
+          {isVideoPost && post.videoMeta?.channelTitle && (
+            <p style={{ fontSize: '0.78rem', color: 'var(--muted-foreground)', marginBottom: '6px' }}>
+              by {post.videoMeta.channelTitle}
+            </p>
+          )}
           <p style={{ fontSize: '0.9rem', color: 'var(--foreground)', lineHeight: 1.6, opacity: 0.88 }}>
             {normalizedPreview}
           </p>

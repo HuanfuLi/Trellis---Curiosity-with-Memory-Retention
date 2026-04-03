@@ -449,6 +449,8 @@ export type PostNarrativeMode =
   | 'mechanism-breakdown'
   | 'starter';
 
+export type PresentationStyle = 'image' | 'text-art' | 'image-less' | 'video' | 'short';
+
 export interface FeedTeaser {
   hook: string;
   preview: string;
@@ -465,7 +467,7 @@ export interface PostSnapshot {
   quickAskPrompts: string[];
   narrativeMode: PostNarrativeMode;
   contextLabel: string;
-  sourceType: 'recent' | 'related' | 'resurfaced' | 'starter' | 'mixed' | 'connection' | 'video';
+  sourceType: 'recent' | 'related' | 'resurfaced' | 'starter' | 'mixed' | 'connection' | 'video' | 'short' | 'text-art';
   sourceQuestionIds: string[];
   sourceQuestionTitles: string[];
   keywords: string[];
@@ -484,6 +486,8 @@ export interface DailyPost extends PostSnapshot {
   generatedAt: number;
   origin: 'ai';
   videoMeta?: VideoMetadata;
+  textArtContent?: string;
+  presentationStyle?: PresentationStyle;
 }
 
 export interface PostOriginContext {

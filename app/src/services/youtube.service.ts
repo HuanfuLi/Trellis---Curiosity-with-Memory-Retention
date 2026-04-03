@@ -494,19 +494,21 @@ export const youtubeService = {
         summary: summaryResult.data,
       };
 
-      const keywords = result.title
-        .split(/\s+/)
-        .filter((w) => w.length > 3)
-        .map((w) => w.toLowerCase().replace(/[^a-z0-9]/g, ''))
-        .filter(Boolean)
-        .slice(0, 8);
+      const keywords = sourceTitles.length > 0
+        ? sourceTitles.slice(0, 8)
+        : result.title
+            .split(/\s+/)
+            .filter((w) => w.length > 3)
+            .map((w) => w.toLowerCase().replace(/[^a-z0-9]/g, ''))
+            .filter(Boolean)
+            .slice(0, 8);
 
       const post: DailyPost = {
         id: `video-${result.videoId}`,
         date: today(),
         title: result.title,
         teaser: {
-          hook: result.channelTitle,
+          hook: result.title,
           preview: result.description.slice(0, 120),
         },
         bodyMarkdown,
