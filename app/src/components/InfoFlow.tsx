@@ -20,8 +20,11 @@ const TEXT_ART_THEMES = [
   { bg: '#FFF8E1', dot: '#FFE082', text: '#E65100', font: '"Bookman Old Style", Bookman, serif' },
 ];
 
-function pickTextArtTheme() {
-  return TEXT_ART_THEMES[Math.floor(Math.random() * TEXT_ART_THEMES.length)];
+function pickTextArtTheme(postId: string) {
+  let h = 0;
+  for (const ch of postId) h = ((h << 5) - h + ch.charCodeAt(0)) | 0;
+  const idx = ((h % TEXT_ART_THEMES.length) + TEXT_ART_THEMES.length) % TEXT_ART_THEMES.length;
+  return TEXT_ART_THEMES[idx];
 }
 
 export type InfoFlowItem =
@@ -277,7 +280,7 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen }: Conc
 
         {/* Text-art notebook card (D-12, D-13, D-14) — square area like image posts */}
         {presentationStyle === 'text-art' && (() => {
-          const theme = pickTextArtTheme();
+          const theme = pickTextArtTheme(post.id);
           const content = post.textArtContent?.split('\n').filter(Boolean).join(' ') || normalizedPreview;
           return (
             <div
