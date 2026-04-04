@@ -184,34 +184,20 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen }: Conc
             }}
           >
             {shortPlaying ? (
-              <>
-                <div style={{
-                  position: 'relative',
-                  width: '100%',
-                  aspectRatio: '9/16',
-                  overflow: 'hidden',
-                }}>
-                  <iframe
-                    src={`https://www.youtube.com/embed/${post.videoMeta.videoId}?playsinline=1&autoplay=1&rel=0`}
-                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                    title={normalizedTitle || 'Short video'}
-                  />
-                </div>
-                {post.videoMeta.summary && (
-                  <p style={{
-                    fontSize: '0.85rem',
-                    color: 'var(--muted-foreground)',
-                    padding: '12px 20px',
-                    lineHeight: 1.5,
-                    margin: 0,
-                    textAlign: 'center',
-                  }}>
-                    {post.videoMeta.summary.split(/[.!?]\s+/).slice(0, 2).join('. ').replace(/\.$/, '') + '.'}
-                  </p>
-                )}
-              </>
+              <div style={{
+                position: 'relative',
+                width: '100%',
+                aspectRatio: '9/16',
+                overflow: 'hidden',
+              }}>
+                <iframe
+                  src={`https://www.youtube.com/embed/${post.videoMeta.videoId}?playsinline=1&autoplay=1&rel=0`}
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  title={normalizedTitle || 'Short video'}
+                />
+              </div>
             ) : (
               <div style={{
                 position: 'relative',
