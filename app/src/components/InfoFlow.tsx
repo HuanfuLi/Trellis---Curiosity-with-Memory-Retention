@@ -340,8 +340,8 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen }: Conc
                 by {post.videoMeta.channelTitle}
               </p>
             )}
-            {/* Preview only for image-less cards (D-05: image+hook only, D-06: no-image gets hook+preview) */}
-            {(presentationStyle === 'image-less' || (!image && !isVideoPost && !isShortPost && presentationStyle !== 'image' && presentationStyle !== 'video' && presentationStyle !== 'short')) && (
+            {/* Preview: show when no image is present (D-05: image+hook only, D-06: no-image gets hook+preview) */}
+            {!image && !isVideoPost && (
               <p style={{ fontSize: '0.9rem', color: 'var(--foreground)', lineHeight: 1.6, opacity: 0.88 }}>
                 {normalizedPreview}
               </p>
