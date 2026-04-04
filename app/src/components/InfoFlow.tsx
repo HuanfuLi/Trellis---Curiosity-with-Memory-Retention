@@ -7,6 +7,23 @@ import { inferImageStyle, buildImagePrompt } from '../services/postFormatting.se
 import { normalizePlainText } from '../lib/text-normalization';
 import { settingsService } from '../services/settings.service';
 
+// ── Text-art theme pool (random selection per render) ──────────────────────────
+
+const TEXT_ART_THEMES = [
+  { bg: '#FFFDE7', dot: '#C5CAE9', text: '#1A1A1A', font: 'Georgia, "Times New Roman", serif' },
+  { bg: '#E8F5E9', dot: '#A5D6A7', text: '#1B5E20', font: '"Courier New", Courier, monospace' },
+  { bg: '#F3E5F5', dot: '#CE93D8', text: '#4A148C', font: 'Palatino, "Palatino Linotype", serif' },
+  { bg: '#E3F2FD', dot: '#90CAF9', text: '#0D47A1', font: 'system-ui, -apple-system, sans-serif' },
+  { bg: '#FFF3E0', dot: '#FFCC80', text: '#BF360C', font: '"Trebuchet MS", "Gill Sans", sans-serif' },
+  { bg: '#FCE4EC', dot: '#F48FB1', text: '#880E4F', font: 'Garamond, "Hoefler Text", serif' },
+  { bg: '#E0F7FA', dot: '#80DEEA', text: '#006064', font: 'Verdana, Geneva, sans-serif' },
+  { bg: '#FFF8E1', dot: '#FFE082', text: '#E65100', font: '"Bookman Old Style", Bookman, serif' },
+];
+
+function pickTextArtTheme() {
+  return TEXT_ART_THEMES[Math.floor(Math.random() * TEXT_ART_THEMES.length)];
+}
+
 export type InfoFlowItem =
   | { kind: 'concept'; post: DailyPost }
   | {
@@ -259,45 +276,43 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen }: Conc
         )}
 
         {/* Text-art notebook card (D-12, D-13, D-14) — square area like image posts */}
-        {presentationStyle === 'text-art' && (
-          <div
-            style={{
-              position: 'relative',
-              width: '100%',
-              aspectRatio: '1/1',
-              overflow: 'hidden',
-              backgroundColor: '#FFFDE7',
-              backgroundImage: 'radial-gradient(circle, #C5CAE9 0.8px, transparent 0.8px)',
-              backgroundSize: '20px 20px',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center',
-              padding: '28px 24px',
-              boxSizing: 'border-box',
-              gap: '10px',
-            }}
-          >
-            {post.textArtContent ? (
-              post.textArtContent.split('\n').filter(Boolean).map((line, i) => (
-                <p
-                  key={i}
-                  style={{
-                    fontSize: '0.95rem',
-                    lineHeight: 1.5,
-                    color: '#333',
-                    margin: 0,
-                  }}
-                >
-                  {line}
-                </p>
-              ))
-            ) : (
-              <p style={{ fontSize: '0.95rem', color: '#666', lineHeight: 1.6, margin: 0 }}>
-                {normalizedPreview}
+        {presentationStyle === 'text-art' && (() => {
+          const theme = pickTextArtTheme();
+          const content = post.textArtContent?.split('\n').filter(Boolean).join(' ') || normalizedPreview;
+          return (
+            <div
+              style={{
+                position: 'relative',
+                width: '100%',
+                aspectRatio: '1/1',
+                overflow: 'hidden',
+                backgroundColor: theme.bg,
+                backgroundImage: `radial-gradient(circle, ${theme.dot} 0.8px, transparent 0.8px)`,
+                backgroundSize: '20px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '32px 28px',
+                boxSizing: 'border-box',
+              }}
+            >
+              <p
+                style={{
+                  fontSize: '2rem',
+                  fontWeight: 700,
+                  lineHeight: 1.3,
+                  color: theme.text,
+                  margin: 0,
+                  textAlign: 'center',
+                  fontFamily: theme.font,
+                  textWrap: 'balance',
+                }}
+              >
+                {content}
               </p>
-            )}
-          </div>
-        )}
+            </div>
+          );
+        })()}
 
         {/* AI-generated image header — only rendered for image presentation style */}
         {!isVideoPost && !isShortPost && image && presentationStyle !== 'text-art' && (
