@@ -89,27 +89,19 @@ export function HomeScreen() {
       if (!cancelled) refreshFeed();
     });
 
-    // Generate new posts when a question is asked — appends 2 posts to the feed
-    // so the user sees fresh content without needing to pull-to-refresh.
-    const unsubQuestion = eventBus.subscribe('QUESTION_ASKED', () => {
-      if (cancelled) return;
-      // Small delay to let the question be fully saved and indexed
-      setTimeout(() => {
-        if (cancelled) return;
-        void conceptFeedService.generateMorePosts(questions, 2).then((newPosts) => {
-          if (!cancelled && newPosts.length > 0) {
-            setDailyPosts((prev) => [...prev, ...newPosts]);
-          }
-        }).catch(() => { /* silent — feed still works without new posts */ });
-      }, 2000);
-    });
+    // When new questions are added, the fingerprint changes but getDailyPosts
+    // re-stamps and returns cached posts. New connection cards are generated
+    // asynchronously — do a delayed re-fetch to pick them up.
+    const delayedRefreshTimer = setTimeout(() => {
+      if (!cancelled) refreshFeed();
+    }, 8000);
 
     return () => {
       cancelled = true;
+      clearTimeout(delayedRefreshTimer);
       unsubPlanner();
       unsubPostDeleted();
       unsubNews();
-      unsubQuestion();
     };
   }, [questions, questionsLoading]);
 
