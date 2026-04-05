@@ -112,9 +112,7 @@ function isValidDailyPost(value: unknown): value is DailyPost {
     typeof post.id === 'string' &&
     typeof post.date === 'string' &&
     typeof post.title === 'string' &&
-    typeof post.bodyMarkdown === 'string' &&
-    typeof post.whyCare === 'string' &&
-    typeof post.takeaway === 'string' &&
+    (typeof post.bodyMarkdown === 'string' || post.bodyMarkdown === undefined) &&
     Boolean(post.teaser) &&
     typeof post.teaser?.hook === 'string' &&
     typeof post.teaser?.preview === 'string' &&
@@ -124,7 +122,6 @@ function isValidDailyPost(value: unknown): value is DailyPost {
     VALID_SOURCE_TYPES.has(post.sourceType as DailyPost['sourceType']) &&
     Array.isArray(post.sourceQuestionIds) &&
     Array.isArray(post.sourceQuestionTitles) &&
-    Array.isArray(post.quickAskPrompts) &&
     Array.isArray(post.keywords) &&
     typeof post.generatedAt === 'number' &&
     post.origin === 'ai'
@@ -299,12 +296,13 @@ function buildGenerationPrompt(
   return [
     `Create ${Math.min(MAX_POSTS, Math.max(2, context.recent.length + context.related.length))} daily learning posts for ${date}.`,
     'The posts should feel like intriguing short-form educational essays, not flashcards or summaries.',
-    'Each post must be substantial: bodyMarkdown 180-340 words.',
+    'Each post must have a punchy teaserHook and a vivid teaserPreview.',
     'teaserHook: max 8 words. Punchy, curiosity-driven, sounds like a podcast title or tweet. Examples: "Your brain lied about rereading", "Why forgetting is a feature", "The 20-minute rule nobody follows".',
     'teaserPreview: 130-170 characters. A vivid teaser that pulls the reader in — not a dry summary. Write it like the opening line of a story or the subheadline of an article.',
     'Vary narrative style across posts using these modes: example-first, historical-story, contrast, analogy, false-intuition, mnemonic, mechanism-breakdown.',
     'At least one post should use an example, and if helpful one may use a gentle joke or mnemonic to improve recall.',
-    'Every post must include: title, teaserHook, teaserPreview, bodyMarkdown, takeaway, quickAskPrompts (3 strings), narrativeMode, contextLabel, sourceType, sourceQuestionIds, keywords.',
+    'Every post must include: title, teaserHook, teaserPreview, narrativeMode, contextLabel, sourceType, sourceQuestionIds, keywords.',
+    'Do NOT include bodyMarkdown, whyCare, takeaway, or quickAskPrompts -- these are generated on demand when the user opens the post.',
     'sourceType must be exactly one of: "recent", "related", "resurfaced", "mixed". Use "recent" for posts from recent questions, "related" for posts bridging two questions, "resurfaced" for older questions brought back, "mixed" for posts drawing from multiple questions.',
     'Use only sourceQuestionIds that appear in the provided context.',
     'Ground the essay in the supplied knowledge. Do not invent unrelated facts. Keep the writing vivid and readable.',
@@ -433,7 +431,7 @@ function extractPosts(parsed: Array<Record<string, unknown>>, questions: Questio
       const teaserPreview = typeof item.teaserPreview === 'string' ? truncate(item.teaserPreview, 220) : '';
       const bodyMarkdown = typeof item.bodyMarkdown === 'string' ? item.bodyMarkdown.trim() : '';
       const title = typeof item.title === 'string' ? truncate(item.title, 110) : teaserHook;
-      if (!teaserHook || !teaserPreview || !bodyMarkdown || !title) return null;
+      if (!teaserHook || !teaserPreview || !title) return null;
 
       const post: DailyPost = {
         id: `post-${date}-${idIndex}-${sourceQuestionIds.join('-') || 'general'}`,
@@ -441,8 +439,8 @@ function extractPosts(parsed: Array<Record<string, unknown>>, questions: Questio
         title,
         teaser: { hook: teaserHook, preview: teaserPreview },
         bodyMarkdown,
-        whyCare: typeof item.whyCare === 'string' ? truncate(item.whyCare, 220) : teaserPreview,
-        takeaway: typeof item.takeaway === 'string' ? truncate(item.takeaway, 180) : teaserPreview,
+        whyCare: typeof item.whyCare === 'string' ? truncate(item.whyCare, 220) : '',
+        takeaway: typeof item.takeaway === 'string' ? truncate(item.takeaway, 180) : '',
         quickAskPrompts: Array.isArray(item.quickAskPrompts)
           ? item.quickAskPrompts.filter((value): value is string => typeof value === 'string').slice(0, 3)
           : [],
@@ -881,7 +879,36 @@ export const conceptFeedService = {
     const fromCache = cached?.posts.find((post) => post.id === id) ?? null;
     if (fromCache) return fromCache;
     // Fall back to sessionStorage-based connection post store
-    return getConnectionPostFromStore(id);
+    const connectionPost = getConnectionPostFromStore(id);
+    if (connectionPost) return connectionPost;
+    // Check video cache
+    try {
+      const videoRaw = localStorage.getItem('echolearn_video_cache');
+      if (videoRaw) {
+        const videoCache = JSON.parse(videoRaw) as { posts?: DailyPost[] };
+        const videoPost = videoCache.posts?.find((p: DailyPost) => p.id === id);
+        if (videoPost) return videoPost;
+      }
+    } catch { /* ignore */ }
+    // Check news cache
+    try {
+      const newsRaw = localStorage.getItem('echolearn_news_posts');
+      if (newsRaw) {
+        const newsCache = JSON.parse(newsRaw) as { posts?: DailyPost[] };
+        const newsPost = newsCache.posts?.find((p: DailyPost) => p.id === id);
+        if (newsPost) return newsPost;
+      }
+    } catch { /* ignore */ }
+    // Check shorts cache
+    try {
+      const shortsRaw = localStorage.getItem('echolearn_short_posts');
+      if (shortsRaw) {
+        const shortsCache = JSON.parse(shortsRaw) as { posts?: DailyPost[] };
+        const shortsPost = shortsCache.posts?.find((p: DailyPost) => p.id === id);
+        if (shortsPost) return shortsPost;
+      }
+    } catch { /* ignore */ }
+    return null;
   },
 
   getCachedDailyPosts(): DailyPost[] {
