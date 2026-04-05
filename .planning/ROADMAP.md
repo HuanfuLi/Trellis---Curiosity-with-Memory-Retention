@@ -160,7 +160,7 @@
 3. Weak areas effectively prioritized (40-50% of concepts identified, +30 boost)
 4. UI shows top 5 suggestions by default with [Show All] button
 5. Each chunk displays source context ("From check-in: ...")
-6. Priority badges (🔴 🟠 🟡 ⚪) show why each chunk was suggested
+6. Priority badges show why each chunk was suggested
 7. Section renamed to "Your Learning Progress" for clarity
 8. No regression in existing features
 
@@ -184,7 +184,7 @@
 
 **Plans:** 5/4 plans complete
 - [x] 14-01-PLAN.md — Strip knowledgeDecision from first call, strip IngestionDecision labels, add anchor type fields
-- [x] 14-02-PLAN.md — Second classification LLM call, anchor creation, Q&A attachment logic
+- [x] 14-02-PLAN.md �� Second classification LLM call, anchor creation, Q&A attachment logic
 - [x] 14-03-PLAN.md — Mindmap renders anchor nodes only with Mind-Elixir expand/retract
 
 **Success Criteria:**
@@ -450,12 +450,15 @@ Plans:
 
 **Depends on:** Phase 19
 
-**Plans:** 0 plans
+**Plans:** 4 plans
 
 Canonical refs: `.planning/phases/20-orchestration-strategy-diagnostic-dialogue/20-CONTEXT.md`
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 20 to break down)
+- [ ] 20-01-PLAN.md — OrchestrationStrategy interface + defaultStrategy + tests (ORCH-01)
+- [ ] 20-02-PLAN.md — Diagnostic dialogue service + tests (DIAG-01, DIAG-03)
+- [ ] 20-03-PLAN.md — Strategy consumers: scorer + feed bias (ORCH-02, ORCH-03)
+- [ ] 20-04-PLAN.md — PortalCard + DiagnosticChat + PlannerScreen integration (DIAG-02, PORTAL-01-03)
 
 ---
 
