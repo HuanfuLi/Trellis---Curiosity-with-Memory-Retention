@@ -9,7 +9,9 @@ EchoLearn aims to provide a "second brain" for learners, where information is no
 
 ### 1. AI-Powered "ASK" & Contextual QA
 - **Contextual Exploration**: Users can ask questions about concepts, and the system provides AI-generated answers grounded in their existing knowledge base.
+- **Web-Augmented Answers**: The LLM has access to a `web_search` tool and autonomously decides when to search for current information. Users can also force web search via a globe toggle. Responses include inline citation tags and a sources section.
 - **Deep Dives & Threading**: True multi-turn conversation sessions enable deep dives into specific sub-topics, intelligently linking responses to prior interactions without polluting context windows.
+- **Persistent Sessions**: The Ask screen is always mounted, preserving session state, streaming progress, and scroll position across navigation.
 
 ### 2. Knowledge Graph & Visual Mapping
 - **Mind Elixir Integration**: Visualizes the relationships between different concepts using an interactive mind-map interface.
@@ -18,6 +20,9 @@ EchoLearn aims to provide a "second brain" for learners, where information is no
 
 ### 3. AI-Generated Concept Feed
 - **Visual Discovery Posts**: AI generates "posts" that break down complex topics accompanied by contextual AI-generated imagery (infographs, illustrations, or photos).
+- **Multi-Style Presentation**: A weighted mix algorithm assigns visual styles — image cards, text-art typography, YouTube video embeds, short video portraits, and newspaper-style news cards — creating a visually diverse feed.
+- **Web-Sourced News**: Daily background Tavily-powered news fetch with LLM summarization, rendered as newspaper-style cards with source attribution.
+- **YouTube Integration**: Auto-fetched video and Shorts content interleaved into the feed with responsive embeds and portrait-format cards.
 - **Carousel & Infinite Scroll**: Posts are digestible through visual carousels with smooth interaction and swipe-gestures.
 - **Connection Cards**: Highlights semantic relationships between seemingly unrelated topics to foster multidisciplinary understanding.
 
@@ -57,4 +62,4 @@ EchoLearn prioritizes a high-quality, "native-first" mobile experience, avoiding
 - `Documents/`: Historical change logs, evaluations, and archives.
 
 ## Current Status (April 2026)
-EchoLearn recently completed **Milestone 1.1: Engagement & Discovery Iteration**. This brought image-forward post feeds, automatic trajectory-aware Planner optimizations, contextual session threading, robust Graph anchoring with cluster aggregations, and systemic token reduction. The project is highly stabilized and prepared for **Milestone 2: Dynamic Learning Orchestration & Diagnostic Dialogue**.
+EchoLearn completed **Milestone 1.1: Engagement & Discovery Iteration** and has continued through Phases 17–19. Phase 17 added YouTube video integration into the feed. Phase 18 redesigned the feed with weighted presentation styles (text-art, short videos, image cards). Phase 19 introduced web search capabilities for both the Ask screen (LLM tool-use with inline citations) and the Home feed (daily news posts). Phase 20 (Orchestration Strategy & Diagnostic Dialogue) is in planning.
