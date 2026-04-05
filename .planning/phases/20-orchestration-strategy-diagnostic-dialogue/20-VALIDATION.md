@@ -2,7 +2,7 @@
 phase: 20
 slug: orchestration-strategy-diagnostic-dialogue
 status: draft
-nyquist_compliant: false
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-04-05
 ---
@@ -17,20 +17,20 @@ created: 2026-04-05
 
 | Property | Value |
 |----------|-------|
-| **Framework** | TypeScript compiler (tsc --noEmit) + manual verification |
+| **Framework** | Node.js test runner (`node --test`) + TypeScript compiler (`tsc --noEmit`) |
 | **Config file** | `app/tsconfig.json` |
 | **Quick run command** | `cd app && npx tsc --noEmit` |
-| **Full suite command** | `cd app && npx tsc --noEmit` |
-| **Estimated runtime** | ~8 seconds |
+| **Full suite command** | `cd app && node --test tests/services/orchestration-strategy.test.mjs && node --test tests/services/diagnostic-dialogue.test.mjs && node --test tests/services/portal-card.test.mjs && node --test tests/services/suggestionScorer.test.mjs && npx tsc --noEmit` |
+| **Estimated runtime** | ~15 seconds |
 
 ---
 
 ## Sampling Rate
 
-- **After every task commit:** Run `cd app && npx tsc --noEmit`
-- **After every plan wave:** Run `cd app && npx tsc --noEmit`
+- **After every task commit:** Run task-specific `<automated>` command from plan
+- **After every plan wave:** Run full suite command
 - **Before `/gsd:verify-work`:** Full suite must be green
-- **Max feedback latency:** 10 seconds
+- **Max feedback latency:** 15 seconds
 
 ---
 
@@ -38,10 +38,14 @@ created: 2026-04-05
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 20-01-01 | 01 | 1 | ORCH-01 | compile | `npx tsc --noEmit` | ✅ | ⬜ pending |
-| 20-02-01 | 02 | 2 | ORCH-02,ORCH-03 | compile+visual | `npx tsc --noEmit` | ✅ | ⬜ pending |
-| 20-03-01 | 03 | 2 | DIAG-01,DIAG-02,DIAG-03 | compile+visual | `npx tsc --noEmit` | ✅ | ⬜ pending |
-| 20-04-01 | 04 | 3 | PORTAL-01,PORTAL-02,PORTAL-03 | compile+visual | `npx tsc --noEmit` | ✅ | ⬜ pending |
+| 20-01-01 | 01 | 1 | ORCH-01 | unit | `node --test tests/services/orchestration-strategy.test.mjs` | ✅ | ⬜ pending |
+| 20-02-01 | 02 | 1 | DIAG-01,DIAG-03 | unit | `node --test tests/services/diagnostic-dialogue.test.mjs` | ✅ | ⬜ pending |
+| 20-03-01 | 03 | 2 | ORCH-03 | unit | `node --test tests/services/suggestionScorer.test.mjs` | ✅ | ⬜ pending |
+| 20-03-02 | 03 | 2 | ORCH-02,ORCH-03 | compile+unit | `npx tsc --noEmit && node --test tests/services/plannerAutoGen.test.mjs && node --test tests/services/suggestionScorer.test.mjs` | ✅ | ⬜ pending |
+| 20-04-01 | 04 | 3 | PORTAL-02,PORTAL-03 | unit+compile | `node --test tests/services/portal-card.test.mjs && npx tsc --noEmit` | ✅ | ⬜ pending |
+| 20-04-02 | 04 | 3 | DIAG-02 | compile | `npx tsc --noEmit` | ✅ | ⬜ pending |
+| 20-04-03 | 04 | 3 | PORTAL-01,DIAG-02 | compile | `npx tsc --noEmit` | ✅ | ⬜ pending |
+| 20-04-04 | 04 | 3 | PORTAL-01,PORTAL-02,PORTAL-03,DIAG-02 | visual | `npx tsc --noEmit` + manual | ✅ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -49,7 +53,7 @@ created: 2026-04-05
 
 ## Wave 0 Requirements
 
-- Existing infrastructure covers all phase requirements (TypeScript compilation).
+- Existing infrastructure covers all phase requirements (Node.js test runner + TypeScript compilation).
 
 ---
 
@@ -70,11 +74,11 @@ created: 2026-04-05
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 10s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 15s
+- [x] `nyquist_compliant: true` set in frontmatter
 
 **Approval:** pending
