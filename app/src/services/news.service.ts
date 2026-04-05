@@ -70,25 +70,41 @@ async function generateNewsPosts(count?: number): Promise<DailyPost[]> {
     const settings = settingsService.getSync();
     if (!settings.preferences.aiConsentGiven || !settings.llm.isConfigured) return [];
 
-    // 1. Get learning concepts from user's questions
+    // 1. Extract clean concept names from anchor nodes in the knowledge graph.
+    //    Anchor nodes have LLM-derived academic concept names (e.g., "Gradient Descent",
+    //    "Reinforcement Learning") — much better search terms than raw user questions.
     const allQuestions = questionService.getAll();
-    const nonFlagged = allQuestions.filter((q) => !q.flagged && !q.isAnchorNode && !q.isClusterNode);
-    if (nonFlagged.length === 0) return [];
-
-    // 2. Extract top learning concepts: take the 10 most recent, deduplicate
-    const recentQuestions = nonFlagged
-      .sort((a, b) => b.createdAt - a.createdAt)
-      .slice(0, 10);
+    const anchors = allQuestions
+      .filter((q) => q.isAnchorNode === true && !q.flagged)
+      .sort((a, b) => b.createdAt - a.createdAt);
 
     const seenConcepts = new Set<string>();
     const concepts: string[] = [];
-    for (const q of recentQuestions) {
-      const term = (q.title || q.content.slice(0, 50)).trim().toLowerCase();
+
+    // Primary: use anchor node titles (clean concept nouns)
+    for (const a of anchors) {
+      const term = (a.title || a.content.slice(0, 50)).trim().toLowerCase();
       if (!seenConcepts.has(term)) {
         seenConcepts.add(term);
-        concepts.push(q.title || q.content.slice(0, 50));
+        concepts.push(a.title || a.content.slice(0, 50));
       }
       if (concepts.length >= 3) break;
+    }
+
+    // Fallback: if no anchor nodes yet, use keywords from recent questions
+    if (concepts.length === 0) {
+      const nonFlagged = allQuestions.filter((q) => !q.flagged && !q.isAnchorNode && !q.isClusterNode);
+      for (const q of nonFlagged.sort((a, b) => b.createdAt - a.createdAt).slice(0, 5)) {
+        for (const kw of q.keywords ?? []) {
+          const term = kw.trim().toLowerCase();
+          if (term.length >= 3 && !seenConcepts.has(term)) {
+            seenConcepts.add(term);
+            concepts.push(kw.trim());
+          }
+          if (concepts.length >= 3) break;
+        }
+        if (concepts.length >= 3) break;
+      }
     }
 
     if (concepts.length === 0) return [];
@@ -106,8 +122,7 @@ async function generateNewsPosts(count?: number): Promise<DailyPost[]> {
     const seenUrls = new Set<string>();
 
     for (const concept of concepts) {
-      const result = await webSearch(concept + ' latest news developments', {
-        topic: 'news',
+      const result = await webSearch(concept + ' latest research breakthroughs', {
         maxResults: 3,
       });
       if (result.success && result.data) {
