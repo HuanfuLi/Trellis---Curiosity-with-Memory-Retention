@@ -104,6 +104,7 @@ export function AskScreen() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState('');
   const [historySearch, setHistorySearch] = useState('');
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
 
   // Keep session ref in sync for use in callbacks without stale closure
   const sessionRef = useRef(session);
@@ -206,7 +207,7 @@ export function AskScreen() {
             if (!controller.signal.aborted) {
               setStreaming({ placeholderId, content: accumulated });
             }
-          }, sessionContext, priorMessages);
+          }, sessionContext, priorMessages, webSearchEnabled);
         }
 
         if (controller.signal.aborted) return;
@@ -264,7 +265,7 @@ export function AskScreen() {
         generatingRef.current = false;
       }
     },
-    [askStreaming, questions],
+    [askStreaming, questions, webSearchEnabled],
   );
 
   const handleSend = useCallback(
@@ -679,6 +680,8 @@ export function AskScreen() {
         onSend={handleSend}
         placeholder="Ask anything..."
         disabled={!!streaming || editingMessageId !== null}
+        webSearchEnabled={webSearchEnabled}
+        onToggleWebSearch={() => setWebSearchEnabled(prev => !prev)}
       />
 
       {/* History drawer — slides in from left */}

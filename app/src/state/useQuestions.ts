@@ -7,6 +7,24 @@ import { today } from '../lib/date';
 import { buildCandidateContextPack, classifyAndAnchor, formatCandidateContextPack } from '../services/canonical-knowledge.service';
 import { evaluateQuestion as filterQuestion, type QuestionFilterContext } from '../services/question-filter.service';
 import { eventBus } from '../lib/event-bus';
+import { webSearch } from '../services/web-search.service';
+
+const WEB_SEARCH_TOOL_PROMPT = `
+You have access to a web search tool. When a question requires current/real-time information, recent events, up-to-date facts, or verification of claims, output exactly:
+[TOOL:web_search]{"query": "your search query here"}
+
+Rules:
+- Only invoke the tool when the question genuinely needs current information
+- After receiving search results, synthesize them into your answer
+- Include numbered citations [1][2] referencing the sources
+- List sources at the end in this format:
+  Sources:
+  [1] [Title](URL)
+  [2] [Title](URL)
+- Do NOT invoke the tool for conceptual/theoretical questions you can answer from training
+`;
+
+const TOOL_PATTERN = /\[TOOL:web_search\]\s*(\{[^}]+\})/;
 
 interface UseQuestionsReturn {
   questions: Question[];
@@ -14,7 +32,7 @@ interface UseQuestionsReturn {
   isLoading: boolean;
   error: ServiceError | null;
   ask: (content: string) => Promise<Question | null>;
-  askStreaming: (content: string, onToken: (accumulated: string) => void, sessionContext?: QuestionFilterContext, sessionHistory?: SessionMessage[]) => Promise<Question | null>;
+  askStreaming: (content: string, onToken: (accumulated: string) => void, sessionContext?: QuestionFilterContext, sessionHistory?: SessionMessage[], webSearchEnabled?: boolean) => Promise<Question | null>;
   getByDate: (date: string) => Question[];
   getRecent: (n: number) => Question[];
   getById: (id: string) => Question | undefined;
@@ -60,7 +78,7 @@ export function useQuestions(): UseQuestionsReturn {
   }, []);
 
   const askStreaming = useCallback(
-    async (content: string, onToken: (accumulated: string) => void, sessionContext?: QuestionFilterContext, sessionHistory?: SessionMessage[]): Promise<Question | null> => {
+    async (content: string, onToken: (accumulated: string) => void, sessionContext?: QuestionFilterContext, sessionHistory?: SessionMessage[], webSearchEnabled?: boolean): Promise<Question | null> => {
       setIsAsking(true);
       setError(null);
 
@@ -91,6 +109,7 @@ export function useQuestions(): UseQuestionsReturn {
           'You are a knowledgeable learning assistant. Answer questions clearly and thoroughly.',
           'Do not generate harmful, illegal, sexually explicit, or deceptive content.',
           `Knowledge graph candidate context:\n${formatCandidateContextPack(candidatePack)}`,
+          WEB_SEARCH_TOOL_PROMPT,
         ]
           .filter(Boolean)
           .join('\n');
@@ -102,6 +121,7 @@ export function useQuestions(): UseQuestionsReturn {
             content: m.content,
           }));
 
+        // --- Pass 1: Stream LLM response ---
         let accumulated = '';
         const stream = chatStream(
           [
@@ -116,6 +136,64 @@ export function useQuestions(): UseQuestionsReturn {
         for await (const token of stream) {
           accumulated += token;
           onToken(accumulated);
+        }
+
+        // --- Check for tool invocation OR forced web search ---
+        const toolMatch = accumulated.match(TOOL_PATTERN);
+        const needsSearch = webSearchEnabled || toolMatch;
+
+        if (needsSearch) {
+          // Determine search query
+          let searchQuery = content; // default: use the user's question
+          if (toolMatch) {
+            try {
+              const parsed = JSON.parse(toolMatch[1]);
+              if (parsed.query) searchQuery = parsed.query;
+            } catch { /* use default */ }
+          }
+
+          // Show searching indicator
+          onToken('Searching the web...');
+
+          const searchResult = await webSearch(searchQuery);
+
+          if (searchResult.success && searchResult.data) {
+            // Format search results for injection
+            const searchContext = searchResult.data.results
+              .slice(0, 5)
+              .map((r, i) => `[${i + 1}] ${r.title}\n${r.content}\nURL: ${r.url}`)
+              .join('\n\n');
+
+            // --- Pass 2: Re-prompt with search results ---
+            accumulated = '';
+            const stream2 = chatStream(
+              [
+                { role: 'system', content: systemPrompt },
+                ...historyMessages,
+                { role: 'user', content },
+                {
+                  role: 'assistant',
+                  content: 'I searched the web for relevant information. Let me provide an answer based on the search results.',
+                },
+                {
+                  role: 'user',
+                  content: `Web search results for "${searchQuery}":\n\n${searchContext}\n\nUsing these search results, provide a comprehensive answer to my original question. Include numbered citations [1][2] etc. referencing the sources, and list them at the end under "Sources:" with format [N] [Title](URL).`,
+                },
+              ],
+              llmConfig,
+              { serviceName: 'ask' },
+            );
+
+            for await (const token of stream2) {
+              accumulated += token;
+              onToken(accumulated);
+            }
+          }
+          // If search failed, keep the original response (minus the tool marker)
+          else if (toolMatch) {
+            accumulated = accumulated.replace(TOOL_PATTERN, '').trim();
+            onToken(accumulated);
+          }
         }
 
         // Persist and get structured question

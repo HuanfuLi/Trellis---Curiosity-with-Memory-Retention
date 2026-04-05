@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Send, Mic, Loader2 } from 'lucide-react';
+import { Send, Mic, Loader2, Globe } from 'lucide-react';
 import { transcribeAudio } from '../providers/stt';
 import { startVoiceRecording, stopVoiceRecording, MicPermissionDeniedError } from '../lib/voice-recorder';
 import { settingsService } from '../services/settings.service';
@@ -9,9 +9,11 @@ interface ChatInputProps {
   onSend: (message: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  webSearchEnabled?: boolean;
+  onToggleWebSearch?: () => void;
 }
 
-export function ChatInput({ onSend, placeholder = 'Ask anything...', disabled }: ChatInputProps) {
+export function ChatInput({ onSend, placeholder = 'Ask anything...', disabled, webSearchEnabled, onToggleWebSearch }: ChatInputProps) {
   const [message, setMessage] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -120,6 +122,30 @@ export function ChatInput({ onSend, placeholder = 'Ask anything...', disabled }:
               : <Mic size={17} />
             }
           </button>
+
+          {/* Globe toggle — forces web search */}
+          {onToggleWebSearch && (
+            <button
+              type="button"
+              onClick={onToggleWebSearch}
+              title={webSearchEnabled ? 'Web search ON (tap to disable)' : 'Web search OFF (tap to enable)'}
+              style={{
+                flexShrink: 0,
+                width: '34px',
+                height: '34px',
+                borderRadius: '50%',
+                backgroundColor: webSearchEnabled ? 'var(--primary-40)' : 'transparent',
+                color: webSearchEnabled ? 'white' : 'var(--muted-foreground)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'background-color 0.2s, color 0.2s',
+              }}
+            >
+              <Globe size={17} />
+            </button>
+          )}
 
           <input
             type="text"
