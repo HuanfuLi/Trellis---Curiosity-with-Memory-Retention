@@ -4,11 +4,12 @@
  * Tests citation extraction (pure function) and
  * webSearch NOT_CONFIGURED guard (mock-based).
  *
- * Run: node --experimental-strip-types --no-warnings --test app/tests/services/web-search.test.mjs
+ * Run: npx tsx --import ./app/tests/services/_capacitor-mock-loader.mjs \
+ *        --test app/tests/services/web-search.test.mjs
  */
 
 import assert from 'node:assert/strict';
-import { describe, it, mock, beforeEach } from 'node:test';
+import { describe, it, beforeEach } from 'node:test';
 
 // ─── Mock localStorage ────────────────────────────────────────────────────────
 
@@ -31,15 +32,6 @@ class MockStorage {
 }
 
 globalThis.localStorage = new MockStorage();
-
-// ─── Mock @capacitor/core before importing service ────────────────────────────
-
-mock.module('@capacitor/core', {
-  namedExports: {
-    Capacitor: { isNativePlatform: () => false },
-    CapacitorHttp: { post: async () => ({ status: 200, data: {} }) },
-  },
-});
 
 // ─── Dynamic import after mocks are set ───────────────────────────────────────
 
