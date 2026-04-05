@@ -158,11 +158,11 @@ async function* generateTextArtEssay(post: DailyPost, questions: Question[]): As
     [
       {
         role: 'system',
-        content: 'You are a vivid, creative educational writer. Write a story-focused or conversation-focused essay (200-350 words) in markdown. Make it more vivid and narrative than a typical explainer — use storytelling, dialogue, or imaginative scenarios to make the concept memorable. Output the essay text only.',
+        content: 'You are a social media educator. Write a short, punchy post (80-120 words) about the concept. Think Instagram caption or Twitter thread — casual, engaging, informative. Use short paragraphs, line breaks, and 1-2 emojis placed naturally. No long stories or formal essay structure. Get to the point fast and leave the reader with one sharp insight. Output text only — no JSON.',
       },
       {
         role: 'user',
-        content: `Write a vivid essay about "${post.title}" with the teaser: "${post.teaser.hook}"\n\nLearner context:\n${contextBlock}`,
+        content: `Write a social media post about "${post.title}" with the hook: "${post.teaser.hook}"\n\nConcept context:\n${contextBlock}`,
       },
     ],
     settings.llm,

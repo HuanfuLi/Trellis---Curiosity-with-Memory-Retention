@@ -290,7 +290,7 @@ export function PostDetailScreen() {
     return () => { cancelled = true; };
   }, [post?.id]); // Re-fetch if different post (also resets carousel via PostCarousel's useEffect)
 
-  // Track initial Q&A message count so we only auto-scroll on NEW messages, not on mount
+  // Scroll once when user submits a question (new message appears), not during streaming
   const initialMsgCount = useRef<number | null>(null);
   useEffect(() => {
     const count = session?.messages.length ?? 0;
@@ -298,10 +298,11 @@ export function PostDetailScreen() {
       initialMsgCount.current = count;
       return;
     }
-    if (count > initialMsgCount.current || qaStreaming) {
+    if (count > initialMsgCount.current) {
       threadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      initialMsgCount.current = count;
     }
-  }, [session?.messages, qaStreaming]);
+  }, [session?.messages]);
 
   const quickAskPrompts = useMemo(() => {
     const fromPost = post?.quickAskPrompts ?? [];
@@ -549,6 +550,50 @@ export function PostDetailScreen() {
         </div>
       ) : post.sourceType !== 'video' && (
         <>
+          {/* Text-art header — shows textArtContent in notebook style like card face */}
+          {post.presentationStyle === 'text-art' && post.textArtContent && (() => {
+            const TEXT_ART_THEMES = [
+              { bg: '#FFFDE7', dot: '#C5CAE9', text: '#1A1A1A', font: 'Georgia, "Times New Roman", serif' },
+              { bg: '#E8F5E9', dot: '#A5D6A7', text: '#1B5E20', font: '"Courier New", Courier, monospace' },
+              { bg: '#F3E5F5', dot: '#CE93D8', text: '#4A148C', font: 'Palatino, "Palatino Linotype", serif' },
+              { bg: '#E3F2FD', dot: '#90CAF9', text: '#0D47A1', font: 'system-ui, -apple-system, sans-serif' },
+              { bg: '#FFF3E0', dot: '#FFCC80', text: '#BF360C', font: '"Trebuchet MS", "Gill Sans", sans-serif' },
+              { bg: '#FCE4EC', dot: '#F48FB1', text: '#880E4F', font: 'Garamond, "Hoefler Text", serif' },
+              { bg: '#E0F7FA', dot: '#80DEEA', text: '#006064', font: 'Verdana, Geneva, sans-serif' },
+              { bg: '#FFF8E1', dot: '#FFE082', text: '#E65100', font: '"Bookman Old Style", Bookman, serif' },
+            ];
+            let h = 0;
+            for (const ch of post.id) h = ((h << 5) - h + ch.charCodeAt(0)) | 0;
+            const theme = TEXT_ART_THEMES[((h % TEXT_ART_THEMES.length) + TEXT_ART_THEMES.length) % TEXT_ART_THEMES.length];
+            const content = post.textArtContent.split('\n').filter(Boolean).join(' ');
+            return (
+              <div style={{
+                width: '100%',
+                aspectRatio: '1/1',
+                overflow: 'hidden',
+                backgroundColor: theme.bg,
+                backgroundImage: `radial-gradient(circle, ${theme.dot} 0.8px, transparent 0.8px)`,
+                backgroundSize: '20px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '32px 28px',
+                boxSizing: 'border-box',
+                marginBottom: '8px',
+              }}>
+                <p style={{
+                  fontSize: '2rem',
+                  fontWeight: 700,
+                  lineHeight: 1.3,
+                  color: theme.text,
+                  margin: 0,
+                  textAlign: 'center',
+                  fontFamily: theme.font,
+                  textWrap: 'balance',
+                }}>{content}</p>
+              </div>
+            );
+          })()}
           {/* Carousel — reserve 350px while loading to prevent layout shift */}
           {carouselImages.length > 0 ? (
             <PostCarousel
@@ -690,7 +735,7 @@ export function PostDetailScreen() {
                 disabled={Boolean(qaStreaming)}
                 style={{
                   padding: '7px 11px',
-                  borderRadius: '999px',
+                  borderRadius: '12px',
                   border: '1px solid var(--border)',
                   backgroundColor: 'var(--surface-variant)',
                   color: 'var(--foreground)',
