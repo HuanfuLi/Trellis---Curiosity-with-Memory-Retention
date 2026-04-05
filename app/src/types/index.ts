@@ -507,6 +507,13 @@ export interface VideoMetadata {
   duration?: string;
 }
 
+export interface SourceCitation {
+  index: number;
+  title: string;
+  url: string;
+  snippet?: string;
+}
+
 export interface DailyPost extends PostSnapshot {
   generatedAt: number;
   origin: 'ai';
