@@ -16,6 +16,7 @@ import { toast } from '../lib/toast';
 import { parseMoveNavigationState } from '../lib/moveNavigator';
 import { inferImageStyle, buildImagePrompt } from '../services/postFormatting.service';
 import { normalizePlainText } from '../lib/text-normalization';
+import { generatePostEssay, generateEssayMeta, patchPostEssayInCache, type EssayContent } from '../services/post-essay.service';
 
 interface ConnectionMeta {
   questionA: Question;
@@ -73,6 +74,13 @@ export function PostDetailScreen() {
   const [isGeneratingEssay, setIsGeneratingEssay] = useState(false);
   const [essayError, setEssayError] = useState<string | null>(null);
   const generateAbortRef = useRef(false);
+
+  // On-enter essay generation state (for posts with empty bodyMarkdown)
+  const [streamingBody, setStreamingBody] = useState('');
+  const [isStreamingOnEnter, setIsStreamingOnEnter] = useState(false);
+  const [onEnterError, setOnEnterError] = useState<string | null>(null);
+  const [onEnterMeta, setOnEnterMeta] = useState<Omit<EssayContent, 'bodyMarkdown'> | null>(null);
+  const onEnterAbortRef = useRef(false);
 
   // Q&A streaming state
   const [qaStreaming, setQaStreaming] = useState('');
@@ -187,6 +195,57 @@ export function PostDetailScreen() {
     setLoadingPost(false);
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps -- passedPost, connectionMeta, discoverMeta are stable per navigation
 
+  // On-enter essay generation: stream bodyMarkdown when post has empty body
+  useEffect(() => {
+    if (!post) return;
+    // Skip if post already has content (starter posts, cached essays, connection/discover)
+    if (post.bodyMarkdown && post.bodyMarkdown.trim() !== '') return;
+    // Skip connection and discover posts (they have their own generation flow)
+    if (post.sourceType === 'connection') return;
+    // Skip shorts (they play inline, no essay)
+    if (post.sourceType === 'short') return;
+
+    onEnterAbortRef.current = false;
+    setIsStreamingOnEnter(true);
+    setOnEnterError(null);
+    setStreamingBody('');
+    setOnEnterMeta(null);
+
+    void (async () => {
+      let accumulated = '';
+      try {
+        for await (const chunk of generatePostEssay(post, questionsRef.current)) {
+          if (onEnterAbortRef.current) return;
+          accumulated += chunk;
+          setStreamingBody(accumulated);
+        }
+        if (onEnterAbortRef.current) return;
+
+        // Generate meta (whyCare, takeaway, quickAskPrompts) after body completes
+        const meta = await generateEssayMeta(post, accumulated);
+        if (onEnterAbortRef.current) return;
+
+        const essay: EssayContent = { bodyMarkdown: accumulated, ...meta };
+
+        // Patch post in state
+        setPost(prev => prev ? { ...prev, ...essay } : prev);
+        setOnEnterMeta(meta);
+        setStreamingBody('');
+
+        // Cache to localStorage
+        patchPostEssayInCache(post.id, essay);
+      } catch (err) {
+        if (!onEnterAbortRef.current) {
+          setOnEnterError(err instanceof Error ? err.message : 'Essay generation failed. Check your AI settings.');
+        }
+      } finally {
+        if (!onEnterAbortRef.current) setIsStreamingOnEnter(false);
+      }
+    })();
+
+    return () => { onEnterAbortRef.current = true; };
+  }, [post?.id, post?.bodyMarkdown]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Fetch cached images for the carousel whenever the post changes.
   // If no images are cached (post has none or generation hasn't run), shows essay alone.
   // Video posts use the YouTube embed instead — skip image fetch entirely.
@@ -244,7 +303,10 @@ export function PostDetailScreen() {
     }
   }, [session?.messages, qaStreaming]);
 
-  const quickAskPrompts = useMemo(() => post?.quickAskPrompts ?? [], [post]);
+  const quickAskPrompts = useMemo(() => {
+    const fromPost = post?.quickAskPrompts ?? [];
+    return fromPost.length > 0 ? fromPost : (onEnterMeta?.quickAskPrompts ?? []);
+  }, [post, onEnterMeta]);
   const normalizedContextLabel = post ? normalizePlainText(post.contextLabel) : '';
   const normalizedTitle = post ? normalizePlainText(post.title) : '';
 
@@ -393,6 +455,12 @@ export function PostDetailScreen() {
 
   return (
     <div style={{ padding: '16px 16px 104px', maxWidth: '448px', margin: '0 auto' }}>
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+      `}</style>
       {/* Move breadcrumb — shown when navigated from a suggested move */}
       {moveState && (
         <div style={{
@@ -532,8 +600,8 @@ export function PostDetailScreen() {
           {normalizedContextLabel} · {post.narrativeMode}
         </p>
         <h1 style={{ fontSize: '1.55rem', lineHeight: 1.12, marginBottom: '12px', textWrap: 'balance' }}>{normalizedTitle}</h1>
-        {post.sourceType !== 'video' && post.whyCare && (
-          <p style={{ fontSize: '0.98rem', lineHeight: 1.62, color: 'var(--foreground)', marginBottom: '16px' }}>{post.whyCare}</p>
+        {post.sourceType !== 'video' && (post.whyCare || onEnterMeta?.whyCare) && (
+          <p style={{ fontSize: '0.98rem', lineHeight: 1.62, color: 'var(--foreground)', marginBottom: '16px' }}>{post.whyCare || onEnterMeta?.whyCare}</p>
         )}
         {post.sourceType === 'video' && (
           <h3 style={{
@@ -545,10 +613,44 @@ export function PostDetailScreen() {
             AI Summary
           </h3>
         )}
-        <div style={isNews ? { fontFamily: "Georgia, 'Times New Roman', serif" } : undefined}>
-          <Markdown>{post.bodyMarkdown}</Markdown>
+        {/* Essay body — shell always rendered, content streams in */}
+        <div style={{ minHeight: '200px', marginBottom: '20px' }}>
+          {onEnterError ? (
+            <div style={{ padding: '20px', borderRadius: 'var(--radius-xl)', border: '1px solid var(--danger)', backgroundColor: 'var(--danger-light)', marginBottom: '16px' }}>
+              <p style={{ color: 'var(--danger-dark)', fontWeight: 600, marginBottom: '8px' }}>Generation failed</p>
+              <p style={{ color: 'var(--danger-dark)', fontSize: '0.875rem', marginBottom: '16px' }}>{onEnterError}</p>
+              <button
+                onClick={() => {
+                  setOnEnterError(null);
+                  // Re-trigger by resetting post bodyMarkdown
+                  setPost(prev => prev ? { ...prev, bodyMarkdown: '' } : prev);
+                }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: 'var(--radius)', backgroundColor: 'var(--danger)', color: 'white', fontWeight: 600, fontSize: '0.875rem', border: 'none', cursor: 'pointer' }}
+              >
+                <RefreshCw size={14} /> Retry
+              </button>
+            </div>
+          ) : isStreamingOnEnter ? (
+            <>
+              {streamingBody ? (
+                <div style={isNews ? { fontFamily: "Georgia, 'Times New Roman', serif" } : undefined}>
+                  <Markdown>{streamingBody}</Markdown>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '20px 0' }}>
+                  <div style={{ height: '14px', width: '90%', borderRadius: '4px', backgroundColor: 'var(--surface-variant)', animation: 'pulse 1.5s ease-in-out infinite' }} />
+                  <div style={{ height: '14px', width: '75%', borderRadius: '4px', backgroundColor: 'var(--surface-variant)', animation: 'pulse 1.5s ease-in-out infinite', animationDelay: '0.2s' }} />
+                  <div style={{ height: '14px', width: '85%', borderRadius: '4px', backgroundColor: 'var(--surface-variant)', animation: 'pulse 1.5s ease-in-out infinite', animationDelay: '0.4s' }} />
+                </div>
+              )}
+            </>
+          ) : post.bodyMarkdown ? (
+            <div style={isNews ? { fontFamily: "Georgia, 'Times New Roman', serif" } : undefined}>
+              <Markdown>{post.bodyMarkdown}</Markdown>
+            </div>
+          ) : null}
         </div>
-        {post.sourceType !== 'video' && post.takeaway && (
+        {post.sourceType !== 'video' && (post.takeaway || onEnterMeta?.takeaway) && (
           <div
             style={{
               marginTop: '16px',
@@ -561,7 +663,7 @@ export function PostDetailScreen() {
             <p style={{ fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted-foreground)', marginBottom: '6px' }}>
               Takeaway
             </p>
-            <p style={{ lineHeight: 1.65 }}>{post.takeaway}</p>
+            <p style={{ lineHeight: 1.65 }}>{post.takeaway || onEnterMeta?.takeaway}</p>
           </div>
         )}
       </article>
