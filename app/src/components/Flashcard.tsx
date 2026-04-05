@@ -75,7 +75,7 @@ export function Flashcard({ front, back, onRate, pinned, onTogglePin }: Flashcar
 
         <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '0 4px' }}>
           {!isFlipped ? (
-            <div>
+            <div style={{ margin: 'auto 0' }}>
               <p
                 style={{
                   fontSize: '0.75rem',
@@ -93,7 +93,7 @@ export function Flashcard({ front, back, onRate, pinned, onTogglePin }: Flashcar
               </div>
             </div>
           ) : (
-            <div>
+            <div style={{ margin: 'auto 0' }}>
               <p
                 style={{
                   fontSize: '0.75rem',
