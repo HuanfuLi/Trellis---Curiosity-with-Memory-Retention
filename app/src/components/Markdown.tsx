@@ -2,6 +2,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import rehypeRaw from 'rehype-raw';
 import 'katex/dist/katex.min.css';
 import { normalizeMarkdownText } from '../lib/text-normalization';
 
@@ -18,7 +19,7 @@ export function Markdown({ children }: MarkdownProps) {
     <div className="md-prose">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeKatex]}
+        rehypePlugins={[rehypeRaw, rehypeKatex]}
       >
         {normalizeMarkdownText(children)}
       </ReactMarkdown>

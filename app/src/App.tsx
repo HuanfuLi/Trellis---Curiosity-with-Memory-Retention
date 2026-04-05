@@ -35,6 +35,7 @@ function RootLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const isHome = location.pathname === '/home';
+  const isAsk = location.pathname === '/ask';
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   // Guard against starting a new recording while one is already active
@@ -102,7 +103,7 @@ function RootLayout() {
         }}
       />
       {/* paddingTop clears the status bar; paddingBottom clears the bottom nav + home indicator */}
-      {/* Both wrappers are always mounted to avoid safe-area padding flicker on navigation */}
+      {/* Home and Ask are always mounted to preserve state across navigation */}
       <div style={{
         paddingTop: 'var(--safe-area-top)',
         paddingBottom: 'calc(80px + var(--safe-area-bottom))',
@@ -113,7 +114,14 @@ function RootLayout() {
       <div style={{
         paddingTop: 'var(--safe-area-top)',
         paddingBottom: 'calc(80px + var(--safe-area-bottom))',
-        display: isHome ? 'none' : undefined,
+        display: isAsk ? undefined : 'none',
+      }}>
+        <AskScreen />
+      </div>
+      <div style={{
+        paddingTop: 'var(--safe-area-top)',
+        paddingBottom: 'calc(80px + var(--safe-area-bottom))',
+        display: (isHome || isAsk) ? 'none' : undefined,
       }}>
         <Outlet />
       </div>
@@ -187,7 +195,7 @@ const router = createBrowserRouter([
       { index: true, element: <HomeRedirect /> },
       { path: 'home', element: null },
       { path: 'posts/:id', element: <PageTransition><PostDetailScreen /></PageTransition> },
-      { path: 'ask', element: <PageTransition><AskScreen /></PageTransition> },
+      { path: 'ask', element: null },
       { path: 'ask/:id', element: <PageTransition><QuestionDetailScreen /></PageTransition> },
       { path: 'anchor/:id', element: <PageTransition><AnchorDetailScreen /></PageTransition> },
       { path: 'cluster/:id', element: <PageTransition><ClusterDetailScreen /></PageTransition> },

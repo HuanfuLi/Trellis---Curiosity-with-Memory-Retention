@@ -289,23 +289,24 @@ export function AskScreen() {
     [generateAiReply],
   );
 
-  // Auto-send a prompt passed via navigation state (e.g. from Home screen STT FAB)
-  const didAutoSend = useRef(false);
+  // Auto-send a prompt passed via navigation state (e.g. from Home screen STT FAB).
+  // Tracks the last processed prompt to avoid re-triggering on re-renders while
+  // still firing for each NEW navigation-with-prompt (important since AskScreen
+  // is always mounted and the mount-only [] pattern no longer works).
+  const lastAutoPrompt = useRef<string | null>(null);
   useEffect(() => {
-    if (didAutoSend.current) return;
+    if (location.pathname !== '/ask') return;
     const prompt = (location.state as { prompt?: string } | null)?.prompt?.trim();
-    if (!prompt) return;
-    didAutoSend.current = true;
+    if (!prompt || prompt === lastAutoPrompt.current) return;
+    lastAutoPrompt.current = prompt;
     // Clear nav state so back-navigation doesn't re-trigger
     window.history.replaceState({}, '');
     // Always open a fresh session so the derived title is written to a clean slate
-    // (if we appended to an existing session whose title was already set,
-    // the `prev.title || question?.title` guard would skip the new title)
     const fresh = startNewSession(sessionRef.current);
     setSession(fresh);
     void handleSend(prompt);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [location]);
 
   const handleEditSubmit = useCallback(async () => {
     if (!editingMessageId || !editingContent.trim()) return;

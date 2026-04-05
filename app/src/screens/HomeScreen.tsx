@@ -84,8 +84,16 @@ export function HomeScreen() {
       setDailyPosts((prev) => prev.filter((p) => p.id !== event.payload.id));
     });
 
+    // When new questions are added, the fingerprint changes but getDailyPosts
+    // re-stamps and returns cached posts. New connection cards are generated
+    // asynchronously — do a delayed re-fetch to pick them up.
+    const delayedRefreshTimer = setTimeout(() => {
+      if (!cancelled) refreshFeed();
+    }, 8000);
+
     return () => {
       cancelled = true;
+      clearTimeout(delayedRefreshTimer);
       unsubPlanner();
       unsubPostDeleted();
     };

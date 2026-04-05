@@ -28,62 +28,68 @@ interface ChatMessageProps {
   onQuestionOverride?: (questionId: string, shouldSave: boolean) => void;
 }
 
+/** Replace inline [N] citation tags with styled superscript spans. */
+function styleCitationTags(body: string, sources: SourceCitation[]): string {
+  if (sources.length === 0) return body;
+  // Build a set of valid indices so we only style real citations
+  const validIndices = new Set(sources.map((s) => s.index));
+  return body.replace(/\[(\d+)\]/g, (match, num) => {
+    const idx = parseInt(num, 10);
+    if (!validIndices.has(idx)) return match;
+    // Use HTML that ReactMarkdown passes through via rehype
+    return `<sup data-cite="${idx}" style="font-size:0.7em;color:var(--muted-foreground);margin:0 1px;cursor:default">[${idx}]</sup>`;
+  });
+}
+
 function SourcesSection({ sources }: { sources: SourceCitation[] }) {
-  const [expanded, setExpanded] = useState(false);
   if (sources.length === 0) return null;
   return (
-    <div style={{ marginTop: '12px' }}>
-      <button
-        onClick={() => setExpanded(!expanded)}
-        style={{
-          fontSize: '0.78rem',
-          color: 'var(--muted-foreground)',
-          cursor: 'pointer',
-          background: 'none',
-          border: 'none',
-          padding: '4px 0',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '5px',
-        }}
-      >
-        <Globe size={13} />
-        <span>{sources.length} source{sources.length > 1 ? 's' : ''}</span>
-        <span style={{
-          display: 'inline-block',
-          transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-          transition: 'transform 0.2s',
-          fontSize: '0.7rem',
-        }}>
-          &#x25B2;
-        </span>
-      </button>
-      {expanded && (
-        <div style={{
-          marginTop: '8px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '6px',
-          paddingLeft: '4px',
-        }}>
-          {sources.map((s) => (
-            <a
-              key={s.index}
-              href={s.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                fontSize: '0.8rem',
-                color: 'var(--primary-40)',
-                textDecoration: 'none',
-                lineHeight: 1.4,
-              }}
-            >
-              [{s.index}] {s.title}
-            </a>
-          ))}
-        </div>
-      )}
+    <div style={{
+      marginTop: '10px',
+      padding: '8px 10px',
+      borderRadius: '8px',
+      backgroundColor: 'var(--surface-variant)',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '4px',
+    }}>
+      <div style={{
+        fontSize: '0.72rem',
+        color: 'var(--muted-foreground)',
+        fontWeight: 500,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '5px',
+        marginBottom: '2px',
+      }}>
+        <Globe size={12} />
+        Sources
+      </div>
+      {sources.map((s) => {
+        let domain = '';
+        try { domain = new URL(s.url).hostname.replace('www.', ''); } catch { /* ignore */ }
+        return (
+          <a
+            key={s.index}
+            href={s.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: '0.78rem',
+              color: 'var(--primary-40)',
+              textDecoration: 'none',
+              lineHeight: 1.4,
+              display: 'flex',
+              alignItems: 'baseline',
+              gap: '4px',
+            }}
+          >
+            <span style={{ color: 'var(--muted-foreground)', fontSize: '0.72rem', flexShrink: 0 }}>[{s.index}]</span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</span>
+            {domain && <span style={{ color: 'var(--muted-foreground)', fontSize: '0.68rem', flexShrink: 0 }}>· {domain}</span>}
+          </a>
+        );
+      })}
     </div>
   );
 }
@@ -276,9 +282,10 @@ export const ChatMessage = memo(function ChatMessage({
         >
           {(() => {
             const { body, sources } = extractCitations(content);
+            const styledBody = styleCitationTags(body, sources);
             return (
               <>
-                <Markdown>{body}</Markdown>
+                <Markdown>{styledBody}</Markdown>
                 <SourcesSection sources={sources} />
               </>
             );

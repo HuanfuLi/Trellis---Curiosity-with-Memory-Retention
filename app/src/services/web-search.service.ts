@@ -116,15 +116,31 @@ export function extractCitations(content: string): { body: string; sources: Sour
   const sourcesBlock = content.slice(dividerMatch.index + dividerMatch[0].length);
 
   const sources: SourceCitation[] = [];
-  const lineRegex = /\[(\d+)\]\s*\[([^\]\n]+?)\]\s*\(([^)\n]+)\)/gm;
-  let match: RegExpExecArray | null;
 
-  while ((match = lineRegex.exec(sourcesBlock)) !== null) {
-    sources.push({
-      index: parseInt(match[1], 10),
-      title: match[2],
-      url: match[3],
-    });
+  // Try multiple formats LLMs commonly output:
+  // Format 1: [N] [Title](URL) — markdown link
+  // Format 2: [N] Title - URL or [N] Title: URL — plain text
+  // Format 3: [N] URL — bare URL
+  const lines = sourcesBlock.split('\n').filter((l) => l.trim());
+  for (const line of lines) {
+    // Format 1: markdown link [N] [Title](URL)
+    const mdMatch = line.match(/\[(\d+)\]\s*\[([^\]\n]+?)\]\s*\(([^)\n]+)\)/);
+    if (mdMatch) {
+      sources.push({ index: parseInt(mdMatch[1], 10), title: mdMatch[2], url: mdMatch[3] });
+      continue;
+    }
+    // Format 2: [N] Title - URL or [N] Title: URL
+    const plainMatch = line.match(/\[(\d+)\]\s*(.+?)\s*[-–—:]\s*(https?:\/\/\S+)/);
+    if (plainMatch) {
+      sources.push({ index: parseInt(plainMatch[1], 10), title: plainMatch[2].trim(), url: plainMatch[3] });
+      continue;
+    }
+    // Format 3: [N] URL (title derived from domain)
+    const bareMatch = line.match(/\[(\d+)\]\s*(https?:\/\/\S+)/);
+    if (bareMatch) {
+      const domain = new URL(bareMatch[2]).hostname.replace('www.', '');
+      sources.push({ index: parseInt(bareMatch[1], 10), title: domain, url: bareMatch[2] });
+    }
   }
 
   return { body, sources };

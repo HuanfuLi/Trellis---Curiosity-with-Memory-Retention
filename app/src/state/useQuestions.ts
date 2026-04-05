@@ -122,6 +122,8 @@ export function useQuestions(): UseQuestionsReturn {
           }));
 
         // --- Pass 1: Stream LLM response ---
+        // Strip [TOOL:web_search]{...} from display during streaming so
+        // the raw tool-call syntax never leaks into the chat bubble.
         let accumulated = '';
         const stream = chatStream(
           [
@@ -135,7 +137,9 @@ export function useQuestions(): UseQuestionsReturn {
 
         for await (const token of stream) {
           accumulated += token;
-          onToken(accumulated);
+          // Show the user a cleaned version — hide partial/complete tool markers
+          const display = accumulated.replace(TOOL_PATTERN, '').replace(/\[TOOL:web_search\]\s*\{[^}]*$/, '').trimEnd();
+          onToken(display);
         }
 
         // --- Check for tool invocation OR forced web search ---
@@ -152,8 +156,12 @@ export function useQuestions(): UseQuestionsReturn {
             } catch { /* use default */ }
           }
 
-          // Show searching indicator
-          onToken('Searching the web...');
+          // Show searching indicator below Pass 1 text (cleaned of tool markers)
+          const cleanPass1 = accumulated.replace(TOOL_PATTERN, '').trimEnd();
+          const searchingText = cleanPass1
+            ? `${cleanPass1}\n\n🔍 Searching the web...`
+            : '🔍 Searching the web...';
+          onToken(searchingText);
 
           const searchResult = await webSearch(searchQuery);
 
@@ -164,7 +172,7 @@ export function useQuestions(): UseQuestionsReturn {
               .map((r, i) => `[${i + 1}] ${r.title}\n${r.content}\nURL: ${r.url}`)
               .join('\n\n');
 
-            // --- Pass 2: Re-prompt with search results ---
+            // --- Pass 2: Re-prompt with search results (replaces Pass 1) ---
             accumulated = '';
             const stream2 = chatStream(
               [
