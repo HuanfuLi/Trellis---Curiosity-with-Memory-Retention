@@ -220,9 +220,9 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen }: Conc
               }}>
                 NEWS
               </span>
-              {post.sourceQuestionTitles?.slice(0, 1).map((title) => (
+              {post.sourceQuestionTitles?.slice(0, 1).map((title, idx) => (
                 <span
-                  key={title}
+                  key={idx}
                   style={{
                     fontSize: '0.65rem',
                     color: '#999',
@@ -467,9 +467,9 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen }: Conc
             )}
             {/* Bottom tags: source concepts + narrative mode */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '12px' }}>
-              {post.sourceQuestionTitles?.slice(0, 2).map((title) => (
+              {post.sourceQuestionTitles?.slice(0, 2).map((title, idx) => (
                 <span
-                  key={title}
+                  key={idx}
                   style={{
                     fontSize: '0.7rem',
                     color: 'var(--muted-foreground)',
