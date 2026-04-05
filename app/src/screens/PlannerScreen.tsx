@@ -328,6 +328,7 @@ export function PlannerScreen() {
   const [checkInInput, setCheckInInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [diagnosticSession, setDiagnosticSession] = useState<DiagnosticSession | null>(null);
+  const [lastCheckInContent, setLastCheckInContent] = useState<string | null>(null);
   const [isDialogueProcessing, setIsDialogueProcessing] = useState(false);
   const [showSavedChunks, setShowSavedChunks] = useState(false);
   const [showCheckInHistory, setShowCheckInHistory] = useState(false);
@@ -353,24 +354,32 @@ export function PlannerScreen() {
     if (!content || isSubmitting) return;
     setIsSubmitting(true);
     try {
-      const session = await diagnosticDialogueService.startSession(content);
+      // Single-shot check-in by default (D-02 revised: optional multi-turn)
+      const result = await submitCheckIn(content);
       setCheckInInput('');
-      setDiagnosticSession(session);
-      const followUp = await diagnosticDialogueService.generateFollowUp(session);
-      // generateFollowUp already pushes the turn onto session.turns and persists
-      setDiagnosticSession({ ...session });
+      const msg = result.generatedChunkIds.length > 0
+        ? `Check-in processed: ${result.generatedChunkIds.length} suggestion(s) added`
+        : 'Check-in saved';
+      toast(msg, 'success');
+      // Store the content for optional "Tell me more" follow-up
+      setLastCheckInContent(content);
     } catch {
-      // Fallback to original single-shot check-in if dialogue fails
-      try {
-        const result = await submitCheckIn(content);
-        setCheckInInput('');
-        const msg = result.generatedChunkIds.length > 0
-          ? `Check-in processed: ${result.generatedChunkIds.length} suggestion(s) added`
-          : 'Check-in saved';
-        toast(msg, 'success');
-      } catch {
-        toast('Failed to process check-in', 'error');
-      }
+      toast('Failed to process check-in', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleTellMeMore = async () => {
+    if (!lastCheckInContent) return;
+    setIsSubmitting(true);
+    try {
+      const session = await diagnosticDialogueService.startSession(lastCheckInContent);
+      const followUp = await diagnosticDialogueService.generateFollowUp(session);
+      setDiagnosticSession({ ...session });
+      setLastCheckInContent(null);
+    } catch {
+      toast('Failed to start dialogue', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -570,6 +579,21 @@ export function PlannerScreen() {
                 {isSubmitting ? 'Processing...' : 'Check In'}
               </button>
             </div>
+            {/* Optional "Tell me more" button after successful check-in */}
+            {lastCheckInContent && !isSubmitting && (
+              <button
+                onClick={() => void handleTellMeMore()}
+                className="active-squish"
+                style={{
+                  width: '100%', padding: '9px 16px', marginTop: '8px',
+                  borderRadius: '12px', backgroundColor: 'var(--surface-variant)',
+                  color: 'var(--primary-40)', border: '1px solid var(--border)',
+                  fontSize: '0.82rem', fontWeight: 500, cursor: 'pointer',
+                }}
+              >
+                Tell me more...
+              </button>
+            )}
           </>
         )}
       </Card>
