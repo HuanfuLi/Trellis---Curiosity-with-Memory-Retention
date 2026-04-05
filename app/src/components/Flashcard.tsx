@@ -73,7 +73,7 @@ export function Flashcard({ front, back, onRate, pinned, onTogglePin }: Flashcar
           </button>
         )}
 
-        <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '0 4px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '0 4px', display: 'flex', flexDirection: 'column' }}>
           {!isFlipped ? (
             <div style={{ margin: 'auto 0' }}>
               <p
