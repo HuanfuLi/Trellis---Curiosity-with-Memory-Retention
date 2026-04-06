@@ -69,19 +69,22 @@ const processingSessionIds = new Set<string>();
 
 /** Fire-and-forget flashcard extraction for a session that is becoming inactive. */
 function processSessionIfNeeded(session: ChatSession): void {
+  // Read latest from localStorage to avoid stale React state (processed flag
+  // is set in localStorage but setSession is not called after processing)
+  const latest = sessionService.getById(session.id) ?? session;
   if (
-    !session.processed &&
-    session.messages.some((m) => m.type === 'user') &&
-    !processingSessionIds.has(session.id)
+    !latest.processed &&
+    latest.messages.some((m) => m.type === 'user') &&
+    !processingSessionIds.has(latest.id)
   ) {
-    processingSessionIds.add(session.id);
-    void flashcardService.processSession(session).then(() => {
-      const refreshed = sessionService.getById(session.id);
+    processingSessionIds.add(latest.id);
+    void flashcardService.processSession(latest).then(() => {
+      const refreshed = sessionService.getById(latest.id);
       if (refreshed) {
         sessionService.save({ ...refreshed, processed: true });
       }
     }).finally(() => {
-      processingSessionIds.delete(session.id);
+      processingSessionIds.delete(latest.id);
     });
   }
 }
@@ -110,18 +113,16 @@ function generateSessionPostsIfNeeded(session: ChatSession): void {
 
   postGeneratedSessionIds.add(session.id);
 
-  if (pendingCount < 4) {
-    console.log('[session-posts] calling generateSessionPosts...');
-    void conceptFeedService.generateSessionPosts(session).then((posts) => {
-      console.log('[session-posts] generated', posts.length, 'posts');
-      if (posts.length > 0) {
-        infiniteScrollService.enqueuePosts(posts);
-        console.log('[session-posts] enqueued, pendingCount now:', infiniteScrollService.getPendingCount());
-      }
-    }).catch((err) => {
-      console.error('[session-posts] FAILED:', err);
-    });
-  }
+  console.log('[session-posts] calling generateSessionPosts...');
+  void conceptFeedService.generateSessionPosts(session).then((posts) => {
+    console.log('[session-posts] generated', posts.length, 'posts');
+    if (posts.length > 0) {
+      infiniteScrollService.enqueuePosts(posts);
+      console.log('[session-posts] enqueued, pendingCount now:', infiniteScrollService.getPendingCount());
+    }
+  }).catch((err) => {
+    console.error('[session-posts] FAILED:', err);
+  });
 }
 
 function startNewSession(current: ChatSession): ChatSession {
