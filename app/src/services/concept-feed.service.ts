@@ -263,6 +263,7 @@ function buildGenerationPrompt(
   date: string,
   context: DailyKnowledgeContext,
   connectionCandidates: Array<{ source: Question; target: Question; score: number }> = [],
+  maxPosts = MAX_POSTS,
 ): string {
   const serializeQuestion = (question: Question) => [
     `id: ${question.id}`,
@@ -297,7 +298,7 @@ function buildGenerationPrompt(
   const hasConnectionCandidates = candidateLines.length > 0;
 
   return [
-    `Create ${Math.min(MAX_POSTS, Math.max(2, context.recent.length + context.related.length))} daily learning posts for ${date}.`,
+    `Create ${Math.min(maxPosts, Math.max(2, context.recent.length + context.related.length))} daily learning posts for ${date}.`,
     'The posts should feel like intriguing short-form educational essays, not flashcards or summaries.',
     'Each post must have a punchy teaserHook and a vivid teaserPreview.',
     'teaserHook: max 8 words. Punchy, curiosity-driven, sounds like a podcast title or tweet. Examples: "Your brain lied about rereading", "Why forgetting is a feature", "The 20-minute rule nobody follows".',
@@ -391,6 +392,7 @@ function parseGeneratedPosts(
   date: string,
   candidates: Array<{ source: Question; target: Question; score: number }> = [],
   indexOffset = 0,
+  maxPosts = MAX_POSTS,
 ): ParsedGeneration {
   // Try object format first: {"posts": [...], "connectionCards": [...]}
   const objMatch = raw.match(/\{[\s\S]*\}/);
@@ -399,7 +401,7 @@ function parseGeneratedPosts(
       const parsed = JSON.parse(objMatch[0]) as { posts?: unknown; connectionCards?: unknown };
       if (Array.isArray(parsed.posts)) {
         return {
-          posts: extractPosts(parsed.posts as Array<Record<string, unknown>>, questions, date, indexOffset),
+          posts: extractPosts(parsed.posts as Array<Record<string, unknown>>, questions, date, indexOffset, maxPosts),
           connectionCards: parseConnectionCards(parsed.connectionCards, candidates),
         };
       }
@@ -413,17 +415,17 @@ function parseGeneratedPosts(
   if (!arrMatch) return { posts: [], connectionCards: [] };
   try {
     const parsed = JSON.parse(arrMatch[0]) as Array<Record<string, unknown>>;
-    return { posts: extractPosts(parsed, questions, date, indexOffset), connectionCards: [] };
+    return { posts: extractPosts(parsed, questions, date, indexOffset, maxPosts), connectionCards: [] };
   } catch {
     return { posts: [], connectionCards: [] };
   }
 }
 
-function extractPosts(parsed: Array<Record<string, unknown>>, questions: Question[], date: string, indexOffset = 0): DailyPost[] {
+function extractPosts(parsed: Array<Record<string, unknown>>, questions: Question[], date: string, indexOffset = 0, maxPosts = MAX_POSTS): DailyPost[] {
   const byId = new Map(questions.map((question) => [question.id, question]));
 
   return parsed
-    .slice(0, MAX_POSTS)
+    .slice(0, maxPosts)
     .map((item, index) => {
       const idIndex = index + indexOffset;
       const sourceQuestionIds = Array.isArray(item.sourceQuestionIds)
@@ -994,12 +996,12 @@ export const conceptFeedService = {
                   'Return only valid JSON.',
                 ].join('\n'),
               },
-              { role: 'user', content: buildGenerationPrompt(date, context) + avoidClause },
+              { role: 'user', content: buildGenerationPrompt(date, context, [], count) + avoidClause },
             ],
             settings.llm,
             { serviceName: 'posts' },
           );
-          newPosts = parseGeneratedPosts(raw, questions, date, [], existingPosts.length).posts
+          newPosts = parseGeneratedPosts(raw, questions, date, [], existingPosts.length, count).posts
             .filter((p) => !existingIds.has(p.id));
         } catch {
           newPosts = [];
@@ -1158,7 +1160,7 @@ export const conceptFeedService = {
       );
 
       const existingIds = new Set(existingPosts.map(p => p.id));
-      let newPosts = parseGeneratedPosts(raw, allQuestions, date, [], existingPosts.length).posts
+      let newPosts = parseGeneratedPosts(raw, allQuestions, date, [], existingPosts.length, 6).posts
         .filter(p => !existingIds.has(p.id));
       newPosts = newPosts.slice(0, 6);
 
