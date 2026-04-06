@@ -40,7 +40,7 @@ export const infiniteScrollService = {
    * @param limit - Number of posts to request (default 10)
    * @returns Deduplicated array of new posts (may be < limit if duplicates filtered)
    */
-  async loadNextBatch(questions: Question[], limit = 10): Promise<DailyPost[]> {
+  async loadNextBatch(questions: Question[], limit = 6): Promise<DailyPost[]> {
     try {
       // Drain pending queue first (session-generated posts waiting to be shown)
       const fromQueue: DailyPost[] = [];

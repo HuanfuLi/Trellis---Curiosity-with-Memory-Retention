@@ -1,6 +1,7 @@
 import { chatStream, chatCompletion } from '../providers/llm/index.ts';
 import type { DailyPost, Question } from '../types';
 import { settingsService } from './settings.service.ts';
+import { postStoreService } from './post-store.service';
 
 /**
  * On-enter essay generation service.
@@ -171,72 +172,8 @@ async function* generateTextArtEssay(post: DailyPost, questions: Question[]): As
 }
 
 /**
- * Patch a post's essay content into the correct localStorage cache after generation.
- * Handles AI posts (echolearn_daily_posts), video (echolearn_video_cache),
- * news (echolearn_news_posts), shorts (echolearn_short_posts).
+ * Patch a post's essay content into the persistent post store after generation.
  */
 export function patchPostEssayInCache(postId: string, essay: EssayContent): void {
-  // Patch main post cache
-  try {
-    const raw = localStorage.getItem('echolearn_daily_posts');
-    if (raw) {
-      const cached = JSON.parse(raw);
-      if (cached && Array.isArray(cached.posts)) {
-        const idx = cached.posts.findIndex((p: DailyPost) => p.id === postId);
-        if (idx >= 0) {
-          cached.posts[idx] = { ...cached.posts[idx], ...essay };
-          localStorage.setItem('echolearn_daily_posts', JSON.stringify(cached));
-          return;
-        }
-      }
-    }
-  } catch { /* ignore */ }
-
-  // Patch video cache
-  try {
-    const raw = localStorage.getItem('echolearn_video_cache');
-    if (raw) {
-      const cached = JSON.parse(raw);
-      if (cached && Array.isArray(cached.posts)) {
-        const idx = cached.posts.findIndex((p: DailyPost) => p.id === postId);
-        if (idx >= 0) {
-          cached.posts[idx] = { ...cached.posts[idx], ...essay };
-          localStorage.setItem('echolearn_video_cache', JSON.stringify(cached));
-          return;
-        }
-      }
-    }
-  } catch { /* ignore */ }
-
-  // Patch news cache
-  try {
-    const raw = localStorage.getItem('echolearn_news_posts');
-    if (raw) {
-      const cached = JSON.parse(raw);
-      if (cached && Array.isArray(cached.posts)) {
-        const idx = cached.posts.findIndex((p: DailyPost) => p.id === postId);
-        if (idx >= 0) {
-          cached.posts[idx] = { ...cached.posts[idx], ...essay };
-          localStorage.setItem('echolearn_news_posts', JSON.stringify(cached));
-          return;
-        }
-      }
-    }
-  } catch { /* ignore */ }
-
-  // Patch shorts cache
-  try {
-    const raw = localStorage.getItem('echolearn_short_posts');
-    if (raw) {
-      const cached = JSON.parse(raw);
-      if (cached && Array.isArray(cached.posts)) {
-        const idx = cached.posts.findIndex((p: DailyPost) => p.id === postId);
-        if (idx >= 0) {
-          cached.posts[idx] = { ...cached.posts[idx], ...essay };
-          localStorage.setItem('echolearn_short_posts', JSON.stringify(cached));
-          return;
-        }
-      }
-    }
-  } catch { /* ignore */ }
+  postStoreService.patch(postId, essay);
 }

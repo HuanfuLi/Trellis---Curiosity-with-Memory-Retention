@@ -10,6 +10,7 @@ import { newsService } from './news.service';
 import { webSearch } from './web-search.service';
 import { defaultStrategy } from './orchestration-strategy.service';
 import { trajectoryAnalyzerService } from './trajectoryAnalyzer.service';
+import { postStoreService } from './post-store.service';
 
 const STORAGE_KEY = 'echolearn_daily_posts';
 const CONNECTION_POSTS_KEY = 'echolearn_connection_posts';
@@ -788,104 +789,13 @@ function applyStrategyBias(posts: DailyPost[]): DailyPost[] {
 }
 
 export const conceptFeedService = {
-  async getDailyPosts(questions: Question[]): Promise<DailyPost[]> {
-    // Exclude off-topic/flagged questions from post generation
-    questions = questions.filter((q) => !q.flagged);
-    const date = today();
-    const fingerprint = computeFingerprint(questions);
-    const cached = loadCache();
-    if (cached?.date === date && cached.fingerprint === fingerprint && cached.posts.length > 0) {
-      // Return feed posts immediately with any already-cached video/short posts.
-      // Kick off video + short generation in the background so they appear on next refresh.
-      const aiPosts = cached.posts.filter((p) => p.sourceType !== 'connection');
-      const videoPosts = youtubeService.getCachedVideoPosts();
-      const shortPosts = youtubeService.getCachedShortPosts();
-      const allVideos = [...videoPosts, ...shortPosts];
-      _backgroundGenerateVideos();
-      _backgroundGenerateShorts(questions);
-      _backgroundGenerateNews();
-      // If cached posts already have presentationStyle assigned, use them directly;
-      // otherwise assign styles and persist back to cache.
-      const allStyled = aiPosts.length > 0 && aiPosts.every(p => p.presentationStyle);
-      const styledResult = allStyled
-        ? [...aiPosts, ...allVideos.map(p => ({ ...p, presentationStyle: (p.sourceType === 'short' ? 'short' : 'video') as PresentationStyle }))]
-        : assignPresentationStyles(aiPosts, allVideos);
-      if (!allStyled && aiPosts.length > 0) _persistStylesToCache(styledResult);
-      // Generate text-art content in background for any text-art posts missing it
-      _backgroundGenerateTextArt(styledResult);
-      // Interleave news posts (NEWS-02, NEWS-03)
-      const newsPosts = newsService.getCachedNewsPosts();
-      return applyStrategyBias(interleaveNewsPosts(styledResult, newsPosts));
-    }
-
-    // If the cache has posts for today but just the fingerprint changed (e.g. new
-    // question added), re-stamp the fingerprint and keep existing posts — only
-    // regenerate when there are truly no posts for today.
-    const hasPostsForToday = cached?.date === date && cached.posts.length > 0;
-
-    if (hasPostsForToday && cached.fingerprint !== fingerprint) {
-      saveCache({ ...cached, fingerprint });
-      const aiPosts = cached.posts.filter((p) => p.sourceType !== 'connection');
-      const videoPosts = youtubeService.getCachedVideoPosts();
-      const shortPosts = youtubeService.getCachedShortPosts();
-      const allVideos = [...videoPosts, ...shortPosts];
-      _backgroundGenerateVideos();
-      _backgroundGenerateShorts(questions);
-      _backgroundGenerateNews();
-      const allStyled2 = aiPosts.length > 0 && aiPosts.every(p => p.presentationStyle);
-      const styledResult2 = allStyled2
-        ? [...aiPosts, ...allVideos.map(p => ({ ...p, presentationStyle: (p.sourceType === 'short' ? 'short' : 'video') as PresentationStyle }))]
-        : assignPresentationStyles(aiPosts, allVideos);
-      if (!allStyled2 && aiPosts.length > 0) _persistStylesToCache(styledResult2);
-      _backgroundGenerateTextArt(styledResult2);
-      // Interleave news posts (NEWS-02, NEWS-03)
-      const newsPosts2 = newsService.getCachedNewsPosts();
-      return applyStrategyBias(interleaveNewsPosts(styledResult2, newsPosts2));
-    }
-
-    let generated: ParsedGeneration = { posts: [], connectionCards: [] };
-    try {
-      generated = await generateDailyPostsWithLLM(questions, date);
-    } catch {
-      generated = { posts: [], connectionCards: [] };
-    }
-
-    const newPosts = generated.posts;
-
-    // Preserve old posts so they remain accessible via getPostById and don't
-    // vanish on date rollover or failed LLM regeneration. Old posts whose IDs
-    // collide with newly generated posts are replaced; the rest are kept.
-    const oldPosts = cached?.posts ?? [];
-    const newIds = new Set(newPosts.map((p) => p.id));
-    const preserved = oldPosts.filter((p) => !newIds.has(p.id));
-    const allPosts = [...newPosts, ...preserved];
-
-    // Cache only AI posts (video posts have their own cache in youtube.service.ts)
-    saveCache({ date, fingerprint, posts: allPosts, connectionCards: generated.connectionCards });
-
-    // Return AI posts immediately; generate video posts in background (D-04)
-    const videoPosts = youtubeService.getCachedVideoPosts();
-    const shortPosts = youtubeService.getCachedShortPosts();
-    _backgroundGenerateVideos();
-    _backgroundGenerateShorts(questions);
-    _backgroundGenerateNews();
-    // Only style new posts — preserved old posts keep their existing presentationStyle
-    const feedPosts = allPosts.filter((p) => p.sourceType !== 'connection');
-    const unstyledPosts = feedPosts.filter(p => !p.presentationStyle);
-    const alreadyStyled = feedPosts.filter(p => p.presentationStyle);
-    const allVideos = [...videoPosts, ...shortPosts];
-    const newlyStyled = unstyledPosts.length > 0
-      ? assignPresentationStyles(unstyledPosts, allVideos)
-      : [...alreadyStyled, ...allVideos.map(p => ({ ...p, presentationStyle: (p.sourceType === 'short' ? 'short' : 'video') as PresentationStyle }))];
-    const styledPosts = unstyledPosts.length > 0 ? [...alreadyStyled, ...newlyStyled] : newlyStyled;
-    const enrichedPosts = await generateTextArtContent(styledPosts);
-
-    // Persist presentationStyle and textArtContent back to cache
-    _persistStylesToCache(enrichedPosts);
-
-    // Interleave news posts (NEWS-02, NEWS-03)
-    const newsPosts3 = newsService.getCachedNewsPosts();
-    return applyStrategyBias(interleaveNewsPosts(enrichedPosts, newsPosts3));
+  /**
+   * Load all persisted posts from the store. No LLM generation — posts are
+   * created by generateSessionPosts (on session end) and generateMorePosts
+   * (on swipe-to-load). Returns newest first.
+   */
+  getDailyPosts(): DailyPost[] {
+    return postStoreService.getAll();
   },
 
   /** Return cached connection card data for the current session. */
@@ -899,84 +809,34 @@ export const conceptFeedService = {
    * cache when the `questions` array changes after mount.
    */
   getPostById(id: string): DailyPost | null {
-    const cached = loadCache();
-    const fromCache = cached?.posts.find((post) => post.id === id) ?? null;
-    if (fromCache) return fromCache;
+    const fromStore = postStoreService.getById(id);
+    if (fromStore) return fromStore;
     // Fall back to sessionStorage-based connection post store
-    const connectionPost = getConnectionPostFromStore(id);
-    if (connectionPost) return connectionPost;
-    // Check video cache
-    try {
-      const videoRaw = localStorage.getItem('echolearn_video_cache');
-      if (videoRaw) {
-        const videoCache = JSON.parse(videoRaw) as { posts?: DailyPost[] };
-        const videoPost = videoCache.posts?.find((p: DailyPost) => p.id === id);
-        if (videoPost) return videoPost;
-      }
-    } catch { /* ignore */ }
-    // Check news cache
-    try {
-      const newsRaw = localStorage.getItem('echolearn_news_posts');
-      if (newsRaw) {
-        const newsCache = JSON.parse(newsRaw) as { posts?: DailyPost[] };
-        const newsPost = newsCache.posts?.find((p: DailyPost) => p.id === id);
-        if (newsPost) return newsPost;
-      }
-    } catch { /* ignore */ }
-    // Check shorts cache
-    try {
-      const shortsRaw = localStorage.getItem('echolearn_short_posts');
-      if (shortsRaw) {
-        const shortsCache = JSON.parse(shortsRaw) as { posts?: DailyPost[] };
-        const shortsPost = shortsCache.posts?.find((p: DailyPost) => p.id === id);
-        if (shortsPost) return shortsPost;
-      }
-    } catch { /* ignore */ }
-    return null;
+    return getConnectionPostFromStore(id);
   },
 
   getCachedDailyPosts(): DailyPost[] {
-    const aiPosts = (loadCache()?.posts ?? []).filter((p) => p.sourceType !== 'connection');
-    const videoPosts = youtubeService.getCachedVideoPosts();
-    const shortPosts = youtubeService.getCachedShortPosts();
-    const allVideos = [...videoPosts, ...shortPosts];
-    // Only reassign styles if none of the AI posts have presentationStyle yet.
-    // This prevents reshuffling the feed on every call.
-    const allStyled = aiPosts.length > 0 && aiPosts.every(p => p.presentationStyle);
-    const result = allStyled
-      ? [...aiPosts, ...allVideos.map(p => ({ ...p, presentationStyle: (p.sourceType === 'short' ? 'short' : 'video') as PresentationStyle }))]
-      : assignPresentationStyles(aiPosts, allVideos);
-    if (!allStyled && aiPosts.length > 0) _persistStylesToCache(result);
-    _backgroundGenerateTextArt(result);
-    const newsPosts = newsService.getCachedNewsPosts();
-    return applyStrategyBias(interleaveNewsPosts(result, newsPosts));
+    return postStoreService.getAll();
   },
 
-  /** Delete a single post by ID from both the daily cache and the connection store. */
   deletePost(id: string): boolean {
-    let deleted = false;
-    const cached = loadCache();
-    if (cached) {
-      const before = cached.posts.length;
-      cached.posts = cached.posts.filter((p) => p.id !== id);
-      if (cached.posts.length < before) {
-        saveCache(cached);
-        deleted = true;
-      }
+    const post = postStoreService.getById(id);
+    if (post) {
+      postStoreService.deleteById(id);
+      eventBus.emit({ type: 'POST_DELETED', payload: { id } });
+      return true;
     }
-    // Also try the connection post sessionStorage store (Record<string, DailyPost>)
+    // Also try the connection post sessionStorage store
     try {
       const store = loadConnectionPosts();
       if (store[id]) {
         delete store[id];
         sessionStorage.setItem(CONNECTION_POSTS_KEY, JSON.stringify(store));
-        deleted = true;
+        eventBus.emit({ type: 'POST_DELETED', payload: { id } });
+        return true;
       }
     } catch { /* ignore */ }
-    if (deleted) {
-      eventBus.emit({ type: 'POST_DELETED', payload: { id } });
-    }
-    return deleted;
+    return false;
   },
 
   /** Explicitly clear the post cache (e.g. after "Clear All Data"). */
@@ -988,12 +848,11 @@ export const conceptFeedService = {
    * Generate additional posts that differ from the ones already cached.
    * Appends to the existing cache so old post IDs remain valid.
    */
-  async generateMorePosts(questions: Question[], count = 4): Promise<DailyPost[]> {
+  async generateMorePosts(questions: Question[], count = 6): Promise<DailyPost[]> {
     // Exclude off-topic/flagged questions from post generation
     questions = questions.filter((q) => !q.flagged);
     const date = today();
-    const cached = loadCache();
-    const existingPosts = cached?.posts ?? [];
+    const existingPosts = postStoreService.getAll();
     const existingIds = new Set(existingPosts.map((p) => p.id));
     const existingTitles = existingPosts.map((p) => p.title);
 
@@ -1037,26 +896,14 @@ export const conceptFeedService = {
 
     newPosts = newPosts.slice(0, count);
 
-    // Append to cache so existing post IDs remain valid (AI posts only)
-    if (newPosts.length > 0) {
-      const allPosts = [...existingPosts, ...newPosts];
-      const fingerprint = computeFingerprint(questions);
-      saveCache({ date, fingerprint, posts: allPosts, connectionCards: cached?.connectionCards });
-    }
-
-    // Generate more video posts and interleave (D-03: 4 on pull-for-more)
-    // Await here is acceptable — user explicitly triggered "load more" so brief delay is expected
-    let moreVideos: DailyPost[] = [];
-    try {
-      moreVideos = await youtubeService.generateMoreVideoPosts(4); // D-03: 4 on pull-for-more
-    } catch {
-      // YouTube integration is optional
-    }
-    const styledMore = assignPresentationStyles(newPosts, moreVideos);
+    // Assign presentation styles and generate text-art
+    const styledMore = assignPresentationStyles(newPosts, []);
     const enrichedMore = await generateTextArtContent(styledMore);
 
-    // Persist presentationStyle and textArtContent back to cache for new posts
-    _persistStylesToCache(enrichedMore);
+    // Persist to post store
+    if (enrichedMore.length > 0) {
+      postStoreService.saveBatch(enrichedMore);
+    }
 
     return enrichedMore;
   },
@@ -1140,8 +987,7 @@ export const conceptFeedService = {
     if (!settings.preferences.aiConsentGiven || !settings.llm.isConfigured) return [];
 
     const date = today();
-    const cached = loadCache();
-    const existingPosts = cached?.posts ?? [];
+    const existingPosts = postStoreService.getAll();
     const existingTitles = existingPosts.map(p => p.title);
     const avoidClause = existingTitles.length > 0
       ? `\nIMPORTANT: Do NOT repeat topics already covered. Existing post titles to avoid:\n${existingTitles.slice(0, 20).map(t => `- ${t}`).join('\n')}\nChoose different angles, examples, or connections.`
@@ -1196,13 +1042,10 @@ export const conceptFeedService = {
       // Assign presentation styles and generate text-art
       const styled = assignPresentationStyles(newPosts, []);
       const enriched = await generateTextArtContent(styled);
-      _persistStylesToCache(enriched);
 
-      // Append to cache
+      // Persist to post store
       if (enriched.length > 0) {
-        const allPosts = [...existingPosts, ...enriched];
-        const fingerprint = computeFingerprint(allQuestions);
-        saveCache({ date, fingerprint, posts: allPosts, connectionCards: cached?.connectionCards });
+        postStoreService.saveBatch(enriched);
       }
 
       return enriched;

@@ -46,71 +46,34 @@ export function HomeScreen() {
   const t = today();
   const todayPodcast = getPodcastForDate(t);
 
+  // Load posts from persistent store — no LLM generation on mount.
+  // Posts are created by session-end generation and swipe-to-load.
   useEffect(() => {
-    // Don't fetch posts until questions have finished loading — running with
-    // an empty-but-loading questions array would wipe the cache and flash the feed.
-    if (questionsLoading) return;
+    setDailyPosts(conceptFeedService.getDailyPosts());
 
     const refreshPlannerSummary = () => {
       setActiveChunkCount(plannerService.getActiveChunks().length);
     };
-
-    const refreshFeed = () => {
-      let cancelled = false;
-      void conceptFeedService.getDailyPosts(questions).then((posts) => {
-        if (!cancelled) setDailyPosts(posts);
-      }).catch((err) => console.warn('[HomeScreen] feed refresh failed:', err));
-      return () => { cancelled = true; };
-    };
-
-    let cancelled = false;
-    void conceptFeedService.getDailyPosts(questions).then((posts) => {
-      if (!cancelled) setDailyPosts(posts);
-    }).catch((err) => console.warn('[HomeScreen] feed generation failed:', err));
     refreshPlannerSummary();
 
-    const unsubPlanner = eventBus.subscribe('PLANNER_UPDATED', (event) => {
+    const unsubPlanner = eventBus.subscribe('PLANNER_UPDATED', () => {
       refreshPlannerSummary();
-      // Only invalidate the feed for thread/checkin changes — those meaningfully
-      // affect the planner fingerprint used in feed generation. Chunk status
-      // toggles (e.g. checking off an item) do not warrant a full LLM re-fetch.
-      if (event.payload.reason !== 'chunk') {
-        conceptFeedService.clearCache();
-        refreshFeed();
-      }
     });
 
     const unsubPostDeleted = eventBus.subscribe('POST_DELETED', (event) => {
       setDailyPosts((prev) => prev.filter((p) => p.id !== event.payload.id));
     });
 
-    // Pick up news posts as soon as background generation completes
-    const unsubNews = eventBus.subscribe('NEWS_POSTS_READY', () => {
-      if (!cancelled) refreshFeed();
-    });
-
-    // When new questions are added, the fingerprint changes but getDailyPosts
-    // re-stamps and returns cached posts. New connection cards are generated
-    // asynchronously — do a delayed re-fetch to pick them up.
-    const delayedRefreshTimer = setTimeout(() => {
-      if (!cancelled) refreshFeed();
-    }, 8000);
-
     return () => {
-      cancelled = true;
-      clearTimeout(delayedRefreshTimer);
       unsubPlanner();
       unsubPostDeleted();
-      unsubNews();
     };
-  }, [questions, questionsLoading]);
+  }, []);
 
-  // Re-sync feed from cache when navigating back to /home (e.g. after deleting
-  // a post on PostDetailScreen). HomeScreen is always mounted so state can go
-  // stale while other screens are active.
+  // Re-sync from store when navigating back to /home
   useEffect(() => {
     if (location.pathname === '/home') {
-      setDailyPosts(conceptFeedService.getCachedDailyPosts());
+      setDailyPosts(conceptFeedService.getDailyPosts());
     }
   }, [location.pathname]);
 
