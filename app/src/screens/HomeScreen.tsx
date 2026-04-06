@@ -46,34 +46,62 @@ export function HomeScreen() {
   const t = today();
   const todayPodcast = getPodcastForDate(t);
 
-  // Load posts from persistent store — no LLM generation on mount.
-  // Posts are created by session-end generation and swipe-to-load.
   useEffect(() => {
-    setDailyPosts(conceptFeedService.getDailyPosts());
+    // Don't fetch posts until questions have finished loading — running with
+    // an empty-but-loading questions array would wipe the cache and flash the feed.
+    if (questionsLoading) return;
 
     const refreshPlannerSummary = () => {
       setActiveChunkCount(plannerService.getActiveChunks().length);
     };
+
+    const refreshFeed = () => {
+      let cancelled = false;
+      void conceptFeedService.getDailyPosts(questions).then((posts) => {
+        if (!cancelled) setDailyPosts(posts);
+      }).catch((err) => console.warn('[HomeScreen] feed refresh failed:', err));
+      return () => { cancelled = true; };
+    };
+
+    let cancelled = false;
+    void conceptFeedService.getDailyPosts(questions).then((posts) => {
+      if (!cancelled) setDailyPosts(posts);
+    }).catch((err) => console.warn('[HomeScreen] feed generation failed:', err));
     refreshPlannerSummary();
 
-    const unsubPlanner = eventBus.subscribe('PLANNER_UPDATED', () => {
+    const unsubPlanner = eventBus.subscribe('PLANNER_UPDATED', (event) => {
       refreshPlannerSummary();
+      if (event.payload.reason !== 'chunk') {
+        conceptFeedService.clearCache();
+        refreshFeed();
+      }
     });
 
     const unsubPostDeleted = eventBus.subscribe('POST_DELETED', (event) => {
       setDailyPosts((prev) => prev.filter((p) => p.id !== event.payload.id));
     });
 
+    const unsubNews = eventBus.subscribe('NEWS_POSTS_READY', () => {
+      if (!cancelled) refreshFeed();
+    });
+
+    const delayedRefreshTimer = setTimeout(() => {
+      if (!cancelled) refreshFeed();
+    }, 8000);
+
     return () => {
+      cancelled = true;
+      clearTimeout(delayedRefreshTimer);
       unsubPlanner();
       unsubPostDeleted();
+      unsubNews();
     };
-  }, []);
+  }, [questions, questionsLoading]);
 
-  // Re-sync from store when navigating back to /home
+  // Re-sync feed from cache when navigating back to /home
   useEffect(() => {
     if (location.pathname === '/home') {
-      setDailyPosts(conceptFeedService.getDailyPosts());
+      setDailyPosts(conceptFeedService.getCachedDailyPosts());
     }
   }, [location.pathname]);
 
@@ -85,7 +113,7 @@ export function HomeScreen() {
     isLoadingMoreRef.current = true;
     setIsLoadingMore(true);
     try {
-      const newPosts = await infiniteScrollService.loadNextBatch(questionsRef.current, 10);
+      const newPosts = await infiniteScrollService.loadNextBatch(questionsRef.current, 6);
       if (newPosts.length > 0) {
         // Pre-generate images for all new posts before showing them
         const { inferImageStyle, buildImagePrompt } = await import('../services/postFormatting.service');

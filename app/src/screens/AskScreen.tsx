@@ -83,21 +83,36 @@ function processSessionIfNeeded(session: ChatSession): void {
     }).finally(() => {
       processingSessionIds.delete(session.id);
     });
+  }
+}
 
-    // Generate session-based posts in background and enqueue for swipe-to-load.
-    // Only generate if the pending queue is low (< 4 posts).
-    if (infiniteScrollService.getPendingCount() < 4) {
-      void conceptFeedService.generateSessionPosts(session).then((posts) => {
-        if (posts.length > 0) {
-          infiniteScrollService.enqueuePosts(posts);
-        }
-      }).catch(() => { /* silent — feed still works without session posts */ });
-    }
+/**
+ * Generate session-based posts in background and enqueue for swipe-to-load.
+ * Tracked separately from flashcard processing — uses its own Set to avoid
+ * duplicate generation without being blocked by session.processed.
+ */
+const postGeneratedSessionIds = new Set<string>();
+function generateSessionPostsIfNeeded(session: ChatSession): void {
+  if (
+    !session.messages.some((m) => m.type === 'user') ||
+    postGeneratedSessionIds.has(session.id)
+  ) return;
+
+  // Mark immediately to prevent duplicate calls
+  postGeneratedSessionIds.add(session.id);
+
+  if (infiniteScrollService.getPendingCount() < 4) {
+    void conceptFeedService.generateSessionPosts(session).then((posts) => {
+      if (posts.length > 0) {
+        infiniteScrollService.enqueuePosts(posts);
+      }
+    }).catch(() => { /* silent — feed still works without session posts */ });
   }
 }
 
 function startNewSession(current: ChatSession): ChatSession {
   processSessionIfNeeded(current);
+  generateSessionPostsIfNeeded(current);
   return sessionService.createNew();
 }
 
@@ -140,6 +155,7 @@ export function AskScreen() {
     const isOnAsk = location.pathname.startsWith('/ask');
     if (wasOnAskRef.current && !isOnAsk) {
       processSessionIfNeeded(sessionRef.current);
+      generateSessionPostsIfNeeded(sessionRef.current);
     }
     wasOnAskRef.current = isOnAsk;
   }, [location.pathname]);
@@ -396,6 +412,7 @@ export function AskScreen() {
   const handleSelectSession = useCallback((id: string) => {
     // Process the outgoing session before switching
     processSessionIfNeeded(sessionRef.current);
+    generateSessionPostsIfNeeded(sessionRef.current);
     sessionService.setActiveId(id);
     const loaded = sessionService.getById(id);
     if (loaded) {

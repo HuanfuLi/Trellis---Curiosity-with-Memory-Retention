@@ -1,7 +1,6 @@
 import { chatStream, chatCompletion } from '../providers/llm/index.ts';
 import type { DailyPost, Question } from '../types';
 import { settingsService } from './settings.service.ts';
-import { postStoreService } from './post-store.service';
 
 /**
  * On-enter essay generation service.
@@ -172,8 +171,28 @@ async function* generateTextArtEssay(post: DailyPost, questions: Question[]): As
 }
 
 /**
- * Patch a post's essay content into the persistent post store after generation.
+ * Patch a post's essay content into the correct localStorage cache after generation.
+ * Checks daily cache, video cache, news cache, and shorts cache.
  */
 export function patchPostEssayInCache(postId: string, essay: EssayContent): void {
-  postStoreService.patch(postId, essay);
+  const cacheKeys = ['echolearn_daily_posts', 'echolearn_video_cache', 'echolearn_news_posts', 'echolearn_short_posts'];
+  for (const key of cacheKeys) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const cached = JSON.parse(raw);
+      const posts: DailyPost[] = cached?.posts ?? (Array.isArray(cached) ? cached : []);
+      const idx = posts.findIndex((p: DailyPost) => p.id === postId);
+      if (idx >= 0) {
+        posts[idx] = { ...posts[idx], ...essay };
+        if (cached?.posts) {
+          cached.posts = posts;
+          localStorage.setItem(key, JSON.stringify(cached));
+        } else {
+          localStorage.setItem(key, JSON.stringify(posts));
+        }
+        return;
+      }
+    } catch { /* ignore */ }
+  }
 }
