@@ -93,20 +93,34 @@ function processSessionIfNeeded(session: ChatSession): void {
  */
 const postGeneratedSessionIds = new Set<string>();
 function generateSessionPostsIfNeeded(session: ChatSession): void {
-  if (
-    !session.messages.some((m) => m.type === 'user') ||
-    postGeneratedSessionIds.has(session.id)
-  ) return;
+  const hasUser = session.messages.some((m) => m.type === 'user');
+  const alreadyGenerated = postGeneratedSessionIds.has(session.id);
+  const questionIds = session.messages.filter(m => m.questionId).map(m => m.questionId);
+  const pendingCount = infiniteScrollService.getPendingCount();
+  console.log('[session-posts] generateSessionPostsIfNeeded', {
+    sessionId: session.id,
+    messageCount: session.messages.length,
+    hasUser,
+    alreadyGenerated,
+    questionIds,
+    pendingCount,
+  });
 
-  // Mark immediately to prevent duplicate calls
+  if (!hasUser || alreadyGenerated) return;
+
   postGeneratedSessionIds.add(session.id);
 
-  if (infiniteScrollService.getPendingCount() < 4) {
+  if (pendingCount < 4) {
+    console.log('[session-posts] calling generateSessionPosts...');
     void conceptFeedService.generateSessionPosts(session).then((posts) => {
+      console.log('[session-posts] generated', posts.length, 'posts');
       if (posts.length > 0) {
         infiniteScrollService.enqueuePosts(posts);
+        console.log('[session-posts] enqueued, pendingCount now:', infiniteScrollService.getPendingCount());
       }
-    }).catch(() => { /* silent — feed still works without session posts */ });
+    }).catch((err) => {
+      console.error('[session-posts] FAILED:', err);
+    });
   }
 }
 

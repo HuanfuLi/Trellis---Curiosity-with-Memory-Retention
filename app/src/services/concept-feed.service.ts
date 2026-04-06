@@ -10,6 +10,7 @@ import { newsService } from './news.service';
 import { webSearch } from './web-search.service';
 import { defaultStrategy } from './orchestration-strategy.service';
 import { trajectoryAnalyzerService } from './trajectoryAnalyzer.service';
+import { questionService } from './question.service';
 
 const STORAGE_KEY = 'echolearn_daily_posts';
 const CONNECTION_POSTS_KEY = 'echolearn_connection_posts';
