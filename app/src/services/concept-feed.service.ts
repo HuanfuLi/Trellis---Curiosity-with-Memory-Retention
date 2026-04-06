@@ -298,7 +298,7 @@ function buildGenerationPrompt(
   const hasConnectionCandidates = candidateLines.length > 0;
 
   return [
-    `Create ${Math.min(maxPosts, Math.max(2, context.recent.length + context.related.length))} daily learning posts for ${date}.`,
+    `Create ${maxPosts} daily learning posts for ${date}.`,
     'The posts should feel like intriguing short-form educational essays, not flashcards or summaries.',
     'Each post must have a punchy teaserHook and a vivid teaserPreview.',
     'teaserHook: max 8 words. Punchy, curiosity-driven, sounds like a podcast title or tweet. Examples: "Your brain lied about rereading", "Why forgetting is a feature", "The 20-minute rule nobody follows".',
