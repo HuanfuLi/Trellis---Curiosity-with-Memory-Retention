@@ -66,8 +66,8 @@ created: 2026-04-05
 |----------|-------------|------------|-------------------|
 | UI shell renders before streaming | POST-03 | Visual layout verification | Open post detail, verify heading/body/follow-up containers render before LLM content appears |
 | No layout shift during streaming | POST-03 | Visual behavior | Open post, observe streaming — no jumps, no container resizing |
-| Daily goal progress bar | REVIEW-03 | NOT IMPLEMENTED | Code not present — milestone gap, not test gap |
-| Daily Goal setting label | REVIEW-04 | NOT IMPLEMENTED | Code not present — milestone gap, not test gap |
+| Daily goal progress bar | REVIEW-03 | DESCOPED | Intentionally removed by user |
+| Daily Goal setting label | REVIEW-04 | DESCOPED | Intentionally removed by user |
 | Error state with retry | POST-08 | Requires LLM failure simulation | Disconnect network, open post, verify error + retry button |
 | Text-art detail page vivid essay | POST-07 | Content quality check | Open text-art post, verify story/conversation tone |
 
@@ -100,4 +100,4 @@ created: 2026-04-05
 - POST-05 — structural test confirming youtube.service defers summarizeTranscript
 - POST-06 — structural test confirming news.service defers chatCompletion
 
-**Noted:** REVIEW-03 and REVIEW-04 are NOT IMPLEMENTED in codebase (milestone-level gaps, not test gaps).
+**Noted:** REVIEW-03 and REVIEW-04 intentionally descoped by user (daily goal feature removed).
