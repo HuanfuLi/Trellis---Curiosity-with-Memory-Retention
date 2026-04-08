@@ -79,7 +79,7 @@ export function ChatInput({ onSend, placeholder = 'Ask anything...', disabled, w
   return (
     <form
       onSubmit={handleSubmit}
-      style={{ position: 'fixed', bottom: 'calc(80px + var(--safe-area-bottom))', left: 0, right: 0, padding: '0 16px 16px' }}
+      style={{ flexShrink: 0, padding: '0 16px 16px' }}
     >
       <div style={{ maxWidth: '448px', margin: '0 auto' }}>
         <div

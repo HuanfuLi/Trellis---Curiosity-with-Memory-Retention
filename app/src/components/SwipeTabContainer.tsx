@@ -142,6 +142,11 @@ export function SwipeTabContainer({ screens, routes, children }: SwipeTabContain
     );
 
     if (newIndex !== activeIndexRef.current) {
+      // Adjust dragOffset so visual position doesn't jump when activeIndex changes.
+      // stripX = -(activeIndex * sw) + dragOffset, so compensate for the index shift.
+      const currentOffset = dragOffset.get();
+      const sw = screenWidthRef.current;
+      dragOffset.set(currentOffset + (newIndex - activeIndexRef.current) * sw);
       activeIndexRef.current = newIndex;
       navigate(routes[newIndex]);
     }
@@ -155,8 +160,10 @@ export function SwipeTabContainer({ screens, routes, children }: SwipeTabContain
     if (targetIndex === activeIndexRef.current) return;
     if (targetIndex < 0 || targetIndex >= routes.length) return;
 
-    // Calculate visual jump distance so the spring animates from old position
-    const jump = (activeIndexRef.current - targetIndex) * screenWidthRef.current;
+    // Calculate visual jump so strip starts at old position and animates to new.
+    // stripX = -(activeIndex * sw) + dragOffset → to keep visual position at old screen,
+    // dragOffset must compensate: jump = (targetIndex - oldIndex) * sw
+    const jump = (targetIndex - activeIndexRef.current) * screenWidthRef.current;
     activeIndexRef.current = targetIndex;
 
     // Set dragOffset to the visual distance (appears at old position)

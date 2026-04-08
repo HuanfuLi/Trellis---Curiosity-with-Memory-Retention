@@ -510,7 +510,7 @@ export function AskScreen() {
       <div style={{ height: `${HEADER_HEIGHT}px`, flexShrink: 0 }} />
 
       {/* Messages */}
-      <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '16px', paddingBottom: 'calc(140px + var(--safe-area-bottom))' }}>
+      <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '16px', paddingBottom: '16px' }}>
         {session.origin?.type === 'post' && (
           <div
             style={{
@@ -724,7 +724,7 @@ export function AskScreen() {
           <div
             onClick={() => setShowHistory(false)}
             style={{
-              position: 'fixed',
+              position: 'absolute',
               inset: 0,
               backgroundColor: 'rgba(0,0,0,0.4)',
               zIndex: 40,
@@ -734,7 +734,7 @@ export function AskScreen() {
           {/* Drawer */}
           <div
             style={{
-              position: 'fixed',
+              position: 'absolute',
               top: 0,
               left: 0,
               width: '80%',
