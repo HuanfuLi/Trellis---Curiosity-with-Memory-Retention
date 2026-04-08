@@ -1,22 +1,23 @@
 import { useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { motion, useTransform } from 'framer-motion';
 import { Home, GitBranch, Mic, Calendar, Settings } from 'lucide-react';
 import { hapticImpactLight } from '../lib/haptics';
+import { useSwipeTab } from '../lib/swipe-tab-context';
 
 interface NavItem {
-  to: string;
   icon: React.ReactNode;
   label: string;
+  index: number;
 }
 
 const leftItems: NavItem[] = [
-  { to: '/home', icon: <Home size={22} />, label: 'Home' },
-  { to: '/planner', icon: <Calendar size={22} />, label: 'Planner' },
+  { icon: <Home size={22} />, label: 'Home', index: 0 },
+  { icon: <Calendar size={22} />, label: 'Planner', index: 1 },
 ];
 
 const rightItems: NavItem[] = [
-  { to: '/graph', icon: <GitBranch size={22} />, label: 'Graph' },
-  { to: '/settings', icon: <Settings size={22} />, label: 'Settings' },
+  { icon: <GitBranch size={22} />, label: 'Graph', index: 3 },
+  { icon: <Settings size={22} />, label: 'Settings', index: 4 },
 ];
 
 // Shared style to suppress all native mobile long-press / callout behaviors
@@ -31,9 +32,56 @@ interface BottomNavigationProps {
   onAskLongPressRelease?: () => void;
 }
 
+/** Tab button with real-time color tracking via swipeProgress MotionValue */
+function TabButton({ item, swipeProgress, onTap }: {
+  item: NavItem;
+  swipeProgress: import('framer-motion').MotionValue<number>;
+  onTap: () => void;
+}) {
+  const i = item.index;
+  const color = useTransform(
+    swipeProgress,
+    [i - 1, i, i + 1],
+    ['var(--muted-foreground)', 'var(--primary-40)', 'var(--muted-foreground)'],
+  );
+  const bgColor = useTransform(
+    swipeProgress,
+    [i - 0.5, i, i + 0.5],
+    ['transparent', 'var(--secondary-container)', 'transparent'],
+  );
+
+  return (
+    <motion.button
+      onClick={onTap}
+      onContextMenu={(e) => e.preventDefault()}
+      className="active-squish"
+      style={{
+        ...noCallout,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '4px',
+        padding: '8px 16px',
+        borderRadius: 'var(--radius-pill)',
+        transition: 'none',
+        minWidth: '56px',
+        height: '56px',
+        border: 'none',
+        cursor: 'pointer',
+        backgroundColor: bgColor,
+        color,
+        flex: 1,
+      }}
+    >
+      {item.icon}
+      <span style={{ fontSize: '0.7rem', fontWeight: 500 }}>{item.label}</span>
+    </motion.button>
+  );
+}
+
 export function BottomNavigation({ onAskLongPress, onAskLongPressRelease }: BottomNavigationProps) {
-  const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const { swipeProgress, navigateToTab } = useSwipeTab();
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressFired = useRef(false);
 
@@ -61,8 +109,29 @@ export function BottomNavigation({ onAskLongPress, onAskLongPressRelease }: Bott
 
   const handleAskClick = () => {
     // Only navigate on a clean tap (long-press resets longPressFired in handleAskPointerRelease)
-    if (!longPressFired.current) navigate('/ask');
+    if (!longPressFired.current) navigateToTab(2);
   };
+
+  // Ask FAB color tracking (index 2)
+  const fabBg = useTransform(
+    swipeProgress,
+    [1.5, 2, 2.5],
+    ['var(--primary-40)', 'var(--primary-30)', 'var(--primary-40)'],
+  );
+  const fabShadow = useTransform(
+    swipeProgress,
+    [1.5, 2, 2.5],
+    [
+      '0 4px 14px rgba(0,0,0,0.2)',
+      '0 0 0 4px color-mix(in srgb, var(--primary-40) 25%, transparent), 0 4px 14px rgba(0,0,0,0.25)',
+      '0 4px 14px rgba(0,0,0,0.2)',
+    ],
+  );
+  const fabScale = useTransform(
+    swipeProgress,
+    [1.5, 2, 2.5],
+    [1, 1.08, 1],
+  );
 
   return (
     <nav
@@ -91,112 +160,56 @@ export function BottomNavigation({ onAskLongPress, onAskLongPressRelease }: Bott
         }}
       >
         {/* Left items */}
-        {leftItems.map((item) => {
-          const isActive = pathname.startsWith(item.to);
-          return (
-            <button
-              key={item.to}
-              onClick={() => navigate(item.to)}
-              onContextMenu={(e) => e.preventDefault()}
-              className="active-squish"
-              style={{
-                ...noCallout,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '4px',
-                padding: '8px 16px',
-                borderRadius: 'var(--radius-pill)',
-                transition: 'all 0.2s',
-                minWidth: '56px',
-                height: '56px',
-                border: 'none',
-                cursor: 'pointer',
-                backgroundColor: isActive ? 'var(--secondary-container)' : 'transparent',
-                color: isActive ? 'var(--primary-40)' : 'var(--muted-foreground)',
-                flex: 1,
-              }}
-            >
-              {item.icon}
-              <span style={{ fontSize: '0.7rem', fontWeight: 500 }}>{item.label}</span>
-            </button>
-          );
-        })}
+        {leftItems.map((item) => (
+          <TabButton
+            key={item.index}
+            item={item}
+            swipeProgress={swipeProgress}
+            onTap={() => navigateToTab(item.index)}
+          />
+        ))}
 
         {/* Center FAB — Ask */}
-        {(() => {
-          const isActive = pathname.startsWith('/ask');
-          return (
-            <button
-              onClick={handleAskClick}
-              onPointerDown={handleAskPointerDown}
-              onPointerUp={handleAskPointerRelease}
-              onPointerLeave={handleAskPointerRelease}
-              onPointerCancel={handleAskPointerRelease}
-              onContextMenu={(e) => e.preventDefault()}
-              className="active-squish"
-              style={{
-                ...noCallout,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '4px',
-                width: '60px',
-                height: '60px',
-                borderRadius: '20px',
-                border: 'none',
-                cursor: 'pointer',
-                backgroundColor: isActive ? 'var(--primary-30)' : 'var(--primary-40)',
-                color: 'white',
-                boxShadow: isActive
-                  ? '0 0 0 4px color-mix(in srgb, var(--primary-40) 25%, transparent), 0 4px 14px rgba(0,0,0,0.25)'
-                  : '0 4px 14px rgba(0,0,0,0.2)',
-                flexShrink: 0,
-                transform: isActive ? 'scale(1.08)' : 'scale(1)',
-                transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)',
-              }}
-            >
-              <Mic size={24} />
-              <span style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.02em' }}>Ask</span>
-            </button>
-          );
-        })()}
+        <motion.button
+          onClick={handleAskClick}
+          onPointerDown={handleAskPointerDown}
+          onPointerUp={handleAskPointerRelease}
+          onPointerLeave={handleAskPointerRelease}
+          onPointerCancel={handleAskPointerRelease}
+          onContextMenu={(e) => e.preventDefault()}
+          className="active-squish"
+          style={{
+            ...noCallout,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '4px',
+            width: '60px',
+            height: '60px',
+            borderRadius: '20px',
+            border: 'none',
+            cursor: 'pointer',
+            backgroundColor: fabBg,
+            color: 'white',
+            boxShadow: fabShadow,
+            flexShrink: 0,
+            scale: fabScale,
+          }}
+        >
+          <Mic size={24} />
+          <span style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.02em' }}>Ask</span>
+        </motion.button>
 
         {/* Right items */}
-        {rightItems.map((item) => {
-          const isActive = pathname.startsWith(item.to);
-          return (
-            <button
-              key={item.to}
-              onClick={() => navigate(item.to)}
-              onContextMenu={(e) => e.preventDefault()}
-              className="active-squish"
-              style={{
-                ...noCallout,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '4px',
-                padding: '8px 16px',
-                borderRadius: 'var(--radius-pill)',
-                transition: 'all 0.2s',
-                minWidth: '56px',
-                height: '56px',
-                border: 'none',
-                cursor: 'pointer',
-                backgroundColor: isActive ? 'var(--secondary-container)' : 'transparent',
-                color: isActive ? 'var(--primary-40)' : 'var(--muted-foreground)',
-                flex: 1,
-              }}
-            >
-              {item.icon}
-              <span style={{ fontSize: '0.7rem', fontWeight: 500 }}>{item.label}</span>
-            </button>
-          );
-        })}
+        {rightItems.map((item) => (
+          <TabButton
+            key={item.index}
+            item={item}
+            swipeProgress={swipeProgress}
+            onTap={() => navigateToTab(item.index)}
+          />
+        ))}
       </div>
     </nav>
   );

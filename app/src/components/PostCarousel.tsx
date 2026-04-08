@@ -136,6 +136,7 @@ export function PostCarousel({ images, isLoading = false, onIndexChange }: PostC
 
   return (
     <div
+      data-no-swipe-nav="true"
       style={{
         position: 'relative',
         width: '100%',

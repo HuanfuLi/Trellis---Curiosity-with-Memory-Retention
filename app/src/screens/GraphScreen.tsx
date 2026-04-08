@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import MindElixir from 'mind-elixir';
 import 'mind-elixir/style';
 import type { MindElixirData, MindElixirInstance, NodeObj } from 'mind-elixir';
@@ -205,9 +205,10 @@ function setAllExpanded(node: NodeObj, expanded: boolean): void {
   }
 }
 
-function MasterMap({ nodes, edges, onNodeClick }: MasterMapProps) {
+function MasterMap({ nodes, edges, onNodeClick, isVisible }: MasterMapProps & { isVisible: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const instanceRef = useRef<MindElixirInstance | null>(null);
+  const initCompletedRef = useRef(false);
   const [allExpanded, setAllExpandedState] = useState(true);
 
   // Keep a stable ref to the callback so the effect doesn't re-run when it changes
@@ -217,8 +218,27 @@ function MasterMap({ nodes, edges, onNodeClick }: MasterMapProps) {
   // Node lookup ref — populated synchronously inside the main effect
   const nodeMapRef = useRef<Record<string, Question>>({});
 
+  // Reset init tracking when nodes change so the map reinitializes with new data
+  useEffect(() => {
+    initCompletedRef.current = false;
+  }, [nodes, edges]);
+
   useEffect(() => {
     if (!containerRef.current) return;
+
+    // Skip initialization when not visible (prevents 0-width MindElixir bug)
+    if (!isVisible) return;
+
+    // If already initialized with current data, just re-center/re-scale
+    if (initCompletedRef.current && instanceRef.current) {
+      const mei = instanceRef.current;
+      mei.toCenter();
+      const containerWidth = containerRef.current.offsetWidth;
+      if (containerWidth > 0) {
+        mei.move(-containerWidth * 0.25, 0);
+      }
+      return;
+    }
 
     // Populate nodeMap synchronously before creating listeners
     nodeMapRef.current = Object.fromEntries(nodes.map((n) => [n.id, n]));
@@ -245,6 +265,7 @@ function MasterMap({ nodes, edges, onNodeClick }: MasterMapProps) {
     containerRef.current.style.visibility = 'hidden';
 
     mei.init(buildMindElixirData(nodes));
+    initCompletedRef.current = true;
 
     // Zoom to 50%, centre, then nudge left so the right-expanding tree
     // uses more of the portrait viewport instead of leaving the left half empty.
@@ -319,8 +340,9 @@ function MasterMap({ nodes, edges, onNodeClick }: MasterMapProps) {
       container.removeEventListener('touchend', handleTouchEnd);
       instanceRef.current?.destroy();
       instanceRef.current = null;
+      initCompletedRef.current = false;
     };
-  }, [nodes, edges]);
+  }, [nodes, edges, isVisible]);
 
   if (nodes.length === 0) {
     return (
@@ -372,7 +394,7 @@ function MasterMap({ nodes, edges, onNodeClick }: MasterMapProps) {
         position: 'relative',
       }}
     >
-      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+      <div ref={containerRef} data-no-swipe-nav="true" style={{ width: '100%', height: '100%' }} />
       <button
         onClick={handleToggleExpand}
         title={allExpanded ? 'Collapse all' : 'Expand all'}
@@ -734,6 +756,8 @@ let cachedEdges: GraphEdge[] | null = null;
 
 export function GraphScreen() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const isVisible = pathname === '/graph';
   const [view, setView] = useState<'map' | 'inbox'>('map');
   const [nodes, setNodes] = useState<Question[]>(cachedNodes ?? []);
   const [edges, setEdges] = useState<GraphEdge[]>(cachedEdges ?? []);
@@ -950,7 +974,7 @@ export function GraphScreen() {
 
       {view === 'map' ? (
         <>
-          <MasterMap nodes={nodes} edges={edges} onNodeClick={setSelectedNode} />
+          <MasterMap nodes={nodes} edges={edges} onNodeClick={setSelectedNode} isVisible={isVisible} />
 
           {selectedNode && (
             <div
