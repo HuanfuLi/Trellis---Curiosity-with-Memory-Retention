@@ -172,7 +172,7 @@
 
 **Plans:** 5/4 plans complete
 - [x] 14-01-PLAN.md — Strip knowledgeDecision from first call, strip IngestionDecision labels, add anchor type fields
-- [x] 14-02-PLAN.md �� Second classification LLM call, anchor creation, Q&A attachment logic
+- [x] 14-02-PLAN.md — Second classification LLM call, anchor creation, Q&A attachment logic
 - [x] 14-03-PLAN.md — Mindmap renders anchor nodes only with Mind-Elixir expand/retract
 
 **Success Criteria:**
@@ -528,6 +528,30 @@ Plans:
 - [ ] 21-02-PLAN.md — Card-face-only batch generation + post-essay service + video/news deferrals (POST-01, POST-04..06)
 - [ ] 21-03-PLAN.md — PostDetailScreen on-enter streaming + UI shell + caching + error handling (POST-02, POST-03, POST-07, POST-08)
 
+### Phase 22: Swipe Navigation Between First-Level Screens
+
+**Goal:** Enable horizontal swipe gestures to switch between the 5 top-level tabs (Home, Planner, Ask, Graph, Settings) with real-time bottom nav tracking, slide animations, gesture conflict resolution, and always-mounted screen strategy.
+
+**Requirements:**
+- SWIPE-01: Axis lock after ~10px — horizontal wins for swipe, vertical wins for scroll
+- SWIPE-02: Swipe threshold at 20% screen width — below snaps back, above commits
+- SWIPE-03: Rubber-band resistance at edges (Home left, Settings right)
+- SWIPE-04: Keyboard-open suppresses swipe (Ask screen input focus)
+- SWIPE-05: Nested draggable suppression (PostCarousel, mind-elixir canvas)
+- SWIPE-06: All 5 screens always-mounted with display toggling
+- SWIPE-07: GraphScreen eager-loaded (remove React.lazy)
+- SWIPE-08: Bottom nav real-time highlight tracking proportional to drag
+- SWIPE-09: Tab tap triggers slide animation (not instant), non-adjacent skips intermediates
+- SWIPE-10: Sub-screens disable swipe, render via Outlet overlay
+
+**Depends on:** Phase 21
+
+**Plans:** 2 plans (2 waves)
+
+Plans:
+- [ ] 22-01-PLAN.md — Pure swipe logic functions + tests + SwipeTabContainer + context
+- [ ] 22-02-PLAN.md — App.tsx restructuring + BottomNavigation tracking + gesture conflict attributes + visual verification
+
 ---
 
-_Created: 2026-03-26 | v1.1 Roadmap | 15 phases | 89 requirements mapped_
+_Created: 2026-03-26 | v1.1 Roadmap | 16 phases | 91 requirements mapped_
