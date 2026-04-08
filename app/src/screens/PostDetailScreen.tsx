@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, Loader2, MessageSquare, RefreshCw } from 'lucide-react';
 import { DetailMenu } from '../components/DetailMenu';
+import { Header, HEADER_HEIGHT } from '../components/ui/Header';
 import type { ChatSession, DailyPost, GeneratedImage, Question, SessionMessage } from '../types';
 import { useQuestions } from '../state/useQuestions';
 import { conceptFeedService } from '../services/concept-feed.service';
@@ -365,7 +366,16 @@ export function PostDetailScreen() {
 
   if (loadingPost) {
     return (
-      <div style={{ padding: '24px 16px', maxWidth: '448px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <div style={{ padding: `calc(24px + ${HEADER_HEIGHT}px) 16px 24px`, maxWidth: '448px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <Header
+          title="Post"
+          centered
+          left={
+            <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}>
+              <ArrowLeft size={20} />
+            </button>
+          }
+        />
         <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
         Loading post...
       </div>
@@ -377,10 +387,16 @@ export function PostDetailScreen() {
     const connMeta = connectionMetaRef.current;
     const discMeta = discoverMetaRef.current;
     return (
-      <div style={{ padding: '16px 16px 104px', maxWidth: '448px', margin: '0 auto' }}>
-        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center', marginBottom: '14px' }}>
-          <ArrowLeft size={20} />
-        </button>
+      <div style={{ padding: `calc(16px + ${HEADER_HEIGHT}px) 16px 104px`, maxWidth: '448px', margin: '0 auto' }}>
+        <Header
+          title="Post"
+          centered
+          left={
+            <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}>
+              <ArrowLeft size={20} />
+            </button>
+          }
+        />
 
         {/* Connection concept pills */}
         {connMeta && (
@@ -439,10 +455,16 @@ export function PostDetailScreen() {
 
   if (!post) {
     return (
-      <div style={{ padding: '24px 16px', maxWidth: '448px', margin: '0 auto' }}>
-        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}>
-          <ArrowLeft size={20} />
-        </button>
+      <div style={{ padding: `calc(24px + ${HEADER_HEIGHT}px) 16px 24px`, maxWidth: '448px', margin: '0 auto' }}>
+        <Header
+          title="Post"
+          centered
+          left={
+            <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}>
+              <ArrowLeft size={20} />
+            </button>
+          }
+        />
         <h2 style={{ marginTop: '24px', marginBottom: '8px' }}>Post not found</h2>
         <p style={{ color: 'var(--muted-foreground)' }}>This post is no longer available in the current daily feed.</p>
       </div>
@@ -455,7 +477,26 @@ export function PostDetailScreen() {
   const meta = connectionMetaRef.current;
 
   return (
-    <div style={{ padding: '16px 16px 104px', maxWidth: '448px', margin: '0 auto' }}>
+    <div style={{ padding: `calc(16px + ${HEADER_HEIGHT}px) 16px 104px`, maxWidth: '448px', margin: '0 auto' }}>
+      <Header
+        title="Post"
+        centered
+        left={
+          <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}>
+            <ArrowLeft size={20} />
+          </button>
+        }
+        right={
+          <DetailMenu
+            deleteLabel="this post"
+            onDelete={() => {
+              conceptFeedService.deletePost(post!.id);
+              toast('Post deleted', 'success');
+              navigate(-1);
+            }}
+          />
+        }
+      />
       <style>{`
         @keyframes pulse {
           0%, 100% { opacity: 1; }
@@ -473,19 +514,6 @@ export function PostDetailScreen() {
           Suggested move: {moveState.move.title}
         </div>
       )}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}>
-          <ArrowLeft size={20} />
-        </button>
-        <DetailMenu
-          deleteLabel="this post"
-          onDelete={() => {
-            conceptFeedService.deletePost(post!.id);
-            toast('Post deleted', 'success');
-            navigate(-1);
-          }}
-        />
-      </div>
 
       {/* Concept pills — shown for connection posts */}
       {isConnectionPost && meta && (
@@ -566,10 +594,12 @@ export function PostDetailScreen() {
             for (const ch of post.id) h = ((h << 5) - h + ch.charCodeAt(0)) | 0;
             const theme = TEXT_ART_THEMES[((h % TEXT_ART_THEMES.length) + TEXT_ART_THEMES.length) % TEXT_ART_THEMES.length];
             const content = post.textArtContent.split('\n').filter(Boolean).join(' ');
+            const fontSize = content.length > 100 ? '1.25rem' : content.length > 60 ? '1.5rem' : '2rem';
             return (
               <div style={{
                 width: '100%',
                 aspectRatio: '1/1',
+                maxHeight: '360px',
                 overflow: 'hidden',
                 backgroundColor: theme.bg,
                 backgroundImage: `radial-gradient(circle, ${theme.dot} 0.8px, transparent 0.8px)`,
@@ -582,7 +612,7 @@ export function PostDetailScreen() {
                 marginBottom: '8px',
               }}>
                 <p style={{
-                  fontSize: '2rem',
+                  fontSize,
                   fontWeight: 700,
                   lineHeight: 1.3,
                   color: theme.text,
@@ -590,6 +620,7 @@ export function PostDetailScreen() {
                   textAlign: 'center',
                   fontFamily: theme.font,
                   textWrap: 'balance',
+                  wordBreak: 'break-word',
                 }}>{content}</p>
               </div>
             );
