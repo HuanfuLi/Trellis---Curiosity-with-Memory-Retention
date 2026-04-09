@@ -60,11 +60,12 @@ Comprehensive audit of the EchoLearn codebase covering security, data safety, ra
 - **Status:** Open — low risk, existing mitigation in place
 
 ### 2.4 PostDetailScreen Abort Flag Double-Set
-- **Severity:** P1 High
-- **Problem:** `generateAbortRef.current = true; generateAbortRef.current = false;` executed synchronously on the same tick — the `true` is immediately overwritten, so any in-flight async generator never sees the abort signal.
-- **Files:** `screens/PostDetailScreen.tsx`
-- **Solution:** Removed the redundant `true` assignment. The cleanup function from the previous useEffect run already sets the flag to `true`; the new effect just resets it to `false`.
-- **Status:** Fixed
+- Severity: P1 High
+- Problem: `onEnterAbortRef.current = false;` executed at the start of `useEffect` sabotages the cleanup signal of the previous run (in StrictMode or rapid re-renders), leading to parallel LLM generators and redundant calls.
+- Files: `screens/PostDetailScreen.tsx`, `screens/ConnectionPostScreen.tsx`
+- Solution: Replaced shared `useRef` abort flags with local `aborted` variables within `useEffect` closures. Each effect run now has its own independent lifecycle control.
+- Status: Fixed Correctly
+
 
 ---
 

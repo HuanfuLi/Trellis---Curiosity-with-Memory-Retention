@@ -74,14 +74,12 @@ export function PostDetailScreen() {
   const [, setEssayStreaming] = useState('');
   const [isGeneratingEssay, setIsGeneratingEssay] = useState(false);
   const [essayError, setEssayError] = useState<string | null>(null);
-  const generateAbortRef = useRef(false);
 
   // On-enter essay generation state (for posts with empty bodyMarkdown)
   const [streamingBody, setStreamingBody] = useState('');
   const [isStreamingOnEnter, setIsStreamingOnEnter] = useState(false);
   const [onEnterError, setOnEnterError] = useState<string | null>(null);
   const [onEnterMeta, setOnEnterMeta] = useState<Omit<EssayContent, 'bodyMarkdown'> | null>(null);
-  const onEnterAbortRef = useRef(false);
 
   // Q&A streaming state
   const [qaStreaming, setQaStreaming] = useState('');
@@ -96,10 +94,7 @@ export function PostDetailScreen() {
   useEffect(() => {
     if (!id) return;
 
-    // Reset abort flag for this effect run. The cleanup function from the
-    // *previous* effect run already set this to true, which stopped any
-    // in-flight generation. We now clear it so the new generation can proceed.
-    generateAbortRef.current = false;
+    let aborted = false;
     setEssayError(null);
     setEssayStreaming('');
     setLoadingPost(true);
@@ -130,11 +125,11 @@ export function PostDetailScreen() {
             connectionMeta.conceptNounA,
             connectionMeta.conceptNounB,
           )) {
-            if (generateAbortRef.current) return;
+            if (aborted) return;
             accumulated += chunk;
             setEssayStreaming(accumulated);
           }
-          if (generateAbortRef.current) return;
+          if (aborted) return;
           const saved = conceptFeedService.saveConnectionPost(
             connectionMeta.questionA,
             connectionMeta.questionB,
@@ -147,15 +142,15 @@ export function PostDetailScreen() {
           setSession(sessionService.getOrCreatePostSession(saved, questionsRef.current));
           setEssayStreaming('');
         } catch (err) {
-          if (!generateAbortRef.current) {
+          if (!aborted) {
             setEssayError(err instanceof Error ? err.message : 'Generation failed. Check your AI settings.');
           }
         } finally {
-          if (!generateAbortRef.current) setIsGeneratingEssay(false);
+          if (!aborted) setIsGeneratingEssay(false);
         }
       })();
 
-      return () => { generateAbortRef.current = true; };
+      return () => { aborted = true; };
     }
 
     if (discoverMeta && id) {
@@ -170,26 +165,26 @@ export function PostDetailScreen() {
             discoverMeta.concept,
             discoverMeta.title,
           )) {
-            if (generateAbortRef.current) return;
+            if (aborted) return;
             accumulated += chunk;
             setEssayStreaming(accumulated);
           }
-          if (generateAbortRef.current) return;
+          if (aborted) return;
           // Use the URL id as stable post ID so revisits find it in cache
           const saved = conceptFeedService.saveDiscoverPost(discoverMeta.concept, discoverMeta.title, accumulated, id);
           setPost(saved);
           setSession(sessionService.getOrCreatePostSession(saved, questionsRef.current));
           setEssayStreaming('');
         } catch (err) {
-          if (!generateAbortRef.current) {
+          if (!aborted) {
             setEssayError(err instanceof Error ? err.message : 'Generation failed. Check your AI settings.');
           }
         } finally {
-          if (!generateAbortRef.current) setIsGeneratingEssay(false);
+          if (!aborted) setIsGeneratingEssay(false);
         }
       })();
 
-      return () => { generateAbortRef.current = true; };
+      return () => { aborted = true; };
     }
 
     setPost(null);
@@ -206,7 +201,7 @@ export function PostDetailScreen() {
     // Skip shorts (they play inline, no essay)
     if (post.sourceType === 'short') return;
 
-    onEnterAbortRef.current = false;
+    let aborted = false;
     setIsStreamingOnEnter(true);
     setOnEnterError(null);
     setStreamingBody('');
@@ -216,15 +211,15 @@ export function PostDetailScreen() {
       let accumulated = '';
       try {
         for await (const chunk of generatePostEssay(post, questionsRef.current)) {
-          if (onEnterAbortRef.current) return;
+          if (aborted) return;
           accumulated += chunk;
           setStreamingBody(accumulated);
         }
-        if (onEnterAbortRef.current) return;
+        if (aborted) return;
 
         // Generate meta (whyCare, takeaway, quickAskPrompts) after body completes
         const meta = await generateEssayMeta(post, accumulated);
-        if (onEnterAbortRef.current) return;
+        if (aborted) return;
 
         const essay: EssayContent = { bodyMarkdown: accumulated, ...meta };
 
@@ -236,16 +231,17 @@ export function PostDetailScreen() {
         // Cache to localStorage
         patchPostEssayInCache(post.id, essay);
       } catch (err) {
-        if (!onEnterAbortRef.current) {
+        if (!aborted) {
           setOnEnterError(err instanceof Error ? err.message : 'Essay generation failed. Check your AI settings.');
         }
       } finally {
-        if (!onEnterAbortRef.current) setIsStreamingOnEnter(false);
+        if (!aborted) setIsStreamingOnEnter(false);
       }
     })();
 
-    return () => { onEnterAbortRef.current = true; };
+    return () => { aborted = true; };
   }, [post?.id, post?.bodyMarkdown]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   // Fetch cached images for the carousel whenever the post changes.
   // If no images are cached (post has none or generation hasn't run), shows essay alone.
@@ -610,6 +606,7 @@ export function PostDetailScreen() {
                 padding: '32px 28px',
                 boxSizing: 'border-box',
                 marginBottom: '8px',
+                borderRadius: 'var(--radius-xl)',
               }}>
                 <p style={{
                   fontSize,

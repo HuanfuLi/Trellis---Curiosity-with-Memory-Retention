@@ -34,7 +34,6 @@ export function ConnectionPostScreen() {
   const [streaming, setStreaming] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const abortRef = useRef(false);
 
   // Q&A section state
   const [session, setSession] = useState<ChatSession | null>(null);
@@ -69,7 +68,7 @@ export function ConnectionPostScreen() {
       return;
     }
 
-    abortRef.current = false;
+    let aborted = false;
     setIsGenerating(true);
     setError(null);
 
@@ -77,27 +76,28 @@ export function ConnectionPostScreen() {
       let accumulated = '';
       try {
         for await (const chunk of conceptFeedService.generateConnectionPost(qA, qB, conceptNounA, conceptNounB)) {
-          if (abortRef.current) return;
+          if (aborted) return;
           accumulated += chunk;
           setStreaming(accumulated);
         }
-        if (abortRef.current) return;
+        if (aborted) return;
         const saved = conceptFeedService.saveConnectionPost(qA, qB, conceptNounA, conceptNounB, accumulated);
         conceptFeedService.setConnectionPostId(idA, idB, saved.id);
         setPost(saved);
         setSession(sessionService.getOrCreatePostSession(saved, questionsRef.current));
         setStreaming('');
       } catch (err) {
-        if (!abortRef.current) {
+        if (!aborted) {
           setError(err instanceof Error ? err.message : 'Generation failed. Check your AI settings.');
         }
       } finally {
-        if (!abortRef.current) setIsGenerating(false);
+        if (!aborted) setIsGenerating(false);
       }
     })();
 
-    return () => { abortRef.current = true; };
+    return () => { aborted = true; };
   }, [idA, idB]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   // Auto-scroll when Q&A messages arrive
   const initialMsgCount = useRef<number | null>(null);
