@@ -50,4 +50,6 @@ This document evolves at phase transitions and milestone boundaries.
 
 **Phase 14 complete (2026-03-29):** Knowledge Graph Classification & Anchor Nodes — dedicated second LLM classification call, concept anchor nodes (isAnchorNode), Q&A attachment via parentId, mindmap renders anchors as collapsed leaves with expand/retract Q&A children. GRAPH-01 through GRAPH-06 validated.
 
-_Last updated: 2026-03-29 — Phase 14 complete_
+**Phase 23 complete (2026-04-09):** Incremental Classification Pipeline + Ask Rate Limiter — replaced single-call classification with 3-step branch→cluster→anchor pipeline using append-only messages for KV cache efficiency. Added configurable monthly rate limiter with Settings UI, inline warning/error banners, and send button disable at limit.
+
+_Last updated: 2026-04-09 — Phase 23 complete_
