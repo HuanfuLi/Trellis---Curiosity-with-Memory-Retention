@@ -17,6 +17,7 @@ import { questionService } from '../services/question.service';
 import { postContextQaService } from '../services/post-context-qa.service';
 import { chatCompletion } from '../providers/llm';
 import { settingsService } from '../services/settings.service';
+import { getRateLimitStatus, type RateLimitStatus } from '../services/ask-rate-limiter.service';
 import { toast } from '../lib/toast';
 import { Header, HEADER_HEIGHT } from '../components/ui/Header';
 
@@ -134,6 +135,15 @@ export function AskScreen() {
   const [editingContent, setEditingContent] = useState('');
   const [historySearch, setHistorySearch] = useState('');
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [rateLimitStatus, setRateLimitStatus] = useState<RateLimitStatus>(() => {
+    const limit = settingsService.getSync().preferences.askMonthlyLimit ?? 0;
+    return getRateLimitStatus(limit);
+  });
+
+  const refreshRateLimit = useCallback(() => {
+    const limit = settingsService.getSync().preferences.askMonthlyLimit ?? 0;
+    setRateLimitStatus(getRateLimitStatus(limit));
+  }, []);
 
   // Keep session ref in sync for use in callbacks without stale closure
   const sessionRef = useRef(session);
@@ -316,8 +326,9 @@ export function AskScreen() {
       setAnchorMsgId(userMsg.id);
 
       await generateAiReply(content, placeholderId, updated.messages);
+      refreshRateLimit();
     },
-    [generateAiReply],
+    [generateAiReply, refreshRateLimit],
   );
 
   // Auto-send a prompt passed via navigation state (e.g. from Home screen STT FAB).
@@ -709,10 +720,27 @@ export function AskScreen() {
         ))}
       </div>
 
+      {rateLimitStatus.nearLimit && (
+        <div style={{
+          padding: '8px 16px',
+          margin: '0 16px 8px',
+          borderRadius: 'var(--radius-xl)',
+          fontSize: '0.8rem',
+          lineHeight: 1.4,
+          background: rateLimitStatus.canAsk ? 'var(--warning-surface, #fff3cd)' : 'var(--error-surface, #f8d7da)',
+          color: rateLimitStatus.canAsk ? 'var(--warning-text, #856404)' : 'var(--error-text, #721c24)',
+          border: `1px solid ${rateLimitStatus.canAsk ? 'var(--warning-border, #ffeeba)' : 'var(--error-border, #f5c6cb)'}`,
+        }}>
+          {rateLimitStatus.canAsk
+            ? `Approaching monthly limit (${rateLimitStatus.count}/${settingsService.getSync().preferences.askMonthlyLimit ?? 0}). Resets ${rateLimitStatus.resetDate}.`
+            : `Monthly limit reached. Resets ${rateLimitStatus.resetDate}.`}
+        </div>
+      )}
+
       <ChatInput
         onSend={handleSend}
         placeholder="Ask anything..."
-        disabled={!!streaming || editingMessageId !== null}
+        disabled={!!streaming || editingMessageId !== null || !rateLimitStatus.canAsk}
         webSearchEnabled={webSearchEnabled}
         onToggleWebSearch={() => setWebSearchEnabled(prev => !prev)}
       />
