@@ -8,7 +8,7 @@ import { embedText, cosine } from '../providers/embedding/index.ts';
 import { dbExecute, dbQuery } from './db.service.ts';
 import {
   buildCanonicalQuestionPatch,
-  classifyAndAnchor,
+  classifyAndAnchorIncremental,
   decideIngestionOutcome,
 } from './canonical-knowledge.service.ts';
 import { evaluateQuestion as filterQuestion, type QuestionFilterContext } from './question-filter.service.ts';
@@ -259,8 +259,8 @@ export const questionService = {
       if (flagged.flagged !== true) {
         // Fire-and-forget: classification + anchor attachment runs asynchronously.
         // The Q&A is already saved; labels will be patched on once the call completes.
-        void classifyAndAnchor(flagged, loadStore({ includeFlagged: true }), llmConfig).catch((err: unknown) => {
-          console.warn('[EchoLearn] classifyAndAnchor failed:', err instanceof Error ? err.message : err);
+        void classifyAndAnchorIncremental(flagged, loadStore({ includeFlagged: true }), llmConfig).catch((err: unknown) => {
+          console.warn('[EchoLearn] classifyAndAnchorIncremental failed:', err instanceof Error ? err.message : err);
         });
       }
 

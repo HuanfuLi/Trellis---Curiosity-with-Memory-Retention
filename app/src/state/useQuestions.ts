@@ -4,7 +4,8 @@ import { questionService } from '../services/question.service';
 import { settingsService } from '../services/settings.service';
 import { chatStream } from '../providers/llm';
 import { today } from '../lib/date';
-import { buildCandidateContextPack, classifyAndAnchor, formatCandidateContextPack } from '../services/canonical-knowledge.service';
+import { buildCandidateContextPack, classifyAndAnchorIncremental, formatCandidateContextPack } from '../services/canonical-knowledge.service';
+import { getRateLimitStatus, incrementAskCount } from '../services/ask-rate-limiter.service';
 import { evaluateQuestion as filterQuestion, type QuestionFilterContext } from '../services/question-filter.service';
 import { eventBus } from '../lib/event-bus';
 import { webSearch } from '../services/web-search.service';
@@ -97,6 +98,15 @@ export function useQuestions(): UseQuestionsReturn {
         const msg = 'Add your API key in Settings to get AI responses.';
         onToken(msg);
         setError({ code: 'NOT_CONFIGURED', message: msg, retryable: false });
+        setIsAsking(false);
+        return null;
+      }
+
+      const monthlyLimit = settings.preferences.askMonthlyLimit ?? 0;
+      const rateLimitStatus = getRateLimitStatus(monthlyLimit);
+      if (!rateLimitStatus.canAsk) {
+        const resetMsg = `Monthly question limit reached (${monthlyLimit}). Resets on ${rateLimitStatus.resetDate}.`;
+        onToken(resetMsg);
         setIsAsking(false);
         return null;
       }
@@ -206,6 +216,7 @@ export function useQuestions(): UseQuestionsReturn {
 
         // Persist and get structured question
         const rawQuestion = questionService.buildAndSave(content, accumulated, store);
+        incrementAskCount();
 
         // Evaluate for off-topic/meta status (with session context for follow-up handling)
         const question = await filterQuestion(rawQuestion, sessionContext);
@@ -223,8 +234,8 @@ export function useQuestions(): UseQuestionsReturn {
         // ── Second classification call (Phase 14) ──────────────────────────────
         // Fire ONLY when Q&A enters the mindmap (not flagged).
         if (question.flagged !== true) {
-          void classifyAndAnchor(question, questionService.getAll(), llmConfig).catch((err: unknown) => {
-            console.warn('[EchoLearn] classifyAndAnchor failed:', err instanceof Error ? err.message : err);
+          void classifyAndAnchorIncremental(question, questionService.getAll(), llmConfig).catch((err: unknown) => {
+            console.warn('[EchoLearn] classifyAndAnchorIncremental failed:', err instanceof Error ? err.message : err);
           });
         }
 
