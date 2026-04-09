@@ -21,6 +21,7 @@ import { ClusterDetailScreen } from './screens/ClusterDetailScreen';
 import { settingsService } from './services/settings.service';
 import { hydrateFromSQLite } from './services/question.service';
 import { hydratePlannerFromSQLite } from './services/planner.service';
+import { useKeyboard } from './state/useKeyboard';
 import { bootstrapImageGeneration } from './services/imageGeneration.bootstrap';
 import { applyTheme } from './lib/theme';
 import { PageTransition } from './components/PageTransition';
@@ -41,6 +42,8 @@ function RootLayout() {
   const [isTranscribing, setIsTranscribing] = useState(false);
   // Guard against starting a new recording while one is already active
   const recordingActiveRef = useRef(false);
+
+  useKeyboard();
 
   const handleAskLongPress = async () => {
     if (recordingActiveRef.current) return;

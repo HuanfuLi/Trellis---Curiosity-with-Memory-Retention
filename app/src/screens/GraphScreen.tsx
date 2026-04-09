@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import MindElixir from 'mind-elixir';
 import 'mind-elixir/style';
 import type { MindElixirData, MindElixirInstance, NodeObj } from 'mind-elixir';
@@ -262,7 +262,7 @@ function MasterMap({ nodes, edges, onNodeClick, isVisible }: MasterMapProps & { 
     });
 
     // Hide until scaled to prevent full-size "Knowledge" flash
-    containerRef.current.style.visibility = 'hidden';
+    containerRef.current.style.opacity = '0';
 
     mei.init(buildMindElixirData(nodes));
     initCompletedRef.current = true;
@@ -277,7 +277,7 @@ function MasterMap({ nodes, edges, onNodeClick, isVisible }: MasterMapProps & { 
       if (containerWidth > 0) {
         mei.move(-containerWidth * 0.25, 0);
       }
-      containerRef.current.style.visibility = 'visible';
+      containerRef.current.style.opacity = '1';
     }, 0);
 
     // mind-elixir does NOT fire a bus event for regular node clicks.
@@ -756,9 +756,8 @@ let cachedEdges: GraphEdge[] | null = null;
 
 export function GraphScreen() {
   const navigate = useNavigate();
-  const { pathname } = useLocation();
   // With the swipe strip, GraphScreen is always mounted at full width —
-  // no need for visibility gating (the old display:none 0-width bug no longer applies).
+  // keeping it visible prevents it from disappearing during horizontal swiping.
   const isVisible = true;
   const [view, setView] = useState<'map' | 'inbox'>('map');
   const [nodes, setNodes] = useState<Question[]>(cachedNodes ?? []);
@@ -845,8 +844,7 @@ export function GraphScreen() {
   // the map's scroll position and vice-versa.
   const containerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    containerRef.current?.scrollIntoView({ block: 'start' });
-    window.scrollTo({ top: 0, behavior: 'instant' });
+    containerRef.current?.parentElement?.scrollTo({ top: 0, behavior: 'instant' });
   }, [view]);
 
   const hasQaNodes = nodes.some((n) => !n.isAnchorNode && !n.isClusterNode && n.flagged !== true);
