@@ -414,6 +414,125 @@ export function buildTreeContext(questions: Question[]): string {
   return lines.join('\n');
 }
 
+// ─── Incremental Pipeline Helpers ───────────────────────────────────────────
+
+const PIPELINE_SYSTEM_PROMPT =
+  'You are a knowledge classification assistant. You help organize questions into a hierarchical knowledge tree with branches (academic disciplines), clusters (sub-fields), and anchors (specific concepts). Follow the response format instructions exactly.';
+
+interface StepDecision {
+  isNew: boolean;
+  selectedIndex?: number; // 0-based
+  newName?: string;
+}
+
+export function parseStepResponse(raw: string, candidateCount: number): StepDecision {
+  const trimmed = raw.trim();
+
+  // Try JSON parse first
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed && parsed.index === 'NEW' && typeof parsed.name === 'string') {
+      return { isNew: true, newName: parsed.name.trim() };
+    }
+    if (parsed && typeof parsed.index === 'number') {
+      if (parsed.index >= 0 && parsed.index < candidateCount) {
+        return { isNew: false, selectedIndex: parsed.index };
+      }
+      throw new Error(`Invalid step response: "${raw}"`);
+    }
+  } catch (e) {
+    if (e instanceof SyntaxError) {
+      // Not JSON — try regex extraction below
+    } else {
+      throw e;
+    }
+  }
+
+  // Try extracting embedded JSON object
+  const jsonMatch = trimmed.match(/\{[\s\S]*?\}/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (parsed && parsed.index === 'NEW' && typeof parsed.name === 'string') {
+        return { isNew: true, newName: parsed.name.trim() };
+      }
+      if (parsed && typeof parsed.index === 'number' && parsed.index >= 0 && parsed.index < candidateCount) {
+        return { isNew: false, selectedIndex: parsed.index };
+      }
+    } catch { /* not valid JSON object */ }
+  }
+
+  // Try bare integer extraction (reject if preceded by minus sign)
+  const intMatch = trimmed.match(/(?:^|[^-])\b(\d+)\b/);
+  if (intMatch) {
+    const num = parseInt(intMatch[1], 10);
+    if (num >= 0 && num < candidateCount) {
+      return { isNew: false, selectedIndex: num };
+    }
+  }
+
+  throw new Error(`Invalid step response: "${raw}"`);
+}
+
+export function buildStepPrompt(
+  level: 'branch' | 'cluster' | 'anchor',
+  candidates: Array<string | { id: string; name: string }>,
+): string {
+  if (candidates.length === 0) {
+    return `Select or create a ${level}.\n\nNo existing ${level}s yet — create a new one.\n\nRespond with {"index":"NEW","name":"<${level} name>"}.`;
+  }
+
+  const numbered = candidates
+    .map((c, i) => `${i}. ${typeof c === 'string' ? c : c.name}`)
+    .join('\n');
+
+  return `Select the best ${level} for this question, or create a new one if none fits.\n\nExisting ${level}s:\n${numbered}\n\nRespond with the index number (0-${candidates.length - 1}) to select an existing ${level}, or {"index":"NEW","name":"<${level} name>"} to create a new one.`;
+}
+
+export function extractUniqueBranches(allQuestions: Question[]): string[] {
+  const seen = new Set<string>();
+  for (const q of allQuestions) {
+    if (q.flagged === true) continue;
+    if (q.isClusterNode === true) continue;
+    if (q.isAnchorNode === true) continue;
+    const branch = q.branchLabel?.trim();
+    if (branch && !VAGUE_LABELS.has(branch)) {
+      seen.add(branch);
+    }
+  }
+  return Array.from(seen);
+}
+
+export function extractClustersUnderBranch(allQuestions: Question[], branchLabel: string): string[] {
+  const seen = new Set<string>();
+  for (const q of allQuestions) {
+    if (q.flagged === true) continue;
+    if (q.isClusterNode === true) continue;
+    if (q.isAnchorNode === true) continue;
+    if (q.branchLabel !== branchLabel) continue;
+    const cluster = q.clusterLabel?.trim();
+    if (cluster && !VAGUE_LABELS.has(cluster)) {
+      seen.add(cluster);
+    }
+  }
+  return Array.from(seen);
+}
+
+export function extractAnchorsUnderCluster(
+  allQuestions: Question[],
+  branchLabel: string,
+  clusterLabel: string,
+): Array<{ id: string; name: string }> {
+  const anchors: Array<{ id: string; name: string }> = [];
+  for (const q of allQuestions) {
+    if (q.isAnchorNode !== true) continue;
+    if (q.branchLabel !== branchLabel) continue;
+    if (q.clusterLabel !== clusterLabel) continue;
+    anchors.push({ id: q.id, name: q.title || q.content.slice(0, 40) });
+  }
+  return anchors;
+}
+
 export async function classifyAndAnchor(
   question: Question,
   allQuestions: Question[],
