@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
 status: Milestone complete
-stopped_at: Phase 25 planning complete — 6 plans verified
-last_updated: "2026-04-14T23:16:14.315Z"
+stopped_at: Completed 25-00-PLAN.md
+last_updated: "2026-04-14T23:49:38.502Z"
 progress:
-  total_phases: 19
+  total_phases: 18
   completed_phases: 5
-  total_plans: 22
+  total_plans: 16
   completed_plans: 16
 ---
 
@@ -72,9 +72,15 @@ Phase 9 - Image Regeneration & Error Handling (next to start)
 
 ## Last Session
 
-Completed Phase 22 Plan 02 (22-02-PLAN.md) — Swipe Navigation Integration
-**Stopped At:** Phase 25 planning complete — 6 plans verified
-**Date:** 2026-04-08
+Completed Phase 25 Plan 00 (25-00-PLAN.md) — Wave 0 Foundations
+**Stopped At:** Completed 25-00-PLAN.md
+**Date:** 2026-04-14
+
+## Latest Decisions (Phase 25-00)
+
+- [Phase 25-00] questionService imported at top-level in review.service.ts (already present), no dynamic import needed for anchor resolution
+- [Phase 25-00] REVIEW_COMPLETED emitted synchronously after REVIEW_SUBMITTED using existing questionService.getAll() for anchor lookup
+- [Phase 25-00] Blossom date service uses trellis_blossom_dates localStorage key, separate from review schedule storage
 
 ## Latest Decisions (Phase 16-03)
 
@@ -173,4 +179,3 @@ Completed Phase 22 Plan 02 (22-02-PLAN.md) — Swipe Navigation Integration
 - Phase 19 added: Web Search Integration for Ask and Feed
 - Phase 20 added: Orchestration Strategy & Diagnostic Dialogue (from original Milestone 2 ROADMAP.md Phases 17-18, renumbered)
 - Phase 22 added: Swipe navigation between first-level screens
-- Phase 25 added: Anime knowledge tree for Planner page — motivational review visualization
