@@ -570,15 +570,27 @@ Plans:
 - RATE-04: Combined "Usage" section in Settings (renamed from "Token Usage") with count, limit, reset date
 - RATE-05: Inline banner in Ask screen at 80%+ of limit
 - RATE-06: Hard block when limit reached -- send button disabled
+- REORG-01: LLM providers (OpenAI/Claude/Gemini) accept a jsonMode option that enables native JSON enforcement
+- REORG-02: Reorganize passes jsonMode: true and maxTokens: 16384 to eliminate truncation and formatting drift
+- REORG-03: Three-tier parser (direct / balanced / repair) + one auto-retry with error feedback
+- REORG-04: Post-parse schema validation rejects responses covering <90% of input qaIds
+- REORG-05: New repairJson helper unit-tested (fences, trailing commas, truncation)
+- DEDUP-01: labelKey(s) = normalizeText(s) is the canonical matching key across the pipeline
+- DEDUP-02: extractUniqueBranches / extractClustersUnderBranch / extractAnchorsUnderCluster dedupe by labelKey and return canonical display forms
+- DEDUP-03: commitClassificationResult uses symmetric labelKey matching for both cluster and anchor (fixes asymmetric-lowercase bug)
+- DEDUP-04: NEW→existing coercion — when LLM proposes NEW with a name that labelKey-collides with a candidate, coerce to that candidate and harvest alias
+- DEDUP-05: buildStepPrompt biases toward reuse and passes summaries for anchor-level candidates; step-1 NEW no longer uses `${branch} fundamentals` stub
 
 **Depends on:** Phase 22
 
-**Plans:** 3/3 plans complete
+**Plans:** 3/5 plans complete
 
 Plans:
 - [x] 23-01-PLAN.md -- Pipeline helpers + classifyAndAnchorIncremental function (PIPE-01..07)
 - [x] 23-02-PLAN.md -- Rate limiter service + type extensions + Settings Usage UI (RATE-01..06)
 - [x] 23-03-PLAN.md -- Wire pipeline + rate limiter into callers (useQuestions, question.service, AskScreen)
+- [ ] 23-04-PLAN.md -- Reorganize JSON robustness: jsonMode across providers, three-tier parser, auto-retry, schema validation (REORG-01..05)
+- [ ] 23-05-PLAN.md -- Incremental classification dedup: symmetric labelKey, reuse-biased prompts, NEW→existing coercion, alias harvest (DEDUP-01..05)
 
 **Success Criteria:**
 1. Classification uses 3-step incremental pipeline with KV cache-friendly append-only messages
