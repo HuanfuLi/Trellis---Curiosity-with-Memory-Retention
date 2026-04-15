@@ -343,9 +343,8 @@ export function TrellisStatusPanel({ nodes, onCreditsChange, counterRef }: Trell
                 transform: 'translate(-50%, -50%)',
                 animation: 'fruit-fly 1s ease-in forwards',
                 animationDelay: `${i * 0.06}s`,
-                // @ts-expect-error custom CSS vars
-                '--fly-dx': `${p.dx}px`,
-                '--fly-dy': `${p.dy}px`,
+                ['--fly-dx' as string]: `${p.dx}px`,
+                ['--fly-dy' as string]: `${p.dy}px`,
               } as CSSProperties}
             />
           ))}
