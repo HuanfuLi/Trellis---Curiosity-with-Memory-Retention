@@ -64,17 +64,13 @@ export function PlannerScreen() {
     toast('Suggestions cleared');
   };
 
-  const handleReplant = async (node: typeof deadNodes[number]) => {
-    try {
-      const result = await trellisActionsService.replant(
-        node.anchor.id,
-        node.anchor,
-        node.qaChildren.map((q) => q.id),
-      );
-      navigate(result.navigateTo, { state: result.state });
-    } catch {
-      toast('Re-plant failed', 'error');
-    }
+  const handleReplant = (node: typeof deadNodes[number]) => {
+    const result = trellisActionsService.replant(
+      node.anchor.id,
+      node.anchor,
+      node.qaChildren.map((q) => q.id),
+    );
+    navigate(result.navigateTo, { state: result.state });
   };
 
   const handleHeal = (node: typeof dyingNodes[number]) => {
@@ -175,7 +171,7 @@ export function PlannerScreen() {
               return (
                 <div
                   key={`dead-${node.anchor.id}`}
-                  onClick={() => { void handleReplant(node); }}
+                  onClick={() => handleReplant(node)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: '12px',
                     padding: '11px 0', borderBottom: '1px solid var(--border)',

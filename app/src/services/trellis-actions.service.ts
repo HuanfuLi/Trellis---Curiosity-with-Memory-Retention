@@ -10,12 +10,10 @@
 // Returns navigation intents rather than invoking navigate() directly — caller owns routing.
 
 import type { Question, ReviewSchedule } from '../types';
-import { flashcardService } from './flashcard.service';
 import { podcastService } from './podcast.service';
 import { questionService } from './question.service';
-import { conceptFeedService } from './concept-feed.service';
 import { eventBus } from '../lib/event-bus';
-import { today } from '../lib/date';
+import { today, addDays } from '../lib/date';
 
 export interface AnchorReviewNavState {
   anchorReview: {
@@ -25,13 +23,26 @@ export interface AnchorReviewNavState {
   };
 }
 
-export interface ActionNavigationResult {
-  navigateTo: string;
-  state: AnchorReviewNavState;
+export interface DiscoverPostNavState {
+  discoverMeta: {
+    concept: string;
+    title: string;
+  };
 }
 
-function freshSchedule(): ReviewSchedule {
-  return { nextReviewDate: today(), reviewCount: 0, easeFactor: 2.5 };
+export interface ActionNavigationResult {
+  navigateTo: string;
+  state: AnchorReviewNavState | DiscoverPostNavState;
+}
+
+// Bump a schedule to the "dying" zone (1 day overdue → yellow per computeLeafState).
+// Preserves reviewCount >= 1 so the node isn't treated as an unreviewed "bud".
+function dyingSchedule(prev?: ReviewSchedule): ReviewSchedule {
+  return {
+    nextReviewDate: addDays(today(), -1),
+    reviewCount: Math.max(1, prev?.reviewCount ?? 0),
+    easeFactor: prev?.easeFactor ?? 2.5,
+  };
 }
 
 export const trellisActionsService = {
@@ -61,55 +72,47 @@ export const trellisActionsService = {
   },
 
   /**
-   * D-13/D-14: Re-plant a dead anchor. Resets SM-2 schedule on ALL flashcards
-   * linked to this anchor (per RESEARCH Pitfall 2 — computeLeafState reads fcMap
-   * as authoritative), resets the anchor's question schedule and each Q&A child's
-   * schedule, and generates a new post for the anchor topic. Does NOT create new
-   * flashcards (D-13) — uses existing ones. Returns review navigation state.
+   * D-13/D-14 (simplified): Re-plant a dead anchor by re-exposing the user to a
+   * freshly generated post (reusing AnchorDetailScreen's "Learn as Post" flow —
+   * navigates to `/posts/anchor-post-{id}` with discoverMeta; PostDetailScreen
+   * streams the essay on mount).
+   *
+   * The anchor + its children are bumped to "dying" (1 day overdue, reviewCount
+   * preserved >= 1) so leaf state becomes yellow — the user must still complete
+   * a real review cycle to graduate the node back to green. Flashcards are
+   * intentionally NOT reset; their own schedules age naturally.
+   *
+   * Returns synchronously — no post-generation await. PostDetailScreen owns
+   * the streaming UX.
    */
-  async replant(
+  replant(
     anchorId: string,
     anchorQuestion: Question,
     qaChildIds: string[],
-  ): Promise<ActionNavigationResult> {
-    // 1. Reset flashcards linked to this anchor (or any of its Q&A children)
-    const linkedFlashcards = flashcardService.getAll().filter((c) => {
-      const nid = c.nodeId ?? '';
-      return c.nodeId === anchorId || qaChildIds.includes(nid);
-    });
-    for (const card of linkedFlashcards) {
-      flashcardService.updateReviewSchedule(card.id, freshSchedule());
-    }
-
-    // 2. Reset anchor question schedule (clear lastReviewedAt so leaf state recomputes)
+  ): ActionNavigationResult {
     questionService.patchQuestion(anchorId, {
-      reviewSchedule: freshSchedule(),
-      lastReviewedAt: undefined,
+      reviewSchedule: dyingSchedule(anchorQuestion.reviewSchedule),
     });
 
-    // 3. Reset each Q&A child question schedule as well
+    const all = questionService.getAll({ includeFlagged: true });
     for (const qaId of qaChildIds) {
+      const qa = all.find((q) => q.id === qaId);
       questionService.patchQuestion(qaId, {
-        reviewSchedule: freshSchedule(),
-        lastReviewedAt: undefined,
+        reviewSchedule: dyingSchedule(qa?.reviewSchedule),
       });
     }
 
-    // 4. Generate a post for the anchor topic — await so caller knows it landed
-    try {
-      await conceptFeedService.generateMorePosts([anchorQuestion]);
-    } catch {
-      /* non-fatal — navigation still proceeds */
-    }
+    // Emit so useTrellisData recomputes — the dead anchor immediately demotes
+    // to dying and the Suggested Moves list refreshes.
+    eventBus.emit({ type: 'CLASSIFICATION_COMPLETED', payload: { anchorId, anchorName: '' } });
 
     const title = anchorQuestion.title ?? anchorQuestion.content ?? 'anchor';
     return {
-      navigateTo: '/review',
+      navigateTo: `/posts/anchor-post-${anchorId}`,
       state: {
-        anchorReview: {
-          anchorId,
-          qaIds: qaChildIds,
-          title,
+        discoverMeta: {
+          concept: title,
+          title: `Understanding ${title}: A Complete Guide`,
         },
       },
     };
