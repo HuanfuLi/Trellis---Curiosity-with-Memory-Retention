@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
-status: In Progress
-stopped_at: Phase 26 context gathered
-last_updated: "2026-04-15T05:25:10.148Z"
+status: Executing Phase 26
+stopped_at: Completed 26-01-PLAN.md
+last_updated: "2026-04-15T05:50:48.097Z"
 progress:
   total_phases: 20
   completed_phases: 5
-  total_plans: 24
-  completed_plans: 23
+  total_plans: 28
+  completed_plans: 24
 ---
 
 # Project State: Milestone 1.1
@@ -24,7 +24,7 @@ Enhance user engagement through rich post formats (Rednote-style), smarter miles
 
 ## Current Phase
 
-Phase 9 - Image Regeneration & Error Handling (next to start)
+Phase 26 — Trellis Harvest Panel, Dying/Dead Node Actions, and Suggested Moves Refactor (Plan 01 of 04 complete)
 
 ## Roadmap
 
@@ -36,6 +36,14 @@ Phase 9 - Image Regeneration & Error Handling (next to start)
 - **Phase 12:** Portal Navigation & Rich Moves Linking (12-01-PLAN.md — COMPLETE, 12-02-PLAN.md — COMPLETE)
 - **Phase 13:** Planner Redesign (13-01-PLAN.md — COMPLETE)
 - **Phase 14:** Knowledge Graph Classification & Anchor Nodes (14-01-PLAN.md — COMPLETE, 14-02-PLAN.md — COMPLETE, 14-03-PLAN.md — COMPLETE, 14-04-PLAN.md — COMPLETE)
+
+## Latest Decisions (Phase 26-01)
+
+- [Phase 26-01] Credits service stores plain integer strings in localStorage (not JSON) for single-counter simplicity
+- [Phase 26-01] BottomSheet overlay uses zIndex 500 to clear app Header at zIndex 190; inline-styles-only convention preserved
+- [Phase 26-01] getPrunedQuestions requires both flagged && isAnchorNode so off-topic Q&A flag does not pollute pruned anchor archive
+- [Phase 26-01] trellisCreditsService.add clamps to non-negative integers via Math.floor+Math.max to defend against bad callers
+- [Phase 26-01] HARVEST_COMPLETED placed after ANCHOR_DELETED in AppEvent union for logical grouping with trellis events
 
 ## Latest Decisions
 
@@ -72,9 +80,9 @@ Phase 9 - Image Regeneration & Error Handling (next to start)
 
 ## Last Session
 
-Completed Phase 25 Plan 00 (25-00-PLAN.md) — Wave 0 Foundations
-**Stopped At:** Phase 26 context gathered
-**Date:** 2026-04-14
+Completed Phase 26 Plan 01 (26-01-PLAN.md) — Foundation primitives (credits service, HARVEST_COMPLETED event, BottomSheet component, getPrunedQuestions)
+**Stopped At:** Completed 26-01-PLAN.md
+**Date:** 2026-04-15
 
 ## Latest Decisions (Phase 25)
 
