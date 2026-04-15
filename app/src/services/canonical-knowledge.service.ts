@@ -1064,6 +1064,94 @@ export function isReorgInProgress(): boolean {
 }
 
 /**
+ * Third-tier parser: attempts to repair common LLM JSON mistakes.
+ * Handles markdown fences, trailing commas, preamble, and truncated tails.
+ * Returns a string that is (hopefully) valid JSON, or null if unrecoverable.
+ */
+export function repairJson(raw: string): string | null {
+  let s = raw.trim();
+
+  // Strip markdown code fences (```json ... ``` or ``` ... ```)
+  s = s.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
+
+  // Trim preamble — find first '{'
+  const start = s.indexOf('{');
+  if (start === -1) return null;
+  s = s.slice(start);
+
+  // Walk the string tracking depth + string state; find a safe end position
+  // that can be truncated to without cutting mid-string.
+  let braceDepth = 0;
+  let bracketDepth = 0;
+  let inString = false;
+  let escape = false;
+  let lastSafeEnd = -1;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') braceDepth++;
+    else if (ch === '}') braceDepth--;
+    else if (ch === '[') bracketDepth++;
+    else if (ch === ']') bracketDepth--;
+    if (braceDepth >= 0 && bracketDepth >= 0) lastSafeEnd = i;
+  }
+
+  // If we ended mid-string or mid-escape, cut back to last safe position
+  if (inString || escape) {
+    if (lastSafeEnd === -1) return null;
+    s = s.slice(0, lastSafeEnd + 1);
+    // Re-scan to recompute depths after truncation
+    braceDepth = 0; bracketDepth = 0;
+    inString = false; escape = false;
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (escape) { escape = false; continue; }
+      if (ch === '\\' && inString) { escape = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (ch === '{') braceDepth++;
+      else if (ch === '}') braceDepth--;
+      else if (ch === '[') bracketDepth++;
+      else if (ch === ']') bracketDepth--;
+    }
+  }
+
+  // Trim trailing incomplete tokens: drop trailing `:` `,` or key-without-value
+  s = s.replace(/\s*[,:]\s*$/, '');
+  // Drop a trailing dangling key like `"foo"` or `"foo":`
+  s = s.replace(/,\s*"[^"]*"\s*:?\s*$/, '');
+
+  // Remove trailing commas before } or ]
+  s = s.replace(/,(\s*[}\]])/g, '$1');
+
+  // Append missing closers (brackets first since they close inner, then braces)
+  while (bracketDepth > 0) { s += ']'; bracketDepth--; }
+  while (braceDepth > 0) { s += '}'; braceDepth--; }
+
+  return s;
+}
+
+/**
+ * Three-tier reorg response parser: direct JSON.parse → balanced extraction →
+ * structural repair. Returns null only when all three tiers fail.
+ */
+function parseReorgResponse(raw: string): ReorganizationResult | null {
+  try { return JSON.parse(raw) as ReorganizationResult; } catch { /* fall through */ }
+  const balanced = extractBalancedJson(raw);
+  if (balanced) {
+    try { return JSON.parse(balanced) as ReorganizationResult; } catch { /* fall through */ }
+  }
+  const repaired = repairJson(raw);
+  if (repaired) {
+    try { return JSON.parse(repaired) as ReorganizationResult; } catch { /* fall through */ }
+  }
+  return null;
+}
+
+/**
  * Extract the first balanced JSON object from a string.
  * Handles: extra trailing braces, markdown wrappers, leading text.
  * Respects braces inside JSON string literals (skips quoted content).
@@ -1210,41 +1298,61 @@ async function _doReorganize(
   const userMessage = JSON.stringify(qaManifest);
 
   try {
-    const raw = await chatCompletion(
-      [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userMessage },
-      ],
+    const messagesForReorg: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userMessage },
+    ];
+
+    let raw = await chatCompletion(
+      messagesForReorg,
       llmConfig,
-      { maxTokens: 8192, serviceName: 'classification' },
+      { maxTokens: 16384, serviceName: 'classification', jsonMode: true },
     );
 
-    // Parse JSON — try direct parse first, then balanced-brace extraction
-    let result: ReorganizationResult;
-    try {
-      result = JSON.parse(raw) as ReorganizationResult;
-    } catch {
-      const balanced = extractBalancedJson(raw);
-      if (!balanced) {
-        console.warn('[EchoLearn] Reorg: could not extract JSON from LLM response:', raw.slice(0, 500));
-        const msg = 'Could not find valid JSON in LLM response.';
-        eventBus.emit({ type: 'REORG_FAILED', payload: { error: msg } });
-        return { success: false, error: { code: 'PARSE_ERROR', message: msg, retryable: true } };
-      }
-      try {
-        result = JSON.parse(balanced) as ReorganizationResult;
-      } catch (parseErr) {
-        console.warn('[EchoLearn] Reorg: balanced extraction still invalid JSON:', balanced.slice(0, 500), parseErr);
-        const msg = 'Invalid JSON in LLM response.';
-        eventBus.emit({ type: 'REORG_FAILED', payload: { error: msg } });
-        return { success: false, error: { code: 'PARSE_ERROR', message: msg, retryable: true } };
-      }
+    let result = parseReorgResponse(raw);
+
+    // Auto-retry ONCE with error feedback on parse failure
+    if (!result) {
+      console.warn('[EchoLearn] Reorg: initial parse failed, retrying with feedback:', raw.slice(0, 300));
+      const retryMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+        ...messagesForReorg,
+        { role: 'assistant', content: raw.slice(0, 2000) },
+        { role: 'user', content: 'Your previous response was not valid JSON. Emit ONLY the JSON object matching the schema — no prose, no markdown fences, no trailing commas.' },
+      ];
+      raw = await chatCompletion(retryMessages, llmConfig, { maxTokens: 16384, serviceName: 'classification', jsonMode: true });
+      result = parseReorgResponse(raw);
+    }
+
+    if (!result) {
+      console.warn('[EchoLearn] Reorg: all parse tiers + retry failed:', raw.slice(0, 500));
+      const msg = 'Could not parse LLM response as JSON after retry.';
+      eventBus.emit({ type: 'REORG_FAILED', payload: { error: msg } });
+      return { success: false, error: { code: 'PARSE_ERROR', message: msg, retryable: true } };
     }
 
     if (!result.hierarchy || !Array.isArray(result.hierarchy)) {
       const msg = 'LLM response missing hierarchy array.';
       eventBus.emit({ type: 'REORG_FAILED', payload: { error: msg } });
       return { success: false, error: { code: 'PARSE_ERROR', message: msg, retryable: true } };
+    }
+
+    // Schema validation — ensure the LLM covered enough of the input qaIds.
+    const mentionedIds = new Set<string>();
+    for (const root of result.hierarchy) {
+      for (const branch of root.branches ?? []) {
+        for (const cluster of branch.clusters ?? []) {
+          for (const anchor of cluster.anchors ?? []) {
+            for (const id of anchor.qaIds ?? []) mentionedIds.add(id);
+          }
+        }
+      }
+    }
+    const coverage = qaNodes.length === 0 ? 1 : mentionedIds.size / qaNodes.length;
+    if (coverage < 0.9) {
+      const msg = `LLM omitted too many QA items (${mentionedIds.size}/${qaNodes.length} covered).`;
+      console.warn('[EchoLearn] Reorg:', msg);
+      eventBus.emit({ type: 'REORG_FAILED', payload: { error: msg } });
+      return { success: false, error: { code: 'COVERAGE_ERROR', message: msg, retryable: true } };
     }
 
     // Validate: collect all qaIds from the response
