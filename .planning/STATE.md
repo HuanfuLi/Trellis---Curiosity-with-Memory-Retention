@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
 status: Executing Phase 26
-stopped_at: Completed 26-01-PLAN.md
-last_updated: "2026-04-15T05:50:48.097Z"
+stopped_at: Completed 26-02-PLAN.md
+last_updated: "2026-04-15T05:57:10.578Z"
 progress:
   total_phases: 20
   completed_phases: 5
   total_plans: 28
-  completed_plans: 24
+  completed_plans: 25
 ---
 
 # Project State: Milestone 1.1
@@ -24,7 +24,7 @@ Enhance user engagement through rich post formats (Rednote-style), smarter miles
 
 ## Current Phase
 
-Phase 26 — Trellis Harvest Panel, Dying/Dead Node Actions, and Suggested Moves Refactor (Plan 01 of 04 complete)
+Phase 26 — Trellis Harvest Panel, Dying/Dead Node Actions, and Suggested Moves Refactor (Plan 02 of 04 complete)
 
 ## Roadmap
 
@@ -36,6 +36,16 @@ Phase 26 — Trellis Harvest Panel, Dying/Dead Node Actions, and Suggested Moves
 - **Phase 12:** Portal Navigation & Rich Moves Linking (12-01-PLAN.md — COMPLETE, 12-02-PLAN.md — COMPLETE)
 - **Phase 13:** Planner Redesign (13-01-PLAN.md — COMPLETE)
 - **Phase 14:** Knowledge Graph Classification & Anchor Nodes (14-01-PLAN.md — COMPLETE, 14-02-PLAN.md — COMPLETE, 14-03-PLAN.md — COMPLETE, 14-04-PLAN.md — COMPLETE)
+
+## Latest Decisions (Phase 26-02)
+
+- [Phase 26-02] Dying bucket = leafState yellow ∪ falling (D-08) — merged into a single "needs attention" column
+- [Phase 26-02] Fruit glow pulses via scoped `<style>` + status-glow keyframe; only active when fruitNodes.length > 0
+- [Phase 26-02] Fly-to-counter vector measured at click time (getBoundingClientRect on both panel and counter refs) so layout shifts don't strand particles
+- [Phase 26-02] Particle count capped at Math.min(count, 8) to avoid visual noise on large harvests
+- [Phase 26-02] Celebration choreography unified per D-03: 1s fly-to-counter → 1.2s delay → 3.5s confetti
+- [Phase 26-02] Computed-key cast `['--fly-dx' as string]` preferred over `@ts-expect-error` (noUnusedLocals flags the directive as unused when the `as CSSProperties` cast already widens the type)
+- [Phase 26-02] Header counter is a `<span ref={counterRef}>` inside a pill div so getBoundingClientRect targets the number glyph, not pill padding
 
 ## Latest Decisions (Phase 26-01)
 
@@ -80,8 +90,8 @@ Phase 26 — Trellis Harvest Panel, Dying/Dead Node Actions, and Suggested Moves
 
 ## Last Session
 
-Completed Phase 26 Plan 01 (26-01-PLAN.md) — Foundation primitives (credits service, HARVEST_COMPLETED event, BottomSheet component, getPrunedQuestions)
-**Stopped At:** Completed 26-01-PLAN.md
+Completed Phase 26 Plan 02 (26-02-PLAN.md) — TrellisStatusPanel (3-column fruit/dying/dead counts + bottom sheets), harvest flow (clear blossom dates + credits + fly-to-counter + confetti), Planner header fruit counter pill
+**Stopped At:** Completed 26-02-PLAN.md
 **Date:** 2026-04-15
 
 ## Latest Decisions (Phase 25)
