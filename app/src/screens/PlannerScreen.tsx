@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Play, RefreshCw, Sparkles, Loader2, X,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, Cherry,
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -13,6 +13,9 @@ import { useQuestions } from '../state/useQuestions';
 import { toast } from '../lib/toast';
 import { Header, HEADER_HEIGHT } from '../components/ui/Header';
 import { TrellisHero } from '../components/trellis/TrellisHero';
+import { TrellisStatusPanel } from '../components/trellis/TrellisStatusPanel';
+import { useTrellisData } from '../state/useTrellisData';
+import { trellisCreditsService } from '../services/trellis-credits.service';
 import { PortalCard, buildPortalData } from '../components/PortalCard';
 import { conceptFeedService } from '../services/concept-feed.service';
 import { plannerService } from '../services/planner.service';
@@ -180,6 +183,9 @@ export function PlannerScreen() {
   const { moves: autoMoves, isRefreshing, accept: acceptMove, dismiss: dismissMove, skipAll, refresh: refreshMoves } = usePlannerAutoGen();
   useDailyRefresh(); // Mount to activate PODCAST_GENERATION_COMPLETED → refresh subscription
   const { questions } = useQuestions();
+  const { layout } = useTrellisData();
+  const [credits, setCredits] = useState<number>(() => trellisCreditsService.getTotal());
+  const counterRef = useRef<HTMLSpanElement>(null);
   const [showAutoMoves, setShowAutoMoves] = useState(true);
   const [showAllSuggestions, setShowAllSuggestions] = useState(false);
   const totalSuggestions = autoMoves.length + suggestedChunks.length;
@@ -213,9 +219,37 @@ export function PlannerScreen() {
 
   return (
     <div style={{ padding: `${HEADER_HEIGHT + 8}px 16px 96px`, maxWidth: '448px', margin: '0 auto' }}>
-      <Header title="Planner" />
+      <Header
+        title="Planner"
+        right={
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '4px 10px',
+              borderRadius: '20px',
+              backgroundColor: credits > 0 ? 'rgba(255,200,0,0.15)' : 'var(--surface-variant)',
+              border: '1px solid var(--border)',
+              fontSize: '0.82rem',
+              fontWeight: 600,
+            }}
+          >
+            <Cherry size={14} />
+            <span ref={counterRef}>{credits}</span>
+          </div>
+        }
+      />
 
       <TrellisHero />
+
+      <div style={{ marginTop: '16px', marginBottom: '8px' }}>
+        <TrellisStatusPanel
+          nodes={layout.nodes}
+          onCreditsChange={setCredits}
+          counterRef={counterRef}
+        />
+      </div>
 
       {/* ── Suggested Moves (unified) ─────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', marginTop: '24px' }}>
