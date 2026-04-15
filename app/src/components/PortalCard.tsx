@@ -1,47 +1,39 @@
 /**
  * PortalCard component
  *
- * Displays a topic portal card with:
- *  - Topic name and description
- *  - Primary CTA button using moveNavigator
- *  - Skip action
+ * Displays a topic portal row with:
+ *  - Signal dot (weak area / score-based urgency)
+ *  - Title and description
+ *  - Icon-only CTA button using moveNavigator
+ *  - Dismiss (X) action
  *
  * Phase 20: Orchestration Strategy & Diagnostic Dialogue
  */
 
-import { BookOpen, FileText, HelpCircle, ChevronRight } from 'lucide-react';
+import { BookOpen, HelpCircle, Headphones, Layers, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { PlannedMove, PlannedMoveType } from '../types';
 import { navigateToMove } from '../lib/moveNavigator';
 
-// ── Move type display config (reused from MoveCard) ─────────────────────────
+// ── Move type CTA config (icon-only) ────────────────────────────────────────
 
 const MOVE_TYPE_CONFIG: Record<PlannedMoveType, {
-  icon: React.ReactNode;
+  ctaIcon: React.ReactNode;
   label: string;
-  color: string;
 }> = {
-  review: {
-    icon: <BookOpen size={14} />,
-    label: 'Review',
-    color: 'var(--node-mint)',
-  },
-  read: {
-    icon: <FileText size={14} />,
-    label: 'Read',
-    color: 'var(--node-sky)',
-  },
-  compare: {
-    icon: <HelpCircle size={14} />,
-    label: 'Compare',
-    color: 'var(--node-lilac)',
-  },
-  podcast: {
-    icon: <ChevronRight size={14} />,
-    label: 'Podcast',
-    color: 'var(--node-peach)',
-  },
+  review: { ctaIcon: <Layers size={14} />, label: 'Review' },
+  read: { ctaIcon: <BookOpen size={14} />, label: 'Read' },
+  compare: { ctaIcon: <HelpCircle size={14} />, label: 'Compare' },
+  podcast: { ctaIcon: <Headphones size={14} />, label: 'Podcast' },
 };
+
+/** Returns a dot color reflecting mastery signal for a planned move. */
+function moveDotColor(move: PlannedMove): string {
+  if (move.isWeakArea)           return '#E53935'; // red   — confirmed weak area
+  if (move.relevanceScore >= 50) return '#F57C00'; // amber — moderate urgency
+  if (move.relevanceScore >= 30) return '#00897B'; // teal  — healthy curiosity
+  return '#0288D1';                                // blue  — open exploration
+}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -96,70 +88,61 @@ export function PortalCard({ data, onAccept, onDismiss, onNavigate }: PortalCard
   return (
     <div
       style={{
-        borderLeft: `4px solid ${config.color}`,
-        borderRadius: 'var(--radius-xl)',
-        boxShadow: 'var(--shadow-1)',
-        background: 'var(--surface)',
-        padding: '16px',
-        marginBottom: '10px',
+        display: 'flex', alignItems: 'center', gap: '12px',
+        padding: '11px 0',
+        borderBottom: '1px solid var(--border)',
       }}
     >
-      {/* Top row: icon + type badge */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-        <span style={{ color: config.color, display: 'flex' }}>{config.icon}</span>
-        <span style={{
-          fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.06em',
-          textTransform: 'uppercase', color: 'var(--muted-foreground)',
-        }}>
-          {config.label}
-        </span>
+      {/* Signal dot */}
+      <div style={{
+        width: '8px', height: '8px', borderRadius: '50%',
+        backgroundColor: moveDotColor(data.move), flexShrink: 0,
+      }} />
+
+      {/* Content */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ fontSize: '0.9rem', fontWeight: 500, color: 'var(--foreground)', lineHeight: 1.4 }}>
+          {data.title}
+        </p>
+        {data.description && (
+          <p style={{
+            fontSize: '0.78rem', color: 'var(--muted-foreground)',
+            marginTop: '1px', lineHeight: 1.35,
+            overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
+          }}>
+            {data.description}
+          </p>
+        )}
       </div>
 
-      {/* Title */}
-      <p style={{
-        fontSize: '0.92rem', lineHeight: 1.45, color: 'var(--foreground)',
-        fontWeight: 500, marginBottom: '4px',
-      }}>
-        {data.title}
-      </p>
-
-      {/* Description */}
-      <p style={{
-        fontSize: '0.8rem', color: 'var(--muted-foreground)',
-        lineHeight: 1.4, marginBottom: '12px',
-        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-        overflow: 'hidden',
-      }}>
-        {data.description}
-      </p>
-
-      {/* Bottom row: CTA + Skip */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      {/* Actions */}
+      <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
         <button
           onClick={handlePrimaryCTA}
+          title={config.label}
           className="active-squish"
           style={{
-            flex: 1, padding: '9px 16px', borderRadius: '12px',
-            border: 'none', backgroundColor: 'var(--primary-40)', color: 'white',
-            fontSize: '0.82rem', fontWeight: 600,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+            width: '30px', height: '30px', borderRadius: '8px',
+            backgroundColor: 'var(--primary-40)', color: 'white',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer',
           }}
         >
-          {config.label}
-          <ChevronRight size={14} />
+          {config.ctaIcon}
         </button>
         <button
           onClick={() => onDismiss(data.move.id)}
+          title="Dismiss"
           className="active-squish"
           style={{
-            padding: '9px 16px', borderRadius: '12px',
+            width: '30px', height: '30px', borderRadius: '8px',
             backgroundColor: 'var(--surface-variant)',
             color: 'var(--muted-foreground)', border: '1px solid var(--border)',
-            fontSize: '0.82rem', fontWeight: 500, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer',
           }}
         >
-          Skip
+          <X size={12} />
         </button>
       </div>
     </div>
