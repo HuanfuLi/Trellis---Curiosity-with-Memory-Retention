@@ -37,6 +37,7 @@ export function BottomSheet({ open, onClose, title, children }: BottomSheetProps
           borderRadius: '20px 20px 0 0',
           padding: '20px 16px 40px',
           boxShadow: 'var(--shadow-3)',
+          minHeight: '45vh',
           maxHeight: '75vh',
           overflowY: 'auto',
           transform: open ? 'translateY(0)' : 'translateY(100%)',
