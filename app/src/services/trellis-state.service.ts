@@ -90,10 +90,46 @@ export function computeLeafState(
   return 'green';
 }
 
+const ALL_LEAF_STATES: LeafState[] = ['bud', 'green', 'yellow', 'falling', 'fallen', 'blossom', 'fruit'];
+
+// Dev mode: generate synthetic nodes showing all 7 leaf states on 2 vines
+function buildDevTrellisState(): TrellisLayout {
+  const branchA = { branchId: 'dev::branch-a', branchLabel: 'Branch A', branchIndex: 0 };
+  const branchB = { branchId: 'dev::branch-b', branchLabel: 'Branch B', branchIndex: 1 };
+  const vineA = { ...branchA, spec: generateVinePath(branchA.branchId, 0, 2), color: getVineColor(branchA.branchId) };
+  const vineB = { ...branchB, spec: generateVinePath(branchB.branchId, 1, 2), color: getVineColor(branchB.branchId) };
+  const vines = [vineA, vineB];
+
+  const nodes: TrellisAnchorNode[] = ALL_LEAF_STATES.map((state, i) => {
+    const vine = i < 4 ? vineA : vineB;
+    const fakeId = `dev-${state}`;
+    const leafPos = getLeafPosition(fakeId, vine.spec);
+    return {
+      anchor: { id: fakeId, content: state, title: state.charAt(0).toUpperCase() + state.slice(1), keywords: [], relatedQuestionIds: [], categoryIds: [], reviewSchedule: { nextReviewDate: '', reviewCount: 0, easeFactor: 2.5 }, createdAt: 0 } as Question,
+      qaChildren: [],
+      leafState: state,
+      branchLabel: vine.branchLabel,
+      branchId: vine.branchId,
+      branchIndex: vine.branchIndex,
+      vinePosition: { t: leafPos.t },
+      layoutPosition: { x: leafPos.x, y: leafPos.y },
+      vineAttach: { x: leafPos.vineX, y: leafPos.vineY },
+      stemAngle: leafPos.stemAngle,
+    };
+  });
+
+  return { nodes, vines };
+}
+
 // Build full trellis state: returns layout for all branches + state-computed anchor nodes.
 // Reads blossom dates from localStorage, writes new blossom dates for anchors that just reached blossom,
 // and clears dates for anchors that dropped below blossom.
 export function buildTrellisState(questions: Question[]): TrellisLayout {
+  // Dev mode: show all 7 leaf states on dummy nodes for visual debugging
+  if (typeof localStorage !== 'undefined' && localStorage.getItem('trellis_dev_mode') === 'true') {
+    return buildDevTrellisState();
+  }
+
   if (!questions || questions.length === 0) {
     return { nodes: [], vines: [] };
   }

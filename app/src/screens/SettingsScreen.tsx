@@ -1120,6 +1120,21 @@ export function SettingsScreen() {
         <p style={{ fontSize: '0.8rem', color: 'var(--muted-foreground)', marginBottom: '16px', lineHeight: 1.5 }}>
           Debug tools for development. Destructive actions cannot be undone.
         </p>
+        <SettingRow label="Trellis Dev Mode">
+          <MaterialSwitch
+            checked={localStorage.getItem('trellis_dev_mode') === 'true'}
+            onChange={() => {
+              const next = localStorage.getItem('trellis_dev_mode') === 'true' ? 'false' : 'true';
+              localStorage.setItem('trellis_dev_mode', next);
+              toast(next === 'true' ? 'Trellis dev mode on — showing all leaf states' : 'Trellis dev mode off');
+              // Force re-render so the switch updates
+              setReviewNotif((v) => { setTimeout(() => setReviewNotif(v), 0); return !v; });
+            }}
+          />
+        </SettingRow>
+        <p style={{ fontSize: '0.72rem', color: 'var(--muted-foreground)', marginTop: '-8px', marginBottom: '16px', lineHeight: 1.4 }}>
+          Shows all 7 leaf states (bud, green, yellow, falling, fallen, blossom, fruit) on dummy nodes for visual debugging.
+        </p>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <Button
             variant="danger"
