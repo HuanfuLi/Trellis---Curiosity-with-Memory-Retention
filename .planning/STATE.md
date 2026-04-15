@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
 status: Executing Phase 26
-stopped_at: Completed 26-02-PLAN.md
-last_updated: "2026-04-15T05:57:10.578Z"
+stopped_at: Completed 26-03-PLAN.md
+last_updated: "2026-04-15T06:03:20.004Z"
 progress:
   total_phases: 20
   completed_phases: 5
   total_plans: 28
-  completed_plans: 25
+  completed_plans: 26
 ---
 
 # Project State: Milestone 1.1
@@ -24,7 +24,7 @@ Enhance user engagement through rich post formats (Rednote-style), smarter miles
 
 ## Current Phase
 
-Phase 26 — Trellis Harvest Panel, Dying/Dead Node Actions, and Suggested Moves Refactor (Plan 02 of 04 complete)
+Phase 26 — Trellis Harvest Panel, Dying/Dead Node Actions, and Suggested Moves Refactor (Plan 03 of 04 complete)
 
 ## Roadmap
 
@@ -36,6 +36,17 @@ Phase 26 — Trellis Harvest Panel, Dying/Dead Node Actions, and Suggested Moves
 - **Phase 12:** Portal Navigation & Rich Moves Linking (12-01-PLAN.md — COMPLETE, 12-02-PLAN.md — COMPLETE)
 - **Phase 13:** Planner Redesign (13-01-PLAN.md — COMPLETE)
 - **Phase 14:** Knowledge Graph Classification & Anchor Nodes (14-01-PLAN.md — COMPLETE, 14-02-PLAN.md — COMPLETE, 14-03-PLAN.md — COMPLETE, 14-04-PLAN.md — COMPLETE)
+
+## Latest Decisions (Phase 26-03)
+
+- [Phase 26-03] heal()/replant() return navigation intents ({ navigateTo, state }) instead of calling navigate() — keeps service pure, component owns sheet-close timing
+- [Phase 26-03] replant() resets BOTH flashcard schedules (authoritative per fcMap in computeLeafState) AND Question.lastReviewedAt (fallback signal) so anchor can return to 'bud' state
+- [Phase 26-03] replant() awaits conceptFeedService.generateMorePosts wrapped in try/catch so post generation never blocks review navigation
+- [Phase 26-03] prune() reuses existing ANCHOR_DELETED event instead of defining PRUNE_COMPLETED — same trellis recompute path, reversible via unpruneQuestion
+- [Phase 26-03] unpruneQuestion() emits CLASSIFICATION_COMPLETED with empty anchorName — subscriber only uses event type for recompute, payload is cosmetic
+- [Phase 26-03] Prune animation delays flagged flip by 800ms (300ms scissors cut + 500ms leaf fall) so visual completes before row disappears
+- [Phase 26-03] Pruned archive lives below the 3-column panel (not inside a sheet) so archive count is always visible
+- [Phase 26-03] Two-button row layout (primary action + Prune) extracted as renderActionableItem closure — shared between dying and dead sheets
 
 ## Latest Decisions (Phase 26-02)
 
@@ -91,7 +102,7 @@ Phase 26 — Trellis Harvest Panel, Dying/Dead Node Actions, and Suggested Moves
 ## Last Session
 
 Completed Phase 26 Plan 02 (26-02-PLAN.md) — TrellisStatusPanel (3-column fruit/dying/dead counts + bottom sheets), harvest flow (clear blossom dates + credits + fly-to-counter + confetti), Planner header fruit counter pill
-**Stopped At:** Completed 26-02-PLAN.md
+**Stopped At:** Completed 26-03-PLAN.md
 **Date:** 2026-04-15
 
 ## Latest Decisions (Phase 25)
