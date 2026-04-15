@@ -12,6 +12,7 @@ import { toast } from '../lib/toast';
 import { Header, HEADER_HEIGHT } from '../components/ui/Header';
 import { TrellisHero } from '../components/trellis/TrellisHero';
 import { TrellisStatusPanel } from '../components/trellis/TrellisStatusPanel';
+import { PrunedSection } from '../components/trellis/PrunedSection';
 import { useTrellisData } from '../state/useTrellisData';
 import { trellisCreditsService } from '../services/trellis-credits.service';
 import { trellisActionsService } from '../services/trellis-actions.service';
@@ -292,6 +293,9 @@ export function PlannerScreen() {
           </>
         )
       )}
+
+      {/* ── Pruned archive (bottom of page) ──────────────────────────── */}
+      <PrunedSection />
     </div>
   );
 }

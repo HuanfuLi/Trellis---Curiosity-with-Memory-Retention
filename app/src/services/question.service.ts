@@ -494,7 +494,7 @@ export const questionService = {
    */
   getPrunedQuestions(): Question[] {
     return loadStore({ includeFlagged: true }).filter(
-      (q) => q.flagged === true && q.isAnchorNode === true,
+      (q) => q.flagged === true && q.prunedFromTrellis === true,
     );
   },
 

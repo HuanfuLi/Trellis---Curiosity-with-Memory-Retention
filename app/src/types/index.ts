@@ -30,6 +30,7 @@ export interface Question {
   coCreationSignals?: Partial<Record<StructuralSignalType, number>> & { lastSignalAt?: number };
   embeddingVector?: number[];
   flagged?: boolean;  // true if detected as off-topic/meta-question; user can override
+  prunedFromTrellis?: boolean; // true when user explicitly prunes this node from the trellis (D-15/D-17)
   isAnchorNode?: boolean;  // true for concept anchor nodes; undefined/false for Q&A leaf nodes
   qaCount?: number;        // number of Q&A nodes attached to this anchor (incremented on attachment)
   shortSummary?: string;   // <=80 words, used as anchor summary entry when Q&A attaches

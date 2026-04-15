@@ -121,7 +121,7 @@ export const trellisActionsService = {
    * (per RESEARCH Open Question 4 — same visual effect as deletion, but reversible).
    */
   prune(anchorId: string): { pruned: true } {
-    questionService.patchQuestion(anchorId, { flagged: true });
+    questionService.patchQuestion(anchorId, { flagged: true, prunedFromTrellis: true });
     eventBus.emit({ type: 'ANCHOR_DELETED', payload: { anchorId } });
     return { pruned: true };
   },
@@ -132,7 +132,7 @@ export const trellisActionsService = {
    * the payload's anchorName is cosmetic for the trellis recompute subscriber).
    */
   unpruneQuestion(anchorId: string): void {
-    questionService.patchQuestion(anchorId, { flagged: false });
+    questionService.patchQuestion(anchorId, { flagged: false, prunedFromTrellis: false });
     eventBus.emit({
       type: 'CLASSIFICATION_COMPLETED',
       payload: { anchorId, anchorName: '' },

@@ -21,19 +21,15 @@ import {
   Heart,
   Scissors,
   Sprout,
-  RotateCcw,
-  Trash2,
 } from 'lucide-react';
 import { BottomSheet } from '../ui/BottomSheet';
 import { Confetti } from '../Confetti';
 import { clearBlossomDate } from '../../services/trellis-blossom-dates.service';
 import { trellisCreditsService } from '../../services/trellis-credits.service';
 import { trellisActionsService } from '../../services/trellis-actions.service';
-import { questionService } from '../../services/question.service';
 import { eventBus } from '../../lib/event-bus';
 import { toast } from '../../lib/toast';
 import type { TrellisAnchorNode } from '../../services/trellis-state.service';
-import type { Question } from '../../types';
 
 interface TrellisStatusPanelProps {
   nodes: TrellisAnchorNode[];
@@ -65,16 +61,12 @@ export function TrellisStatusPanel({ nodes, onCreditsChange, counterRef }: Trell
   const [activeSheet, setActiveSheet] = useState<SheetKey>(null);
   const [flyParticles, setFlyParticles] = useState<FlyParticle[]>([]);
   const [showConfetti, setShowConfetti] = useState(false);
-  const [prunedNodes, setPrunedNodes] = useState<Question[]>(() => questionService.getPrunedQuestions());
-  const [showPruned, setShowPruned] = useState(false);
   const [pruningId, setPruningId] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
   const fruitNodes = nodes.filter((n) => n.leafState === 'fruit');
   const dyingNodes = nodes.filter((n) => n.leafState === 'yellow' || n.leafState === 'falling');
   const deadNodes = nodes.filter((n) => n.leafState === 'fallen');
-
-  const refreshPrunedNodes = () => setPrunedNodes(questionService.getPrunedQuestions());
 
   const handleHarvest = () => {
     const count = fruitNodes.length;
@@ -131,27 +123,15 @@ export function TrellisStatusPanel({ nodes, onCreditsChange, counterRef }: Trell
     const id = node.anchor.id;
     setPruningId(id);
     // Let the CSS animation play (scissors cut ~0.5s, leaf fall starts at 0.5s, ends at 1.0s)
-    // before flipping the flagged field and refreshing state.
+    // before flipping the flagged field and refreshing state. PrunedSection listens
+    // for ANCHOR_DELETED and refreshes itself; the trellis recompute also clears
+    // this node from the dying/dead columns automatically.
     window.setTimeout(() => {
       trellisActionsService.prune(id);
-      refreshPrunedNodes();
       setPruningId(null);
       toast('Pruned - moved to archive', 'success');
-      // Close sheet so the user sees the pruned badge update in the panel area
       setActiveSheet(null);
     }, 1000);
-  };
-
-  const handleUnprune = (q: Question) => {
-    trellisActionsService.unpruneQuestion(q.id);
-    refreshPrunedNodes();
-    toast('Restored to trellis', 'success');
-  };
-
-  const handleHardDelete = async (q: Question) => {
-    await trellisActionsService.hardDelete(q.id);
-    refreshPrunedNodes();
-    toast('Permanently deleted', 'success');
   };
 
   const columnBase: CSSProperties = {
@@ -349,103 +329,6 @@ export function TrellisStatusPanel({ nodes, onCreditsChange, counterRef }: Trell
           <span style={labelTextStyle}>Dead</span>
         </div>
       </div>
-
-      {/* Pruned section link (D-16) */}
-      {prunedNodes.length > 0 && (
-        <div style={{ padding: '0 16px 12px' }}>
-          <button
-            onClick={() => setShowPruned((v) => !v)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '6px 10px',
-              borderRadius: '10px',
-              backgroundColor: 'transparent',
-              border: '1px dashed var(--border)',
-              color: 'var(--muted-foreground)',
-              fontSize: '0.78rem',
-              cursor: 'pointer',
-            }}
-          >
-            <Scissors size={12} />
-            Pruned ({prunedNodes.length})
-            <span style={{ marginLeft: '2px' }}>{showPruned ? '▾' : '▸'}</span>
-          </button>
-          {showPruned && (
-            <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {prunedNodes.map((q) => (
-                <div
-                  key={q.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '8px 10px',
-                    borderRadius: '10px',
-                    backgroundColor: 'var(--surface-variant)',
-                    border: '1px solid var(--border)',
-                  }}
-                >
-                  <span
-                    style={{
-                      flex: 1,
-                      minWidth: 0,
-                      fontSize: '0.82rem',
-                      color: 'var(--muted-foreground)',
-                      overflow: 'hidden',
-                      whiteSpace: 'nowrap',
-                      textOverflow: 'ellipsis',
-                    }}
-                  >
-                    {q.title ?? q.content ?? 'anchor'}
-                  </span>
-                  <button
-                    onClick={() => handleUnprune(q)}
-                    aria-label="Restore"
-                    title="Restore to trellis"
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      padding: '6px 8px',
-                      borderRadius: '8px',
-                      backgroundColor: 'var(--surface)',
-                      border: '1px solid var(--border)',
-                      color: 'var(--foreground)',
-                      fontSize: '0.75rem',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <RotateCcw size={12} />
-                    Restore
-                  </button>
-                  <button
-                    onClick={() => { void handleHardDelete(q); }}
-                    aria-label="Delete forever"
-                    title="Delete forever"
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      padding: '6px 8px',
-                      borderRadius: '8px',
-                      backgroundColor: 'var(--surface)',
-                      border: '1px solid var(--border)',
-                      color: '#B44',
-                      fontSize: '0.75rem',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <Trash2 size={12} />
-                    Delete
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Fruit bottom sheet */}
       <BottomSheet
