@@ -40,9 +40,10 @@ export function TrellisCanvas({ layout, onLeafTap }: TrellisCanvasProps) {
             key={v.branchId}
             d={v.spec.d}
             stroke={v.color}
-            strokeWidth={2}
+            strokeWidth={3}
             fill="none"
-            opacity={0.85}
+            opacity={0.8}
+            strokeLinecap="round"
             initial={{ pathLength: 0 }}
             animate={{ pathLength: 1 }}
             transition={{ duration: 1.2, delay: i * 0.2, ease: 'easeInOut' }}

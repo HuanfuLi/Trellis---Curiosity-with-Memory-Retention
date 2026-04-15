@@ -46,43 +46,47 @@ export function TrellisLeaf(props: TrellisLeafProps) {
     shape = (
       <g>
         {[0, 72, 144, 216, 288].map((angle) => (
-          <ellipse key={angle} cx={0} cy={-8} rx={5} ry={8} fill={color} transform={`rotate(${angle})`} />
+          <ellipse key={angle} cx={0} cy={-10} rx={6} ry={10} fill={color} transform={`rotate(${angle})`} opacity={0.85} />
         ))}
-        <circle cx={0} cy={0} r={3} fill="var(--primary-40)" />
+        <circle cx={0} cy={0} r={4} fill="var(--primary-40)" />
       </g>
     );
   } else if (state === 'fruit') {
-    shape = <circle cx={0} cy={0} r={8} fill={color} />;
+    shape = <circle cx={0} cy={0} r={10} fill={color} />;
   } else if (state === 'bud') {
-    shape = <circle cx={0} cy={0} r={5} fill={color} />;
+    shape = <circle cx={0} cy={0} r={7} fill={color} />;
   } else {
     // leaf ellipse with stem
     shape = (
       <g>
-        <ellipse cx={0} cy={0} rx={12} ry={7} fill={color} style={filter ? { filter } : undefined} />
-        <line x1={-10} y1={4} x2={-16} y2={10} stroke="var(--node-salmon)" strokeWidth={1.2} opacity={0.6} />
+        <ellipse cx={0} cy={0} rx={14} ry={9} fill={color} style={filter ? { filter } : undefined} />
+        <line x1={0} y1={0} x2={-6} y2={8} stroke="#6B8E5A" strokeWidth={1.2} opacity={0.5} />
       </g>
     );
   }
 
   return (
-    <motion.g
+    <g
       role="button"
       tabIndex={0}
       aria-label={`${anchorName} — ${state} health, ${qaCount} Q&A${qaCount === 1 ? '' : 's'}`}
       transform={`translate(${x}, ${y})`}
-      initial={{ scale: 0, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1, rotate: ambientSway ? [0, 2, -2, 0] : 0 }}
-      transition={ambientSway
-        ? { scale: { type: 'spring', stiffness: 260, damping: 18, delay: animationDelay }, opacity: { duration: 0.3, delay: animationDelay }, rotate: { duration: 3, repeat: Infinity, ease: 'easeInOut' } }
-        : { type: 'spring', stiffness: 260, damping: 18, delay: animationDelay }}
       onPointerDown={handleTap}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTap(e as unknown as React.PointerEvent<SVGGElement>); }}
       style={{ cursor: 'pointer', outline: 'none' }}
     >
       {/* 44x44 invisible hit target centered on leaf (WCAG 2.5.5) */}
       <rect x={-half} y={-half} width={LEAF_HIT_TARGET_PX} height={LEAF_HIT_TARGET_PX} fill="transparent" style={{ pointerEvents: 'all' }} />
-      {shape}
-    </motion.g>
+      <motion.g
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1, rotate: ambientSway ? [0, 2, -2, 0] : 0 }}
+        transition={ambientSway
+          ? { scale: { type: 'spring', stiffness: 260, damping: 18, delay: animationDelay }, opacity: { duration: 0.3, delay: animationDelay }, rotate: { duration: 3, repeat: Infinity, ease: 'easeInOut' } }
+          : { type: 'spring', stiffness: 260, damping: 18, delay: animationDelay }}
+        style={{ transformOrigin: '0 0', transformBox: 'fill-box' }}
+      >
+        {shape}
+      </motion.g>
+    </g>
   );
 }

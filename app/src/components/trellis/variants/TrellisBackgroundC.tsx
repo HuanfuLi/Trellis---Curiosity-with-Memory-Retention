@@ -1,20 +1,29 @@
 import { TRELLIS_VIEWBOX_W, TRELLIS_VIEWBOX_H } from '../../../services/trellis-layout.service.ts';
 
-// Pure-SVG trellis lattice. Renders warm gradient sky + wooden lattice.
+// Pure-SVG trellis background: soft garden sky gradient with organic diamond-lattice woodwork.
 // All filters static (no animated feTurbulence / feDisplacementMap per Pitfall 3).
 export function TrellisBackgroundC() {
   const W = TRELLIS_VIEWBOX_W;
   const H = TRELLIS_VIEWBOX_H;
-  const latticeSpacing = 40;
   const groundY = H * 0.88;
 
-  const verticalLines = [];
-  for (let x = latticeSpacing; x < W; x += latticeSpacing) {
-    verticalLines.push(<line key={`v${x}`} x1={x} y1={H * 0.15} x2={x} y2={groundY} stroke="var(--node-salmon)" strokeWidth={1.5} opacity={0.35} />);
+  // Diamond lattice: diagonal cross-hatching like a real garden trellis
+  const spacing = 36;
+  const topY = H * 0.08;
+  const diagonals: React.ReactNode[] = [];
+  // Forward diagonals (\)
+  for (let offset = -H; offset < W + H; offset += spacing) {
+    diagonals.push(
+      <line key={`f${offset}`} x1={offset} y1={topY} x2={offset + groundY - topY} y2={groundY}
+        stroke="#C4A882" strokeWidth={1.8} opacity={0.32} strokeLinecap="round" />,
+    );
   }
-  const horizontalLines = [];
-  for (let y = H * 0.2; y < groundY; y += latticeSpacing) {
-    horizontalLines.push(<line key={`h${y}`} x1={0} y1={y} x2={W} y2={y} stroke="var(--node-salmon)" strokeWidth={1.5} opacity={0.25} />);
+  // Back diagonals (/)
+  for (let offset = -H; offset < W + H; offset += spacing) {
+    diagonals.push(
+      <line key={`b${offset}`} x1={offset + groundY - topY} y1={topY} x2={offset} y2={groundY}
+        stroke="#C4A882" strokeWidth={1.8} opacity={0.28} strokeLinecap="round" />,
+    );
   }
 
   return (
@@ -28,20 +37,30 @@ export function TrellisBackgroundC() {
     >
       <defs>
         <linearGradient id="trellis-c-sky" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--node-peach)" stopOpacity="0.6" />
-          <stop offset="60%" stopColor="var(--surface)" stopOpacity="0.9" />
+          <stop offset="0%" stopColor="#E8F5E9" stopOpacity="0.7" />
+          <stop offset="50%" stopColor="var(--surface)" stopOpacity="0.95" />
           <stop offset="100%" stopColor="var(--surface-variant)" stopOpacity="1" />
         </linearGradient>
-        <filter id="trellis-c-blur"><feGaussianBlur stdDeviation="2" /></filter>
+        <linearGradient id="trellis-c-ground" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#A5D6A7" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="#81C784" stopOpacity="0.2" />
+        </linearGradient>
+        <clipPath id="trellis-c-clip">
+          <rect x={0} y={topY} width={W} height={groundY - topY} />
+        </clipPath>
       </defs>
+      {/* Sky */}
       <rect x={0} y={0} width={W} height={H} fill="url(#trellis-c-sky)" />
-      {/* Ground */}
-      <rect x={0} y={groundY} width={W} height={H - groundY} fill="var(--node-mint)" opacity={0.25} />
-      {/* Lattice — static blur only on background layer per Pitfall 3 */}
-      <g filter="url(#trellis-c-blur)" opacity={0.7}>
-        {verticalLines}
-        {horizontalLines}
+      {/* Ground strip */}
+      <rect x={0} y={groundY} width={W} height={H - groundY} fill="url(#trellis-c-ground)" />
+      {/* Diamond lattice woodwork — clipped to garden area */}
+      <g clipPath="url(#trellis-c-clip)" opacity={0.65}>
+        {diagonals}
       </g>
+      {/* Top rail */}
+      <line x1={0} y1={topY} x2={W} y2={topY} stroke="#B89B71" strokeWidth={2.5} opacity={0.4} />
+      {/* Bottom rail */}
+      <line x1={0} y1={groundY} x2={W} y2={groundY} stroke="#B89B71" strokeWidth={2.5} opacity={0.35} />
     </svg>
   );
 }

@@ -109,7 +109,7 @@ export function buildTrellisState(questions: Question[]): TrellisLayout {
       const branchId = `${root.rootLabel}::${branch.branchLabel}`;
       const vine = vines.find((v) => v.branchId === branchId)!;
       branch.clusters.forEach((cluster) => {
-        // Per Pitfall 7: process ONLY anchors, not legacyNodes.
+        // Process anchors with their children
         cluster.anchors.forEach(({ anchor, qaChildren }) => {
           const state = computeLeafState(anchor, qaChildren, blossomDates[anchor.id]);
           // Blossom date persistence (Pitfall 4)
@@ -134,6 +134,32 @@ export function buildTrellisState(questions: Question[]): TrellisLayout {
             vinePosition: { t: leafPos.t },
             layoutPosition: { x: leafPos.x, y: leafPos.y },
             blossomSinceDate: blossomDates[anchor.id],
+          });
+        });
+        // Legacy questions (not yet classified as anchors) show as standalone leaves
+        cluster.legacyNodes.forEach((q) => {
+          const state = computeLeafState(q, [], blossomDates[q.id]);
+          if (state === 'blossom' || state === 'fruit') {
+            if (!blossomDates[q.id]) {
+              const isoToday = new Date().toISOString().split('T')[0];
+              blossomDates[q.id] = isoToday;
+              setBlossomDate(q.id, isoToday);
+            }
+          } else if (blossomDates[q.id]) {
+            delete blossomDates[q.id];
+            clearBlossomDate(q.id);
+          }
+          const leafPos = getLeafPosition(q.id, vine.spec);
+          nodes.push({
+            anchor: q,
+            qaChildren: [],
+            leafState: state,
+            branchLabel: branch.branchLabel,
+            branchId,
+            branchIndex: vine.branchIndex,
+            vinePosition: { t: leafPos.t },
+            layoutPosition: { x: leafPos.x, y: leafPos.y },
+            blossomSinceDate: blossomDates[q.id],
           });
         });
       });

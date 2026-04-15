@@ -75,13 +75,13 @@ export function getLeafPosition(anchorId: string, vineSpec: VinePathSpec): { x: 
   return { x: x + jitterX, y: y + jitterY, t };
 }
 
-// Deterministic branch color: hash(branchId) % 5 -> one of 5 --node-* tokens
+// Deterministic branch color: natural green/brown tones for organic vine look
 export const VINE_COLOR_VARS = [
-  'var(--node-mint)',
-  'var(--node-sky)',
-  'var(--node-lilac)',
-  'var(--node-peach)',
-  'var(--node-salmon)',
+  '#6B8E5A', // sage green
+  '#8B7355', // warm brown
+  '#5C7A4A', // forest green
+  '#A0845C', // light bark
+  '#4A7043', // deep green
 ] as const;
 
 export function getVineColor(branchId: string): string {
