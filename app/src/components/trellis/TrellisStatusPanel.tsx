@@ -4,16 +4,36 @@
 // exposes Harvest All which clears blossom dates, accumulates credits, emits
 // HARVEST_COMPLETED, flies fruit particles to the header counter, and fires confetti
 // (D-02, D-03, D-06). Inline styles only — project convention.
+//
+// Plan 26-03 additions:
+// - Dying sheet items expose Heal + Prune actions (D-11, D-15)
+// - Dead sheet items expose Re-plant + Prune actions (D-13, D-15)
+// - Prune animation: scissors rotate → node card falls + fades (D-17)
+// - Pruned section below the 3-column panel with Restore / Delete forever (D-16, D-18)
 
 import { useRef, useState } from 'react';
 import type { CSSProperties, RefObject } from 'react';
-import { Cherry, Leaf, XCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Cherry,
+  Leaf,
+  XCircle,
+  Heart,
+  Scissors,
+  Sprout,
+  RotateCcw,
+  Trash2,
+} from 'lucide-react';
 import { BottomSheet } from '../ui/BottomSheet';
 import { Confetti } from '../Confetti';
 import { clearBlossomDate } from '../../services/trellis-blossom-dates.service';
 import { trellisCreditsService } from '../../services/trellis-credits.service';
+import { trellisActionsService } from '../../services/trellis-actions.service';
+import { questionService } from '../../services/question.service';
 import { eventBus } from '../../lib/event-bus';
+import { toast } from '../../lib/toast';
 import type { TrellisAnchorNode } from '../../services/trellis-state.service';
+import type { Question } from '../../types';
 
 interface TrellisStatusPanelProps {
   nodes: TrellisAnchorNode[];
@@ -32,94 +52,40 @@ interface FlyParticle {
 const FRUIT_COLOR = '#E8A838';
 const DYING_COLOR = '#D4A017';
 const DEAD_COLOR = '#9E9E9E';
+const HEAL_COLOR = 'var(--node-mint, #8BC9A8)';
+const REPLANT_COLOR = '#4FB3A0';
 
 function anchorLabel(node: TrellisAnchorNode): string {
   const q = node.anchor;
   return q.title ?? q.content ?? 'anchor';
 }
 
-function NodeListItem({
-  node,
-  icon,
-  color,
-}: {
-  node: TrellisAnchorNode;
-  icon: React.ReactNode;
-  color: string;
-}) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px',
-        padding: '10px 12px',
-        borderRadius: 'var(--radius-xl)',
-        backgroundColor: 'var(--surface-variant)',
-        border: '1px solid var(--border)',
-        marginBottom: '8px',
-      }}
-    >
-      <span style={{ color, display: 'flex', flexShrink: 0 }}>{icon}</span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p
-          style={{
-            margin: 0,
-            fontSize: '0.88rem',
-            fontWeight: 500,
-            color: 'var(--foreground)',
-            overflow: 'hidden',
-            whiteSpace: 'nowrap',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {anchorLabel(node)}
-        </p>
-        <p
-          style={{
-            margin: '2px 0 0',
-            fontSize: '0.72rem',
-            color: 'var(--muted-foreground)',
-            overflow: 'hidden',
-            whiteSpace: 'nowrap',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {node.branchLabel}
-        </p>
-      </div>
-    </div>
-  );
-}
-
 export function TrellisStatusPanel({ nodes, onCreditsChange, counterRef }: TrellisStatusPanelProps) {
+  const navigate = useNavigate();
   const [activeSheet, setActiveSheet] = useState<SheetKey>(null);
   const [flyParticles, setFlyParticles] = useState<FlyParticle[]>([]);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [prunedNodes, setPrunedNodes] = useState<Question[]>(() => questionService.getPrunedQuestions());
+  const [showPruned, setShowPruned] = useState(false);
+  const [pruningId, setPruningId] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
   const fruitNodes = nodes.filter((n) => n.leafState === 'fruit');
   const dyingNodes = nodes.filter((n) => n.leafState === 'yellow' || n.leafState === 'falling');
   const deadNodes = nodes.filter((n) => n.leafState === 'fallen');
 
+  const refreshPrunedNodes = () => setPrunedNodes(questionService.getPrunedQuestions());
+
   const handleHarvest = () => {
     const count = fruitNodes.length;
     if (count === 0) return;
 
-    // 1. Clear blossom dates so leaf state recomputes away from 'fruit'
     fruitNodes.forEach((n) => clearBlossomDate(n.anchor.id));
-
-    // 2. Persist credits
     const newTotal = trellisCreditsService.add(count);
     onCreditsChange(newTotal);
-
-    // 3. Notify subscribers (useTrellisData will recompute)
     eventBus.emit({ type: 'HARVEST_COMPLETED', payload: { count } });
-
-    // 4. Close sheet
     setActiveSheet(null);
 
-    // 5. Fly-to-counter animation — compute vector from panel center to counter
     const panelEl = panelRef.current;
     const counterEl = counterRef.current;
     if (panelEl && counterEl) {
@@ -138,13 +104,54 @@ export function TrellisStatusPanel({ nodes, onCreditsChange, counterRef }: Trell
         dy,
       }));
       setFlyParticles(particles);
-      // Clear particles after animation
       window.setTimeout(() => setFlyParticles([]), 1100);
     }
 
-    // 6. Confetti after fly-to-counter completes
     window.setTimeout(() => setShowConfetti(true), 1200);
     window.setTimeout(() => setShowConfetti(false), 1200 + 3500);
+  };
+
+  const handleHeal = (node: TrellisAnchorNode) => {
+    const name = anchorLabel(node);
+    const qaIds = node.qaChildren.map((q) => q.id);
+    const result = trellisActionsService.heal(node.anchor.id, name, qaIds);
+    setActiveSheet(null);
+    navigate(result.navigateTo, { state: result.state });
+  };
+
+  const handleReplant = async (node: TrellisAnchorNode) => {
+    const qaIds = node.qaChildren.map((q) => q.id);
+    const result = await trellisActionsService.replant(node.anchor.id, node.anchor, qaIds);
+    toast('Schedule reset - review to revive', 'success');
+    setActiveSheet(null);
+    navigate(result.navigateTo, { state: result.state });
+  };
+
+  const handlePrune = (node: TrellisAnchorNode) => {
+    const id = node.anchor.id;
+    setPruningId(id);
+    // Let the CSS animation play (scissors cut ~0.3s, leaf fall ~0.5s) before
+    // flipping the flagged field and refreshing state.
+    window.setTimeout(() => {
+      trellisActionsService.prune(id);
+      refreshPrunedNodes();
+      setPruningId(null);
+      toast('Pruned - moved to archive', 'success');
+      // Close sheet so the user sees the pruned badge update in the panel area
+      setActiveSheet(null);
+    }, 800);
+  };
+
+  const handleUnprune = (q: Question) => {
+    trellisActionsService.unpruneQuestion(q.id);
+    refreshPrunedNodes();
+    toast('Restored to trellis', 'success');
+  };
+
+  const handleHardDelete = async (q: Question) => {
+    await trellisActionsService.hardDelete(q.id);
+    refreshPrunedNodes();
+    toast('Permanently deleted', 'success');
   };
 
   const columnBase: CSSProperties = {
@@ -181,6 +188,107 @@ export function TrellisStatusPanel({ nodes, onCreditsChange, counterRef }: Trell
     marginLeft: '2px',
   };
 
+  const actionBtnBase: CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '8px 12px',
+    borderRadius: '10px',
+    border: 'none',
+    fontSize: '0.82rem',
+    fontWeight: 600,
+    cursor: 'pointer',
+    color: 'white',
+  };
+
+  const renderActionableItem = (
+    node: TrellisAnchorNode,
+    leadIcon: React.ReactNode,
+    leadColor: string,
+    primaryAction: { label: string; icon: React.ReactNode; color: string; onClick: () => void },
+  ) => {
+    const isPruning = pruningId === node.anchor.id;
+    return (
+      <div
+        key={node.anchor.id}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          padding: '10px 12px',
+          borderRadius: 'var(--radius-xl)',
+          backgroundColor: 'var(--surface-variant)',
+          border: '1px solid var(--border)',
+          marginBottom: '8px',
+          animation: isPruning ? 'prune-fall 0.5s ease-in 0.3s forwards' : undefined,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ color: leadColor, display: 'flex', flexShrink: 0 }}>{leadIcon}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p
+              style={{
+                margin: 0,
+                fontSize: '0.88rem',
+                fontWeight: 500,
+                color: 'var(--foreground)',
+                overflow: 'hidden',
+                whiteSpace: 'nowrap',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {anchorLabel(node)}
+            </p>
+            <p
+              style={{
+                margin: '2px 0 0',
+                fontSize: '0.72rem',
+                color: 'var(--muted-foreground)',
+                overflow: 'hidden',
+                whiteSpace: 'nowrap',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {node.branchLabel}
+            </p>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            className="active-squish"
+            onClick={primaryAction.onClick}
+            disabled={isPruning}
+            style={{ ...actionBtnBase, backgroundColor: primaryAction.color, flex: 1 }}
+          >
+            {primaryAction.icon}
+            {primaryAction.label}
+          </button>
+          <button
+            className="active-squish"
+            onClick={() => handlePrune(node)}
+            disabled={isPruning}
+            aria-label="Prune"
+            style={{
+              ...actionBtnBase,
+              backgroundColor: 'var(--surface)',
+              color: 'var(--muted-foreground)',
+              border: '1px solid var(--border)',
+              padding: '8px 10px',
+            }}
+          >
+            <Scissors
+              size={14}
+              style={{
+                animation: isPruning ? 'prune-cut 0.3s ease-in-out forwards' : undefined,
+              }}
+            />
+            Prune
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div style={{ position: 'relative' }}>
       <style>{`
@@ -192,6 +300,15 @@ export function TrellisStatusPanel({ nodes, onCreditsChange, counterRef }: Trell
           0%   { transform: translate(0, 0) scale(1); opacity: 1; }
           80%  { opacity: 1; }
           100% { transform: translate(var(--fly-dx), var(--fly-dy)) scale(0.4); opacity: 0; }
+        }
+        @keyframes prune-cut {
+          0%   { transform: rotate(0); }
+          50%  { transform: rotate(-25deg); }
+          100% { transform: rotate(0); }
+        }
+        @keyframes prune-fall {
+          0%   { transform: translateY(0); opacity: 1; }
+          100% { transform: translateY(60px); opacity: 0; }
         }
       `}</style>
 
@@ -228,6 +345,103 @@ export function TrellisStatusPanel({ nodes, onCreditsChange, counterRef }: Trell
         </div>
       </div>
 
+      {/* Pruned section link (D-16) */}
+      {prunedNodes.length > 0 && (
+        <div style={{ padding: '0 16px 12px' }}>
+          <button
+            onClick={() => setShowPruned((v) => !v)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 10px',
+              borderRadius: '10px',
+              backgroundColor: 'transparent',
+              border: '1px dashed var(--border)',
+              color: 'var(--muted-foreground)',
+              fontSize: '0.78rem',
+              cursor: 'pointer',
+            }}
+          >
+            <Scissors size={12} />
+            Pruned ({prunedNodes.length})
+            <span style={{ marginLeft: '2px' }}>{showPruned ? '▾' : '▸'}</span>
+          </button>
+          {showPruned && (
+            <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {prunedNodes.map((q) => (
+                <div
+                  key={q.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 10px',
+                    borderRadius: '10px',
+                    backgroundColor: 'var(--surface-variant)',
+                    border: '1px solid var(--border)',
+                  }}
+                >
+                  <span
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      fontSize: '0.82rem',
+                      color: 'var(--muted-foreground)',
+                      overflow: 'hidden',
+                      whiteSpace: 'nowrap',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {q.title ?? q.content ?? 'anchor'}
+                  </span>
+                  <button
+                    onClick={() => handleUnprune(q)}
+                    aria-label="Restore"
+                    title="Restore to trellis"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '6px 8px',
+                      borderRadius: '8px',
+                      backgroundColor: 'var(--surface)',
+                      border: '1px solid var(--border)',
+                      color: 'var(--foreground)',
+                      fontSize: '0.75rem',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <RotateCcw size={12} />
+                    Restore
+                  </button>
+                  <button
+                    onClick={() => { void handleHardDelete(q); }}
+                    aria-label="Delete forever"
+                    title="Delete forever"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '6px 8px',
+                      borderRadius: '8px',
+                      backgroundColor: 'var(--surface)',
+                      border: '1px solid var(--border)',
+                      color: '#B44',
+                      fontSize: '0.75rem',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Trash2 size={12} />
+                    Delete
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Fruit bottom sheet */}
       <BottomSheet
         open={activeSheet === 'fruit'}
@@ -263,18 +477,56 @@ export function TrellisStatusPanel({ nodes, onCreditsChange, counterRef }: Trell
               Harvest All ({fruitNodes.length})
             </button>
             {fruitNodes.map((n) => (
-              <NodeListItem
+              <div
                 key={n.anchor.id}
-                node={n}
-                icon={<Cherry size={16} />}
-                color={FRUIT_COLOR}
-              />
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '10px 12px',
+                  borderRadius: 'var(--radius-xl)',
+                  backgroundColor: 'var(--surface-variant)',
+                  border: '1px solid var(--border)',
+                  marginBottom: '8px',
+                }}
+              >
+                <span style={{ color: FRUIT_COLOR, display: 'flex', flexShrink: 0 }}>
+                  <Cherry size={16} />
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: '0.88rem',
+                      fontWeight: 500,
+                      color: 'var(--foreground)',
+                      overflow: 'hidden',
+                      whiteSpace: 'nowrap',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {anchorLabel(n)}
+                  </p>
+                  <p
+                    style={{
+                      margin: '2px 0 0',
+                      fontSize: '0.72rem',
+                      color: 'var(--muted-foreground)',
+                      overflow: 'hidden',
+                      whiteSpace: 'nowrap',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {n.branchLabel}
+                  </p>
+                </div>
+              </div>
             ))}
           </>
         )}
       </BottomSheet>
 
-      {/* Dying bottom sheet */}
+      {/* Dying bottom sheet (D-11, D-15: Heal + Prune) */}
       <BottomSheet
         open={activeSheet === 'dying'}
         onClose={() => setActiveSheet(null)}
@@ -285,18 +537,23 @@ export function TrellisStatusPanel({ nodes, onCreditsChange, counterRef }: Trell
             No anchors are dying — your trellis is healthy.
           </p>
         ) : (
-          dyingNodes.map((n) => (
-            <NodeListItem
-              key={n.anchor.id}
-              node={n}
-              icon={<Leaf size={16} />}
-              color={DYING_COLOR}
-            />
-          ))
+          dyingNodes.map((n) =>
+            renderActionableItem(
+              n,
+              <Leaf size={16} />,
+              DYING_COLOR,
+              {
+                label: 'Heal',
+                icon: <Heart size={14} />,
+                color: HEAL_COLOR,
+                onClick: () => handleHeal(n),
+              },
+            ),
+          )
         )}
       </BottomSheet>
 
-      {/* Dead bottom sheet */}
+      {/* Dead bottom sheet (D-13, D-15: Re-plant + Prune) */}
       <BottomSheet
         open={activeSheet === 'dead'}
         onClose={() => setActiveSheet(null)}
@@ -307,14 +564,19 @@ export function TrellisStatusPanel({ nodes, onCreditsChange, counterRef }: Trell
             Nothing has died yet. Keep reviewing to keep your trellis alive.
           </p>
         ) : (
-          deadNodes.map((n) => (
-            <NodeListItem
-              key={n.anchor.id}
-              node={n}
-              icon={<XCircle size={16} />}
-              color={DEAD_COLOR}
-            />
-          ))
+          deadNodes.map((n) =>
+            renderActionableItem(
+              n,
+              <XCircle size={16} />,
+              DEAD_COLOR,
+              {
+                label: 'Re-plant',
+                icon: <Sprout size={14} />,
+                color: REPLANT_COLOR,
+                onClick: () => { void handleReplant(n); },
+              },
+            ),
+          )
         )}
       </BottomSheet>
 
