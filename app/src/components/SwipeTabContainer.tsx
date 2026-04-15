@@ -16,7 +16,7 @@
  * inside the SwipeTabContext.Provider so they can read swipeProgress.
  */
 
-import { useRef, useEffect, useLayoutEffect, useCallback, useMemo, useState } from 'react';
+import { useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, useMotionValue, useTransform, animate } from 'framer-motion';
 import type { PanInfo, AnimationPlaybackControls } from 'framer-motion';
@@ -52,10 +52,6 @@ export function SwipeTabContainer({ screens, routes, children }: SwipeTabContain
   const keyboardOpenRef = useRef(false);
   const animatingRef = useRef(false);
   const animControlsRef = useRef<AnimationPlaybackControls | null>(null);
-
-  // Jump tracking to prevent intermediate flashes
-  const [isJumping, setIsJumping] = useState(false);
-  const jumpStartRef = useRef(-1);
 
   // Resolve initial index from current route (once on mount)
   const initialIndex = useMemo(() => {
@@ -166,26 +162,16 @@ export function SwipeTabContainer({ screens, routes, children }: SwipeTabContain
     if (targetIndex < 0 || targetIndex >= routes.length) return;
 
     animControlsRef.current?.stop();
-    
-    const jump = Math.abs(targetIndex - activeIndexRef.current) > 1;
-    if (jump) {
-      jumpStartRef.current = activeIndexRef.current;
-      setIsJumping(true);
-    }
 
     activeIndexRef.current = targetIndex;
     animatingRef.current = true;
 
     animControlsRef.current = animate(stripX, -(targetIndex * screenWidthRef.current), {
       ...SPRING,
-      onComplete: () => { 
-        animatingRef.current = false; 
-        if (jump) setIsJumping(false);
-      }
+      onComplete: () => { animatingRef.current = false; },
     });
 
     navigate(routes[targetIndex]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routes, navigate, stripX]);
 
   // ── Context (stable identity) ───────────────────────────────────────────
@@ -207,26 +193,22 @@ export function SwipeTabContainer({ screens, routes, children }: SwipeTabContain
           touchAction: 'pan-y',
         }}
       >
-        {screens.map((screen, i) => {
-          const isIntermediate = isJumping && i !== activeIndexRef.current && i !== jumpStartRef.current;
-          return (
-            <div
-              key={routes[i]}
-              style={{
-                width: '100vw',
-                flexShrink: 0,
-                height: '100dvh',
-                overflow: 'hidden',
-                // Creates a per-slot containing block so position:fixed elements
-                // (Header, modals) are scoped to their own screen, not the strip.
-                transform: 'translateZ(0)',
-                visibility: isIntermediate ? 'hidden' : 'visible',
-              }}
-            >
-              {screen}
-            </div>
-          );
-        })}
+        {screens.map((screen, i) => (
+          <div
+            key={routes[i]}
+            style={{
+              width: '100vw',
+              flexShrink: 0,
+              height: '100dvh',
+              overflow: 'hidden',
+              // Creates a per-slot containing block so position:fixed elements
+              // (Header, modals) are scoped to their own screen, not the strip.
+              transform: 'translateZ(0)',
+            }}
+          >
+            {screen}
+          </div>
+        ))}
       </motion.div>
       {children}
     </SwipeTabContext.Provider>
