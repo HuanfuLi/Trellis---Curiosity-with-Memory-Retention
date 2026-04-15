@@ -588,7 +588,7 @@ export const plannerService = {
     persistCheckInToSQLite(checkIn);
 
     // Single event emit for the entire check-in — prevents render storming.
-    eventBus.emit({ type: 'PLANNER_UPDATED', payload: { reason: 'checkin' } });
+    eventBus.emit({ type: 'PLANNER_UPDATED', payload: { reason: 'chunk' } });
 
     return checkIn;
   },

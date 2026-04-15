@@ -645,7 +645,7 @@ export type AppEvent =
   | { type: 'CATEGORY_CREATED'; payload: Category }
   | { type: 'REVIEW_SUBMITTED'; payload: { questionId: string; rating: number } }
   | { type: 'REVIEW_DUE_COUNT_CHANGED'; payload: { count: number } }
-  | { type: 'PLANNER_UPDATED'; payload: { reason: 'chunk' | 'thread' | 'checkin' } }
+  | { type: 'PLANNER_UPDATED'; payload: { reason: 'chunk' } }
   | { type: 'PODCAST_GENERATION_STARTED'; payload: { podcastId: string; date: string } }
   | { type: 'PODCAST_GENERATION_PROGRESS'; payload: { podcastId: string; progress: number } }
   | { type: 'PODCAST_GENERATION_COMPLETED'; payload: DailyPodcast }

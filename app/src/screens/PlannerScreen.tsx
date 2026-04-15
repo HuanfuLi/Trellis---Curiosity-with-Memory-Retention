@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Play, RefreshCw, Sparkles,
+  Play, RefreshCw, Sparkles, Loader2, X,
   ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
