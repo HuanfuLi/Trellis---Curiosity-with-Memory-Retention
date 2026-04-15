@@ -76,11 +76,20 @@ Completed Phase 25 Plan 00 (25-00-PLAN.md) — Wave 0 Foundations
 **Stopped At:** Completed 25-05-PLAN.md
 **Date:** 2026-04-14
 
-## Latest Decisions (Phase 25-00)
+## Latest Decisions (Phase 25)
 
 - [Phase 25-00] questionService imported at top-level in review.service.ts (already present), no dynamic import needed for anchor resolution
 - [Phase 25-00] REVIEW_COMPLETED emitted synchronously after REVIEW_SUBMITTED using existing questionService.getAll() for anchor lookup
 - [Phase 25-00] Blossom date service uses trellis_blossom_dates localStorage key, separate from review schedule storage
+- [Phase 25] Variant V (video background) removed — user decided against video background variant; only A (image) and C (SVG) remain
+- [Phase 25] Learning Check-In section removed from PlannerScreen — redundant with Ask screen; users go there to explore topics
+- [Phase 25] Leaf state reads FlashCard review data (via flashcardService.getAll()) as authoritative source — Question.reviewSchedule is never updated by the review flow
+- [Phase 25] Legacy questions (not classified as anchors) rendered as standalone trellis leaves with their own state
+- [Phase 25] Vine colors use natural green/brown hex tones (#6B8E5A, #8B7355, etc.) not rainbow --node-* CSS vars
+- [Phase 25] Background Variant C: diamond cross-hatch lattice with wooden rails, not rectangular grid
+- [Phase 25] Leaf shapes are Ghibli-style botanical silhouettes (pointed leaves with veins, sakura blossom, apple fruit) — not colored dots
+- [Phase 25] Leaf stems connect to vine via branch lines and rotate toward vine attachment point (stemAngle from layout service)
+- [Phase 25] Leaf shapes scaled 1.8x for visibility in 800x400 viewBox
 
 ## Latest Decisions (Phase 16-03)
 
