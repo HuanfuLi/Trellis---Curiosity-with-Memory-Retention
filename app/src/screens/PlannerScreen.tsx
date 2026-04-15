@@ -16,6 +16,7 @@ import { transcribeAudio } from '../providers/stt';
 import { startVoiceRecording, stopVoiceRecording } from '../lib/voice-recorder';
 import { settingsService } from '../services/settings.service';
 import { Header, HEADER_HEIGHT } from '../components/ui/Header';
+import { TrellisHero } from '../components/trellis/TrellisHero';
 import { PortalCard, buildPortalData } from '../components/PortalCard';
 import { DiagnosticChat } from '../components/DiagnosticChat';
 import { diagnosticDialogueService } from '../services/diagnostic-dialogue.service';
@@ -490,6 +491,8 @@ export function PlannerScreen() {
   return (
     <div style={{ padding: `${HEADER_HEIGHT + 8}px 16px 96px`, maxWidth: '448px', margin: '0 auto' }}>
       <Header title="Planner" />
+
+      <TrellisHero />
 
       {/* Review Banner */}
       {reviewCount > 0 && (
