@@ -149,17 +149,18 @@ None. Scanned all 6 phase files for TODO, FIXME, PLACEHOLDER, empty returns, har
 **Expected:** Tab snaps back to Home; no navigation to Planner.
 **Why human:** Requires physical gesture with real viewport width.
 
-#### 4. Tab tap slide animation (not instant)
+#### 4. Tab tap — ~~slide animation (not instant)~~ **REVERTED 2026-04-15**
 
-**Test:** Tap the Settings icon in the bottom nav from the Home screen.
-**Expected:** Visible spring slide animation ~250ms (not an instant jump).
-**Why human:** Animation timing and quality require visual inspection.
+~~Test: Tap the Settings icon in the bottom nav from the Home screen.~~
+~~Expected: Visible spring slide animation ~250ms (not an instant jump).~~
 
-#### 5. Non-adjacent tab tap — direct slide
+**Current behavior (as of 2026-04-15, see addendum below):** Tapping a bottom-nav tab is **instant transport** — `stripX.set()` applied in one frame, no spring animation. Reverted per user feedback that the animated jump was fragile and flickery in practice.
 
-**Test:** From Home, tap Graph (index 3).
-**Expected:** Slides directly from Home to Graph. Planner and Ask do NOT flash by.
-**Why human:** navigateToTab sets dragOffset jump to bypass intermediates — must confirm no intermediate screen renders.
+#### 5. Non-adjacent tab tap — ~~direct slide~~ **REVERTED 2026-04-15**
+
+~~Test: From Home, tap Graph (index 3). Slides directly without intermediates flashing.~~
+
+**Current behavior:** Non-adjacent taps now snap instantly to the target with no animation. Intermediate-hide logic (`visibility: hidden` on pass-through screens) also removed — all 5 screens are always mounted AND always visible. See addendum.
 
 #### 6. PostCarousel swipe conflict suppression
 
@@ -207,3 +208,31 @@ Verification is blocked on 11 visual/device behaviors that cannot be confirmed w
 
 _Verified: 2026-04-07_
 _Verifier: Claude (gsd-verifier)_
+
+---
+
+## Addendum — 2026-04-15: BottomNavigation tap reverted to instant transport
+
+**Motivation:** During Phase 26 UAT the user reported that tapping the bottom nav buttons produced flickers and inconsistent animation behavior, especially on multi-tab jumps. The animated spring was fragile in practice and never felt as clean as the finger-swipe commit. The user requested a split: keep the spring for finger drags, make taps instant (matching the pre-Phase-22 behavior).
+
+**Code changes (`app/src/components/SwipeTabContainer.tsx`):**
+
+1. `navigateToTab()` — replaced `animate(stripX, ..., SPRING)` with `stripX.set(-(targetIndex * screenWidthRef.current))`. Also stops any in-flight animation from a prior swipe and clears `animatingRef`.
+
+2. Removed `isJumping` state + `jumpStartRef` ref and the `visibility: isIntermediate ? 'hidden' : 'visible'` per-slot style. All 5 first-level screens are now always visible — no pass-through hiding, no white-flash gaps between non-adjacent screens.
+
+3. Finger-swipe path (`onPan` / `onPanEnd`) is untouched — still uses `animate(..., SPRING)` for the commit snap and live `stripX.set()` during drag. Rubber-band resistance, commit threshold, and axis lock behavior all preserved.
+
+**Which earlier tests this invalidates:**
+
+- Human-verification items 4 and 5 above (tab-tap slide animation, non-adjacent direct-slide) no longer apply — replaced with instant transport.
+- SWIPE-09 requirement ("Tab tap triggers slide animation; non-adjacent skips intermediates") is now historical; the instant-transport replacement meets the user's updated preference.
+
+**Which tests still apply unchanged:**
+
+- All finger-swipe behaviors (items 1, 2, 3, 6, 7, 8, 9, 10, 11)
+- Always-mounted screens with preserved scroll state
+- Gesture conflict suppression via `data-no-swipe-nav`
+- Keyboard-open swipe suppression
+
+**Commits:** `361a4d62` (visibility-hide removal), `ae55409c` (tap instant transport).
