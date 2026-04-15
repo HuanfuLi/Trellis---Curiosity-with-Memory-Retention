@@ -93,31 +93,48 @@ export function computeLeafState(
 
 const ALL_LEAF_STATES: LeafState[] = ['bud', 'green', 'yellow', 'falling', 'fallen', 'blossom', 'fruit'];
 
-// Dev mode: show all 8 botanical categories across blossom + fruit states,
-// plus a few leaf states. 3 vines for visual spread.
+// Dev mode: 10 vines with varying heights (1-15 nodes each),
+// showing all 8 botanical categories across all leaf states.
+// Mimics a realistic garden with sparse and dense branches.
 function buildDevTrellisState(): TrellisLayout {
-  const vineCount = 3;
-  const nodesPerVine = [8, 7, 6]; // varying sizes for height demo
+  const vineCount = 10;
+  // Varying node counts → varying vine heights
+  const nodesPerVine = [1, 2, 3, 4, 5, 7, 10, 12, 15, 20];
   const vineDefs = Array.from({ length: vineCount }, (_, i) => {
     const id = `dev::vine-${i}`;
     return { branchId: id, branchLabel: `Vine ${i + 1}`, branchIndex: i,
       spec: generateVinePath(id, i, vineCount, nodesPerVine[i]), color: getVineColor(id) };
   });
 
-  // Show: 8 blossoms (one per category) + 8 fruits + some leaf states
-  const devEntries: Array<{ state: LeafState; cat: number }> = [
-    // Blossoms — all 8 categories
-    ...Array.from({ length: 8 }, (_, i) => ({ state: 'blossom' as LeafState, cat: i })),
-    // Fruits — all 8 categories
-    ...Array.from({ length: 8 }, (_, i) => ({ state: 'fruit' as LeafState, cat: i })),
-    // Leaf states sampled
-    { state: 'bud', cat: 0 }, { state: 'green', cat: 2 }, { state: 'yellow', cat: 4 },
-    { state: 'falling', cat: 6 }, { state: 'fallen', cat: 1 },
+  // Build nodes: assign to vines round-robin, covering all states and categories
+  const devEntries: Array<{ state: LeafState; cat: number; vineIdx: number }> = [
+    // Each vine gets 1-3 nodes to keep it sparse and realistic
+    // Vine 0 (1 node): single bud
+    { state: 'bud', cat: 0, vineIdx: 0 },
+    // Vine 1 (2 nodes): bud + green
+    { state: 'bud', cat: 1, vineIdx: 1 }, { state: 'green', cat: 1, vineIdx: 1 },
+    // Vine 2 (3 nodes): green leaves
+    { state: 'green', cat: 2, vineIdx: 2 }, { state: 'green', cat: 3, vineIdx: 2 }, { state: 'yellow', cat: 2, vineIdx: 2 },
+    // Vine 3: mixed health
+    { state: 'yellow', cat: 4, vineIdx: 3 }, { state: 'falling', cat: 4, vineIdx: 3 }, { state: 'green', cat: 5, vineIdx: 3 },
+    // Vine 4: decay
+    { state: 'falling', cat: 6, vineIdx: 4 }, { state: 'fallen', cat: 7, vineIdx: 4 }, { state: 'yellow', cat: 6, vineIdx: 4 },
+    // Vine 5: blossoms
+    { state: 'blossom', cat: 0, vineIdx: 5 }, { state: 'blossom', cat: 1, vineIdx: 5 }, { state: 'green', cat: 0, vineIdx: 5 },
+    // Vine 6: more blossoms
+    { state: 'blossom', cat: 2, vineIdx: 6 }, { state: 'blossom', cat: 3, vineIdx: 6 }, { state: 'blossom', cat: 4, vineIdx: 6 },
+    // Vine 7: fruits
+    { state: 'fruit', cat: 0, vineIdx: 7 }, { state: 'fruit', cat: 1, vineIdx: 7 }, { state: 'fruit', cat: 2, vineIdx: 7 }, { state: 'green', cat: 3, vineIdx: 7 },
+    // Vine 8: more fruits
+    { state: 'fruit', cat: 3, vineIdx: 8 }, { state: 'fruit', cat: 4, vineIdx: 8 }, { state: 'fruit', cat: 5, vineIdx: 8 }, { state: 'blossom', cat: 5, vineIdx: 8 },
+    // Vine 9 (tallest): mixed garden
+    { state: 'fruit', cat: 6, vineIdx: 9 }, { state: 'fruit', cat: 7, vineIdx: 9 }, { state: 'blossom', cat: 6, vineIdx: 9 },
+    { state: 'blossom', cat: 7, vineIdx: 9 }, { state: 'green', cat: 7, vineIdx: 9 },
   ];
 
-  const nodes: TrellisAnchorNode[] = devEntries.map(({ state, cat }, i) => {
-    const vine = vineDefs[i % vineCount];
-    const fakeId = `dev-${state}-cat${cat}-${i}`;
+  const nodes: TrellisAnchorNode[] = devEntries.map(({ state, cat, vineIdx }, i) => {
+    const vine = vineDefs[vineIdx];
+    const fakeId = `dev-${state}-cat${cat}-v${vineIdx}-${i}`;
     const leafPos = getLeafPosition(fakeId, vine.spec);
     return {
       anchor: { id: fakeId, content: state, title: `${state} (cat ${cat})`, keywords: [], relatedQuestionIds: [], categoryIds: [], reviewSchedule: { nextReviewDate: '', reviewCount: 0, easeFactor: 2.5 }, createdAt: 0 } as Question,
