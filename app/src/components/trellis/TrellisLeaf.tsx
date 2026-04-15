@@ -3,13 +3,13 @@ import type { LeafState } from '../../services/trellis-state.service.ts';
 import { LEAF_HIT_TARGET_PX } from './types.ts';
 
 export const LEAF_STATE_COLOR: Record<LeafState, string> = {
-  bud: 'var(--primary-80)',
-  green: 'var(--node-mint)',
-  yellow: 'var(--secondary-40)',
-  falling: 'var(--node-peach)',
-  fallen: 'var(--node-salmon)',
-  blossom: 'var(--accent-lavender)',
-  fruit: 'var(--accent-coral)',
+  bud: '#8BC34A',      // bright lime green — newly planted
+  green: '#4CAF50',    // solid green — healthy
+  yellow: '#FFC107',   // amber — due soon
+  falling: '#FF9800',  // orange — overdue
+  fallen: '#E57373',   // muted red — long overdue
+  blossom: '#BA68C8',  // rich lavender — mastered
+  fruit: '#EF5350',    // vivid red — sustained mastery
 };
 
 export const LEAF_STATE_FILTER: Partial<Record<LeafState, string>> = {
@@ -35,7 +35,8 @@ export function TrellisLeaf(props: TrellisLeafProps) {
   const filter = LEAF_STATE_FILTER[state];
   const half = LEAF_HIT_TARGET_PX / 2;
 
-  const handleTap = (e: React.PointerEvent<SVGGElement>) => {
+  const handleTap = (e: React.MouseEvent<SVGGElement>) => {
+    e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
     onTap(anchorId, rect.left + rect.width / 2, rect.top + rect.height / 2);
   };
@@ -71,8 +72,8 @@ export function TrellisLeaf(props: TrellisLeafProps) {
       tabIndex={0}
       aria-label={`${anchorName} — ${state} health, ${qaCount} Q&A${qaCount === 1 ? '' : 's'}`}
       transform={`translate(${x}, ${y})`}
-      onPointerDown={handleTap}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTap(e as unknown as React.PointerEvent<SVGGElement>); }}
+      onClick={handleTap}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTap(e as unknown as React.MouseEvent<SVGGElement>); }}
       style={{ cursor: 'pointer', outline: 'none' }}
     >
       {/* 44x44 invisible hit target centered on leaf (WCAG 2.5.5) */}

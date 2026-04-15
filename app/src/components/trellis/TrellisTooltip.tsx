@@ -37,6 +37,7 @@ export interface TrellisTooltipProps {
   anchorName: string;
   state: LeafState;
   qaCount: number;
+  qaIds: string[];
   reviewedCount: number;
   overdueCount: number;
   daysInBlossom: number;
@@ -51,7 +52,7 @@ const TOOLTIP_WIDTH = 240;
 const TOOLTIP_HEIGHT_EST = 140;
 
 export function TrellisTooltip(props: TrellisTooltipProps) {
-  const { anchorId, anchorName, state, qaCount, reviewedCount, overdueCount, daysInBlossom, x, y, heroWidth, heroHeight, onClose } = props;
+  const { anchorId, anchorName, state, qaCount, qaIds, reviewedCount, overdueCount, daysInBlossom, x, y, heroWidth, heroHeight, onClose } = props;
   const navigate = useNavigate();
 
   // Clamp x: center tooltip on leaf, but keep inside hero
@@ -83,7 +84,7 @@ export function TrellisTooltip(props: TrellisTooltipProps) {
         {reviewedCount} / {qaCount} reviewed · {overdueCount} overdue
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-        <Button size="sm" variant="primary" onClick={() => navigate('/review', { state: { anchorReview: { anchorId, anchorName } } })}>Review</Button>
+        <Button size="sm" variant="primary" onClick={() => navigate('/review', { state: { anchorReview: { anchorId, qaIds, title: anchorName } } })}>Review</Button>
         <Button size="sm" variant="secondary" onClick={() => navigate(`/anchor/${anchorId}`)}>View Q&As</Button>
       </div>
     </Card>

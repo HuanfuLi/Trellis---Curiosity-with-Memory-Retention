@@ -1,9 +1,10 @@
-import type { Question } from '../types/index.ts';
+import type { FlashCard, Question, ReviewSchedule } from '../types/index.ts';
 import { buildAnchorReflectionTree } from './canonical-knowledge.service.ts';
 import {
   getBlossomDates, setBlossomDate, clearBlossomDate,
 } from './trellis-blossom-dates.service.ts';
 import { generateVinePath, getLeafPosition, getVineColor, type VinePathSpec } from './trellis-layout.service.ts';
+import { flashcardService } from './flashcard.service.ts';
 
 export type LeafState = 'bud' | 'green' | 'yellow' | 'falling' | 'fallen' | 'blossom' | 'fruit';
 
@@ -32,15 +33,28 @@ function computeDaysOverdue(nextReviewDate: string): number {
   return Math.floor((todayDate.getTime() - reviewDate.getTime()) / 86400000);
 }
 
+// Resolve best review data: prefer FlashCard data (actually updated by review flow)
+// over Question.reviewSchedule (often stale at initial values).
+function resolveReview(q: Question, fcMap: Map<string, ReviewSchedule>): ReviewSchedule {
+  return fcMap.get(q.id) ?? q.reviewSchedule ?? { nextReviewDate: '', reviewCount: 0, easeFactor: 2.5 };
+}
+
 export function computeLeafState(
   anchor: Question,
   qaChildren: Question[],
   blossomSinceDate?: string,
+  fcMap?: Map<string, ReviewSchedule>,
 ): LeafState {
+  const fm = fcMap ?? new Map();
+  const anchorReview = resolveReview(anchor, fm);
+  const childReviews = qaChildren.map((q) => resolveReview(q, fm));
+
   // Bud gate: if no reviews happened anywhere, it's a bud.
-  const anchorReviewCount = anchor.reviewSchedule?.reviewCount ?? 0;
-  const anyChildReviewed = qaChildren.some((q) => (q.reviewSchedule?.reviewCount ?? 0) > 0);
-  if (anchorReviewCount === 0 && !anyChildReviewed) return 'bud';
+  const anchorReviewCount = anchorReview.reviewCount ?? 0;
+  const anyChildReviewed = childReviews.some((r) => (r.reviewCount ?? 0) > 0);
+  // Also check lastReviewedAt as a fallback signal
+  const anchorEverReviewed = anchorReviewCount > 0 || (anchor.lastReviewedAt != null && anchor.lastReviewedAt > 0);
+  if (!anchorEverReviewed && !anyChildReviewed) return 'bud';
 
   // Fruit check (D-09): 7+ consecutive days in blossom
   if (blossomSinceDate) {
@@ -53,17 +67,17 @@ export function computeLeafState(
   }
 
   // Blossom check (D-08): all children reviewed AND aggregate easeFactor > 2.5
-  const allReviewed = qaChildren.length > 0 && qaChildren.every((q) => (q.reviewSchedule?.reviewCount ?? 0) > 0);
-  const aggregateEase = qaChildren.length > 0
-    ? qaChildren.reduce((sum, q) => sum + (q.reviewSchedule?.easeFactor ?? 2.5), 0) / qaChildren.length
-    : (anchor.reviewSchedule?.easeFactor ?? 2.5);
+  const allReviewed = childReviews.length > 0 && childReviews.every((r) => (r.reviewCount ?? 0) > 0);
+  const aggregateEase = childReviews.length > 0
+    ? childReviews.reduce((sum, r) => sum + (r.easeFactor ?? 2.5), 0) / childReviews.length
+    : (anchorReview.easeFactor ?? 2.5);
   if (allReviewed && aggregateEase > 2.5) return 'blossom';
 
   // Overdue aggregation (worst-child-wins per D-07)
-  const pool = qaChildren.length > 0 ? qaChildren : [anchor];
+  const pool = childReviews.length > 0 ? childReviews : [anchorReview];
   let maxOverdue = -Infinity;
-  for (const q of pool) {
-    const nrd = q.reviewSchedule?.nextReviewDate;
+  for (const r of pool) {
+    const nrd = r.nextReviewDate;
     if (!nrd) continue;
     const d = computeDaysOverdue(nrd);
     if (d > maxOverdue) maxOverdue = d;
@@ -84,6 +98,21 @@ export function buildTrellisState(questions: Question[]): TrellisLayout {
 
   const tree = buildAnchorReflectionTree(questions);
   const blossomDates = getBlossomDates();
+
+  // Build FlashCard review lookup: nodeId → best ReviewSchedule
+  // Reviews update FlashCards (not Questions), so this is the authoritative source.
+  const fcMap = new Map<string, ReviewSchedule>();
+  try {
+    const allCards = flashcardService.getAll();
+    for (const card of allCards) {
+      if (!card.nodeId) continue;
+      const existing = fcMap.get(card.nodeId);
+      // Keep the card with the most reviews (best signal)
+      if (!existing || (card.reviewSchedule.reviewCount > existing.reviewCount)) {
+        fcMap.set(card.nodeId, card.reviewSchedule);
+      }
+    }
+  } catch { /* flashcard service unavailable — fall back to question data */ }
 
   // Flat list of all (branchId, branchLabel, branchIndex) entries across all roots.
   const branches: Array<{ branchId: string; branchLabel: string; branchIndex: number }> = [];
@@ -111,7 +140,7 @@ export function buildTrellisState(questions: Question[]): TrellisLayout {
       branch.clusters.forEach((cluster) => {
         // Process anchors with their children
         cluster.anchors.forEach(({ anchor, qaChildren }) => {
-          const state = computeLeafState(anchor, qaChildren, blossomDates[anchor.id]);
+          const state = computeLeafState(anchor, qaChildren, blossomDates[anchor.id], fcMap);
           // Blossom date persistence (Pitfall 4)
           if (state === 'blossom' || state === 'fruit') {
             if (!blossomDates[anchor.id]) {
@@ -138,7 +167,7 @@ export function buildTrellisState(questions: Question[]): TrellisLayout {
         });
         // Legacy questions (not yet classified as anchors) show as standalone leaves
         cluster.legacyNodes.forEach((q) => {
-          const state = computeLeafState(q, [], blossomDates[q.id]);
+          const state = computeLeafState(q, [], blossomDates[q.id], fcMap);
           if (state === 'blossom' || state === 'fruit') {
             if (!blossomDates[q.id]) {
               const isoToday = new Date().toISOString().split('T')[0];

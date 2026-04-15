@@ -106,6 +106,7 @@ export function TrellisHero() {
           anchorName={tooltipNode.anchor.title ?? tooltipNode.anchor.content ?? 'Anchor'}
           state={tooltipNode.leafState}
           qaCount={tooltipNode.qaChildren.length}
+          qaIds={tooltipNode.qaChildren.map((q) => q.id)}
           reviewedCount={reviewedCount}
           overdueCount={overdueCount}
           daysInBlossom={daysInBlossom}
