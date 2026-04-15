@@ -583,13 +583,13 @@ Plans:
 
 **Depends on:** Phase 22
 
-**Plans:** 3/5 plans complete
+**Plans:** 4/5 plans complete
 
 Plans:
 - [x] 23-01-PLAN.md -- Pipeline helpers + classifyAndAnchorIncremental function (PIPE-01..07)
 - [x] 23-02-PLAN.md -- Rate limiter service + type extensions + Settings Usage UI (RATE-01..06)
 - [x] 23-03-PLAN.md -- Wire pipeline + rate limiter into callers (useQuestions, question.service, AskScreen)
-- [ ] 23-04-PLAN.md -- Reorganize JSON robustness: jsonMode across providers, three-tier parser, auto-retry, schema validation (REORG-01..05)
+- [x] 23-04-PLAN.md -- Reorganize JSON robustness: jsonMode across providers, three-tier parser, auto-retry, schema validation (REORG-01..05)
 - [ ] 23-05-PLAN.md -- Incremental classification dedup: symmetric labelKey, reuse-biased prompts, NEW→existing coercion, alias harvest (DEDUP-01..05)
 
 **Success Criteria:**
