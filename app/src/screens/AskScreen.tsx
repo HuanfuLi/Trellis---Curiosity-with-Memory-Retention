@@ -515,7 +515,7 @@ export function AskScreen() {
         centered
         left={
           <button
-            onClick={() => { setShowHistory(true); setHistorySearch(''); }}
+            onClick={() => { setShowHistory(prev => !prev); setHistorySearch(''); }}
             title={t('ask.historyButtonTitle')}
             style={{
               display: 'flex',

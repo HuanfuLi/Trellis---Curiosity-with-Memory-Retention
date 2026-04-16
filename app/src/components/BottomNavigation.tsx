@@ -214,7 +214,7 @@ export function BottomNavigation({ onAskLongPress, onAskLongPressRelease, isTopL
             alignItems: 'center',
             justifyContent: 'center',
             gap: '4px',
-            width: '60px',
+            width: '68px',
             height: '60px',
             borderRadius: '20px',
             border: 'none',
@@ -227,7 +227,7 @@ export function BottomNavigation({ onAskLongPress, onAskLongPressRelease, isTopL
           }}
         >
           <Mic size={24} />
-          <span style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.02em' }}>{t('common.nav.ask')}</span>
+          <span style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', textAlign: 'center' }}>{t('common.nav.ask')}</span>
         </motion.button>
 
         {/* Right items */}

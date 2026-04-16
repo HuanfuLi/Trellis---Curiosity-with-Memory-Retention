@@ -231,15 +231,14 @@ export function PlannerScreen() {
                       {t('planner.deadRowSubtitle')}
                     </p>
                   </div>
+                  <Badge color="red">{t('planner.replantBadge')}</Badge>
                   <button
                     onClick={(e) => { e.stopPropagation(); handlePrune(node.anchor.id); }}
                     aria-label={t('planner.pruneAria')}
                     title={t('planner.pruneTitle')}
                     style={{
-                      // Phase 28 D-29 — WCAG 2.5.8 44×44 minimum touch target.
-                      // Visible icon is still 14px — the 44×44 is tap area.
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      minWidth: '44px', minHeight: '44px', borderRadius: 8,
+                      minWidth: '32px', minHeight: '32px', borderRadius: 8,
                       backgroundColor: 'transparent',
                       border: '1px solid var(--border)',
                       color: 'var(--muted-foreground)', cursor: 'pointer',
@@ -247,7 +246,6 @@ export function PlannerScreen() {
                   >
                     <Scissors size={14} />
                   </button>
-                  <Badge color="red">{t('planner.replantBadge')}</Badge>
                 </div>
               );
             })}
@@ -284,14 +282,14 @@ export function PlannerScreen() {
                       {t('planner.dyingRowSubtitle')}
                     </p>
                   </div>
+                  <Badge color="yellow">{t('planner.healBadge')}</Badge>
                   <button
                     onClick={(e) => { e.stopPropagation(); handlePrune(node.anchor.id); }}
                     aria-label={t('planner.pruneAria')}
                     title={t('planner.pruneTitle')}
                     style={{
-                      // Phase 28 D-29 — WCAG 2.5.8 44×44 minimum touch target.
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      minWidth: '44px', minHeight: '44px', borderRadius: 8,
+                      minWidth: '32px', minHeight: '32px', borderRadius: 8,
                       backgroundColor: 'transparent',
                       border: '1px solid var(--border)',
                       color: 'var(--muted-foreground)', cursor: 'pointer',
@@ -299,7 +297,6 @@ export function PlannerScreen() {
                   >
                     <Scissors size={14} />
                   </button>
-                  <Badge color="yellow">{t('planner.healBadge')}</Badge>
                 </div>
               );
             })}

@@ -84,7 +84,7 @@ export function TrellisStatusPanel({ nodes, onCreditsChange, counterRef }: Trell
     alignItems: 'center',
     justifyContent: 'center',
     gap: '8px',
-    padding: '10px 12px',
+    padding: '6px 12px',
     borderRadius: 'var(--radius-xl)',
     backgroundColor: 'var(--surface-variant)',
     border: '1px solid var(--border)',
@@ -109,7 +109,7 @@ export function TrellisStatusPanel({ nodes, onCreditsChange, counterRef }: Trell
     alignItems: 'center',
     justifyContent: 'center',
     gap: '8px',
-    padding: '12px',
+    padding: '6px 12px',
     borderRadius: 'var(--radius-xl)',
     border: 'none',
     backgroundColor: fruitNodes.length > 0 ? FRUIT_COLOR : 'var(--surface-variant)',
@@ -140,7 +140,7 @@ export function TrellisStatusPanel({ nodes, onCreditsChange, counterRef }: Trell
         style={{
           display: 'flex',
           gap: '12px',
-          padding: '12px 0',
+          padding: '6px 0',
           alignItems: 'stretch',
         }}
       >
