@@ -28,3 +28,13 @@ test('AppEvent includes ANCHOR_DELETED', async () => {
   unsub();
   assert.equal(received?.payload?.anchorId, 'a1');
 });
+
+test('AppEvent includes LOCALE_CHANGED (Phase 27 — Plan 04 mid-stream-abort dependency)', async () => {
+  const { eventBus } = await import('../src/lib/event-bus.ts');
+  let received = null;
+  const unsub = eventBus.subscribe('LOCALE_CHANGED', (e) => { received = e; });
+  eventBus.emit({ type: 'LOCALE_CHANGED', payload: { locale: 'zh' } });
+  unsub();
+  assert.equal(received?.type, 'LOCALE_CHANGED');
+  assert.equal(received?.payload?.locale, 'zh');
+});

@@ -660,6 +660,7 @@ export type AppEvent =
   | { type: 'PODCAST_CONCEPT_ADDED'; payload: { podcastId: string; questionId: string } }
   | { type: 'LLM_CONFIG_CHANGED'; payload: LLMConfig }
   | { type: 'TTS_CONFIG_CHANGED'; payload: TTSConfig }
+  | { type: 'LOCALE_CHANGED'; payload: { locale: SupportedLocale } }
   | { type: 'ZEROTIER_STATUS_CHANGED'; payload: ZeroTierConfig }
   | { type: 'NETWORK_STATUS_CHANGED'; payload: { isOnline: boolean } }
   | { type: 'POST_DELETED'; payload: { id: string } }
