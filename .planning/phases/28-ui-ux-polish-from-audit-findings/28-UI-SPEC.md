@@ -1,10 +1,11 @@
 ---
 phase: 28
 slug: ui-ux-polish-from-audit-findings
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-04-16
+reviewed_at: 2026-04-16
 ---
 
 # Phase 28 — UI Design Contract
