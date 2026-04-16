@@ -125,9 +125,17 @@ export function PlannerScreen() {
       </div>
 
       {/* ── Suggested Moves (trellis-first) ───────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', marginTop: '24px' }}>
+      {/* Phase 28 D-04 — explicit heading styling (1rem / 600 / --section-gap top margin)
+           so the section is visually prominent against the crowded surface above. */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', marginTop: 'var(--section-gap)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <h2 style={{ fontSize: '1rem', fontWeight: 600 }}>{t('planner.suggestedMoves')}</h2>
+          <h2 style={{
+            fontSize: '1rem',
+            fontWeight: 600,
+            lineHeight: 1.4,
+            color: 'var(--foreground)',
+            letterSpacing: '-0.01em',
+          }}>{t('planner.suggestedMoves')}</h2>
           {totalSuggestions > 0 && <Badge color="gray">{totalSuggestions}</Badge>}
         </div>
         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>

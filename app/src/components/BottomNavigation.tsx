@@ -21,7 +21,26 @@ const noCallout: React.CSSProperties = {
 interface BottomNavigationProps {
   onAskLongPress?: () => void;
   onAskLongPressRelease?: () => void;
+  /**
+   * Phase 28 D-06 — when false, the nav slides down off-screen (y: '100%').
+   * Defaults to true so any caller that hasn't wired the prop yet keeps
+   * the nav visible (back-compat).
+   */
+  isTopLevelScreen?: boolean;
 }
+
+/**
+ * Spring config for the slide-down animation — matches SwipeTabContainer's
+ * SPRING so visual motion feels coherent between swipe commit and nav
+ * show/hide. Exported for the pure-function test.
+ */
+const SLIDE_SPRING = { type: 'spring' as const, stiffness: 300, damping: 30, mass: 0.8 };
+
+/**
+ * Pure helper surfaced for BottomNavigation.slide.test.mjs. Keeps the
+ * slide-target derivation testable without a DOM.
+ */
+export const getNavYTarget = (isTop: boolean): number | string => (isTop ? 0 : '100%');
 
 /** Tab button with real-time color tracking via swipeProgress MotionValue */
 function TabButton({ item, swipeProgress, onTap }: {
@@ -71,7 +90,7 @@ function TabButton({ item, swipeProgress, onTap }: {
   );
 }
 
-export function BottomNavigation({ onAskLongPress, onAskLongPressRelease }: BottomNavigationProps) {
+export function BottomNavigation({ onAskLongPress, onAskLongPressRelease, isTopLevelScreen = true }: BottomNavigationProps) {
   const { t } = useTranslation();
   const { swipeProgress, navigateToTab } = useSwipeTab();
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -136,8 +155,15 @@ export function BottomNavigation({ onAskLongPress, onAskLongPressRelease }: Bott
   );
 
   return (
-    <nav
+    <motion.nav
       id="bottom-navigation"
+      // Phase 28 D-06: slide down off-screen when user is on a sub-screen
+      // (PostDetail, AnchorDetail, Review, Podcast, QuestionDetail, etc.).
+      // initial={{ y: 0 }} prevents a first-mount flash where the nav would
+      // otherwise animate into view from below even on the top-level route.
+      initial={{ y: 0 }}
+      animate={{ y: getNavYTarget(isTopLevelScreen) }}
+      transition={SLIDE_SPRING}
       style={{
         position: 'fixed',
         bottom: 0,
@@ -214,6 +240,6 @@ export function BottomNavigation({ onAskLongPress, onAskLongPressRelease }: Bott
           />
         ))}
       </div>
-    </nav>
+    </motion.nav>
   );
 }

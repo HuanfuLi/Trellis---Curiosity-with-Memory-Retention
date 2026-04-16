@@ -31,6 +31,7 @@ import { transcribeAudio } from './providers/stt';
 import { toast } from './lib/toast';
 import { startScheduler, stopScheduler } from './services/scheduler.service';
 import { scheduleNativeNotifications } from './services/scheduler.native';
+import { HeaderScrollContext } from './lib/header-scroll-context';
 
 const SCREEN_ROUTES = ['/home', '/planner', '/ask', '/graph', '/settings'] as const;
 
@@ -40,6 +41,9 @@ function RootLayout() {
   const isTopLevelScreen = SCREEN_ROUTES.some(r => location.pathname === r);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  // Phase 28 D-07 — sub-screen Outlet scroll state published via context
+  // so Header can render a subtle shadow once content starts scrolling.
+  const [headerScrolled, setHeaderScrolled] = useState(false);
   // Guard against starting a new recording while one is already active
   const recordingActiveRef = useRef(false);
 
@@ -164,6 +168,7 @@ function RootLayout() {
         <BottomNavigation
           onAskLongPress={() => void handleAskLongPress()}
           onAskLongPressRelease={() => void handleAskLongPressRelease()}
+          isTopLevelScreen={isTopLevelScreen}
         />
         {/* Recording / transcribing indicator for the nav bar long-press flow */}
         {(isRecording || isTranscribing) && (
@@ -210,19 +215,29 @@ function RootLayout() {
 
       {/* Outlet for sub-screens (rendered on top of swipe container) */}
       {!isTopLevelScreen && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 50,
-          backgroundColor: 'var(--surface)',
-          paddingTop: 'var(--safe-area-top)',
-          paddingBottom: 'calc(80px + var(--safe-area-bottom))',
-          overflow: 'auto',
-        }}>
-          <Outlet />
+        <div
+          onScroll={(e) => {
+            // Phase 28 D-07 — 4px threshold gives natural hysteresis and
+            // avoids flicker when the browser chrome expands/collapses.
+            const nextScrolled = e.currentTarget.scrollTop > 4;
+            if (nextScrolled !== headerScrolled) setHeaderScrolled(nextScrolled);
+          }}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 50,
+            backgroundColor: 'var(--surface)',
+            paddingTop: 'var(--safe-area-top)',
+            paddingBottom: 'calc(80px + var(--safe-area-bottom))',
+            overflow: 'auto',
+          }}
+        >
+          <HeaderScrollContext.Provider value={{ scrolled: headerScrolled }}>
+            <Outlet />
+          </HeaderScrollContext.Provider>
         </div>
       )}
 

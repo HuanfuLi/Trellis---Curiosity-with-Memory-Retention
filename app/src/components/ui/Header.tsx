@@ -1,4 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
+import { useContext } from 'react';
+import { HeaderScrollContext } from '../../lib/header-scroll-context';
 
 /** Height of the header bar (excluding safe-area). Use in content padding. */
 export const HEADER_HEIGHT = 56;
@@ -14,6 +16,12 @@ interface HeaderProps {
   centered?: boolean;
   /** Extra inline styles on the outer fixed container */
   style?: CSSProperties;
+  /**
+   * Phase 28 D-07 — when true, Header paints a subtle `var(--shadow-1)` to
+   * separate itself from scrolled content beneath. If omitted, the component
+   * consumes `HeaderScrollContext` (published by App.tsx's Outlet wrapper).
+   */
+  scrolled?: boolean;
 }
 
 /**
@@ -22,7 +30,9 @@ interface HeaderProps {
  * Each screen using this component should add `paddingTop: HEADER_HEIGHT` (or more)
  * to its scrollable content so it doesn't sit behind the header.
  */
-export function Header({ title, left, right, centered, style }: HeaderProps) {
+export function Header({ title, left, right, centered, style, scrolled: scrolledProp }: HeaderProps) {
+  const ctx = useContext(HeaderScrollContext);
+  const scrolled = scrolledProp ?? ctx?.scrolled ?? false;
   return (
     <div
       style={{
@@ -32,6 +42,10 @@ export function Header({ title, left, right, centered, style }: HeaderProps) {
         right: 0,
         height: `${HEADER_HEIGHT}px`,
         backgroundColor: 'var(--surface)',
+        // Phase 28 D-07 — scroll-aware shadow. 150ms ease-out so the
+        // transition feels subtle; no shadow at rest keeps the flat look.
+        boxShadow: scrolled ? 'var(--shadow-1)' : 'none',
+        transition: 'box-shadow 150ms ease-out',
         zIndex: 190,
         ...style,
       }}
