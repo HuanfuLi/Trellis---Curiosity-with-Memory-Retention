@@ -10,17 +10,16 @@ The platform prioritizes a high-quality, native-first mobile experience built wi
 
 Enable learners to transform fragmented information into structured knowledge through AI-driven Q&A, visual mapping, and adaptive spaced repetition—all while maintaining complete local-first privacy.
 
-## Current Milestone: v1.1 (Engagement & Discovery Iteration)
+## Current Milestone: v1.4 (next — planning)
 
-**Goal:** Enhance user engagement through rich post formats (Rednote-style), smarter milestone cards, and automated Planner suggestions.
+**Status:** Awaiting scope. v1.3 (pre-release) closed 2026-04-16 with phases 20-27 shipped — see `.planning/v1.3-MILESTONE-AUDIT.md`. First queued phase is Phase 28 (UI/UX polish from audit findings). Pre-existing tsc/Node 25 items from v1.3 should be rolled into v1.4 planning.
 
-**Target features:**
-- Redesign Home Feed posts with image-forward design (AI-generated images, titles with emojis)
-- Implement scroll-to-load more posts (replacing "More" button)
-- Add visual variety to milestone cards (more designs to prevent boredom)
-- Auto-generate Planner "Suggested Moves" when Knowledge Graph is populated
-- Integrate Nano Banana and Gemini API for image generation
-- Add daily auto-refresh of suggested moves and allow user retry/regeneration
+## Previous Milestones
+
+- **v1.0** — phases 5-6 (foundation UI polish, question quality evaluation)
+- **v1.1** — phases 7-9 (image-forward feed, post detail, infinite scroll)
+- **v1.2** — phases 10-19 (Planner auto-suggestions, knowledge graph classification, token optimization, feed expansion, web search)
+- **v1.3 (pre-release)** — phases 20-27 (orchestration, streaming, swipe nav, incremental classification, Trellis, harvest actions, i18n/L10n)
 
 ## Key Decisions
 
@@ -56,4 +55,6 @@ This document evolves at phase transitions and milestone boundaries.
 
 **Phase 27 complete (2026-04-16):** i18n/L10n support — 4 locales shipped (EN canonical + Simplified Chinese + Spanish + Japanese). `i18next` + `react-i18next` with synchronous init in `main.tsx`; 602 flattened keys across all 4 bundles (ZH 92.7% / ES 90.2% / JA 92.4% leaf coverage — remainder are intentional EN retention for proper nouns, provider names, LLM system prompts per D-07). Centralized locale injection: LLM provider prepends `applyLocaleDirective` to system prompts (D-12), TTS maps locale→voice (D-13), YouTube forwards `hl`/`regionCode` (D-14), Tavily web-search stays English by design (D-15), dates use `Intl.DateTimeFormat` (D-11). User flow: onboarding Language step (4-option script picker with cross-locale `Language / 语言 / Idioma / 言語` header, D-18), Settings locale switcher with instant swap (D-19), mid-stream LLM abort on `LOCALE_CHANGED` event (D-22 — `AbortController` shared across Pass 1/2 streams), locale-specific CSS font stacks via `:root[data-locale]` overrides (D-23). Workflow codified: root `CLAUDE.md` requires syncing all 4 bundles when adding UI strings; `app/scripts/translate-locales.md` is the Sonnet subagent template for future re-translations (D-09). Dev-time translation only — runtime LLM translation is prohibited (D-07). Operator UAT walkthrough approved (D-24).
 
-_Last updated: 2026-04-16 — Phase 27 complete_
+**Milestone v1.3 (pre-release) complete (2026-04-16):** Phases 20-27 archived as milestone v1.3. Audit: `.planning/v1.3-MILESTONE-AUDIT.md`. Phase archives moved to `.planning/milestones/v1.3-phases/`. Phase 28 queued as first phase of v1.4. Four phases carry `human_needed` verification status (20, 21, 22, 26) — automated checks pass; visual/timing/feel QA on device is the pending work if v1.4 decides to close those gaps.
+
+_Last updated: 2026-04-16 — Milestone v1.3 (pre-release) archived_

@@ -1,32 +1,42 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
+milestone: v1.3
 milestone_name: milestone
-status: Phase 27 complete — i18n/L10n shipped
-stopped_at: Phase 27 verified (24/24 decisions), operator UAT approved
-last_updated: "2026-04-16T14:00:00.000Z"
+release_type: pre-release
+status: Milestone v1.3 complete — phases 20-27 archived, awaiting v1.4 scope
+stopped_at: v1.3 audit written, phase dirs archived, ROADMAP/STATE/PROJECT updated
+last_updated: "2026-04-16T14:30:00.000Z"
 progress:
-  total_phases: 22
-  completed_phases: 7
-  total_plans: 35
-  completed_plans: 35
+  total_phases: 8
+  completed_phases: 8
+  total_plans: 32
+  completed_plans: 31
+previous_milestones:
+  - v1.0 — phases 5-6 (archive: .planning/milestones/v1.0-phases/)
+  - v1.1 — phases 7-9 (archive: .planning/milestones/v1.1-phases/)
+  - v1.2 — phases 10-19 (archive: .planning/milestones/v1.2-phases/)
+  - v1.3 — phases 20-27 (archive: .planning/milestones/v1.3-phases/) — this milestone
+next_milestone:
+  version: v1.4
+  status: planning
+  first_phase: 28
 ---
 
-# Project State: Milestone 1.1
+# Project State: Milestone v1.3 complete
 
 ## Current Milestone
 
-Milestone v1.1: Engagement & Discovery Iteration
+Milestone v1.3 (pre-release) ✓ COMPLETE (2026-04-16) — Orchestration & Engagement Polish.
 
 ## Milestone Goal
 
-Enhance user engagement through rich post formats (Rednote-style), smarter milestone cards, and automated Planner suggestions.
+Shipped: diagnostic dialogue (Phase 20), post streaming (21), swipe nav (22), incremental classification + rate limiter (23), retroactive verification close-out (24), anime Trellis visualization (25), harvest/heal/replant actions (26), i18n/L10n for EN/ZH/ES/JA (27). Audit: `.planning/v1.3-MILESTONE-AUDIT.md`.
 
 ## Current Phase
 
-Phase 27 ✓ COMPLETE (2026-04-16) — i18n/L10n shipped across 4 locales (EN/ZH/ES/JA). 24/24 decisions verified by gsd-verifier; 43/43 Phase 27 tests green; `npx vite build` green; operator UAT approved (see `uat-screenshots/README.md`). Pre-existing tsc/Node 25 issues in unrelated files (GraphScreen, canonical-knowledge, review, trellis-state) documented in `deferred-items.md` — out of scope for Phase 27.
+No active phase — awaiting v1.4 scope. Phase 28 (UI/UX polish from audit findings) is queued as the first phase of v1.4. Pre-existing tsc/Node 25 issues documented in v1.3 archive (`.planning/milestones/v1.3-phases/27-*/deferred-items.md`) should be rolled into v1.4 planning.
 
-Next: Phase 28 (UI/UX polish from audit findings) — awaiting planning.
+Run `/gsd:new-milestone` when ready to open v1.4 with a concrete scope, then `/gsd:plan-phase 28` to break down Phase 28.
 
 ## Latest Decisions (Phase 27-07)
 

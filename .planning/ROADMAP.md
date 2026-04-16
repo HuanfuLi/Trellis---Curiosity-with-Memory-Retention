@@ -485,6 +485,16 @@ Plans:
 - **Phase 18** must complete before Phase 19 (feed mix and presentation styles needed for news post integration)
 - **Phase 19** must complete before Phase 20 (web search enrichment needed for strategy-driven content selection)
 
+---
+
+# Milestone v1.3 (pre-release) ✓ COMPLETE (2026-04-16)
+
+**Audit:** `.planning/v1.3-MILESTONE-AUDIT.md` | **Archive:** `.planning/milestones/v1.3-phases/`
+**Covers:** Phases 20-27 (8 phases shipped)
+**Theme:** Orchestration & Engagement Polish — diagnostic dialogue, post streaming, swipe nav, incremental classification, retroactive verification close-out, motivational Trellis visualization, harvest/heal/replant actions, and i18n/L10n.
+
+Phases 20 and below were moved from `.planning/phases/` into the milestone archive. Phase sections below are kept in this ROADMAP for historical traceability.
+
 ## Phase 21: Review Cap Fix & Generate-on-Enter Posts
 
 **Goal:** (1) Remove the hard `dailyLimit` cap from the review queue, repurpose as daily goal with progress indicator. (2) Rework post generation to card-face-only at feed time, deferring essay body + metadata to on-demand streaming LLM calls when user opens a post — saving tokens and dramatically reducing feed load time.
@@ -673,11 +683,17 @@ Plans:
 - [x] 27-06-PLAN.md — Component + UI + trellis + toast string extraction (D-10) (wave 2)
 - [x] 27-07-PLAN.md — Sonnet-subagent translation of zh/es/ja + CLAUDE.md creation with i18n Workflow section (D-02/D-03/D-07/D-08/D-09) + D-24 UAT walkthrough (wave 5)
 
+---
+
+# Milestone v1.4 (next) — PLANNING
+
+**Scope:** TBD. First queued phase is Phase 28 (UI/UX polish from audit findings). Pre-existing tsc/Node 25 items from v1.3 (`.planning/milestones/v1.3-phases/27-*/deferred-items.md`) should be rolled into v1.4 planning.
+
 ### Phase 28: UI/UX polish from audit findings
 
 **Goal:** [To be planned]
 **Requirements**: TBD
-**Depends on:** Phase 27
+**Depends on:** Phase 27 (v1.3)
 **Plans:** 0 plans
 
 Plans:
@@ -686,3 +702,4 @@ Plans:
 ---
 
 _Created: 2026-03-26 | v1.1 Roadmap | 17 phases | 91 requirements mapped_
+_Updated: 2026-04-16 — phases 20-27 archived as v1.3 (pre-release); Phase 28 opens v1.4_
