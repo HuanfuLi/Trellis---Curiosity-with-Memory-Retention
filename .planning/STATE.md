@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: gap closure)
-status: Executing Phase 28 — Plans 01-02 complete; Plan 03 pending
-stopped_at: Completed 28-01-PLAN.md
-last_updated: "2026-04-16T21:00:30.522Z"
+status: Phase 28 COMPLETE — all 3 plans (01-02-03) executed
+stopped_at: Completed 28-03-PLAN.md — Phase 28 fully complete
+last_updated: "2026-04-16T21:10:18.808Z"
 progress:
   total_phases: 21
   completed_phases: 0
@@ -12,7 +12,7 @@ progress:
   completed_plans: 0
 ---
 
-# Project State: Phase 28 in progress (Plans 01-02 complete)
+# Project State: Phase 28 COMPLETE (all 3 plans executed)
 
 ## Current Milestone
 
@@ -24,9 +24,26 @@ Shipped: diagnostic dialogue (Phase 20), post streaming (21), swipe nav (22), in
 
 ## Current Phase
 
-Phase 28 — UI/UX Polish from Audit Findings. Plans 01 (Wave A+B+B-spacing foundations) and 02 (Wave C — trellis interactions + Mind Map → Knowledge Graph rename) ✓ COMPLETE 2026-04-16. Plan 03 (Wave D — AskScreen polish + residual P2 items) pending.
+Phase 28 — UI/UX Polish from Audit Findings. All 3 plans COMPLETE 2026-04-16:
 
-Next: run `/gsd:execute-phase 28` to continue with 28-03-PLAN.md, or `/gsd:verify 28` for a mid-phase verifier pass.
+- Plan 01 (Wave A+B foundations): spacing tokens, desync fix, nav slide-down, scroll shadow, touch targets, padding unification
+- Plan 02 (Wave C): trellis shake/haptic/pulse, perf guard, Mind Map → Knowledge Graph rename
+- Plan 03 (Wave D): AskScreen recent-questions refactor (D-15), active-squish (D-16), D-28 deferral fix, D-17/D-18/D-19 audit (all no-op)
+
+Next: run `/gsd:verify 28` for verifier pass, then proceed to Phase 29 or merge branch.
+
+## Latest Decisions (Phase 28-03)
+
+- [Phase 28-03] D-15 landed: AskScreen recent-question rows refactored to tappable `<button>` elements with `navigate('/ask/${q.id}')`, 2-line text clamp (`WebkitLineClamp: 2`), 44px minHeight touch target, 12px 16px padding, and `active-squish` press feedback via `buildRowClassName` helper. Empty state renders `t('ask.recentQuestionsEmpty')` via `renderRecentQuestionsMarker` pure helper. Bullet prefix removed.
+- [Phase 28-03] D-16 landed: `className="active-squish"` applied to PlannerScreen dead row + dying row Suggested Moves, and AskScreen recent-question rows via `buildRowClassName`. PlannerScreen now has 3 active-squish sites (refresh + dead + dying).
+- [Phase 28-03] D-28 AskScreen:607 deferred fix complete: `padding: '11px 16px'` replaced with `'12px 16px'` as part of D-15 button refactor. TODO marker removed.
+- [Phase 28-03] i18n: `ask.recentQuestionsEmpty` key added to all 4 locale bundles — en "No recent questions yet — ask your first one below.", zh "暂无近期提问 — 先问一下吧。", es "Aun no hay preguntas recientes — haz la primera abajo.", ja "最近の質問はまだありません — 下から最初の質問をどうぞ。"
+- [Phase 28-03] D-17 no-op: empty-state copy consistency audit found PlannerScreen emptyHint already em-dash + hint, GraphScreen heading + body appropriate for full-page context, ReviewScreen period + CTA appropriate for library context. No changes warranted.
+- [Phase 28-03] D-18 no-op: GraphScreen toolbar audit found consistent padding (8px 12px), proper Header alignment, properly positioned expand/collapse button, display-only keyword chips. No tweaks needed.
+- [Phase 28-03] D-19/D-09 no-op: Residual P2 pass found zero remaining off-grid padding values in target screens after Plans 28-01/28-02 cleanup.
+- [Phase 28-03] Wave 0 tests: 9 tests in AskScreen.recent.test.mjs (4 inline-mirror contract + 5 source-side grep). All GREEN. Bundle parity GREEN. Vite build GREEN in 2.94s.
+- [Phase 28-03] Commits: `9236c187` (test — RED Wave 0 scaffolds), `e9a94984` (feat — D-15/D-16/D-28/i18n GREEN). 4 minutes total; 2 tasks / 7 files (1 created + 6 modified).
+- [Phase 28-03] PHASE 28 COMPLETE: All 19 audit findings (D-04 through D-19 + D-26 through D-30) addressed across 3 plans. 9 landed as code changes, 3 documented as no-op (D-17/D-18/D-19), 1 was already present (D-08). Total: 9 commits, 22 minutes, ~30 files.
 
 ## Latest Decisions (Phase 28-02)
 
@@ -295,7 +312,7 @@ Completed Phase 27 Plan 07 autonomous tasks (27-07-PLAN.md) — Task 1 landed pr
 ## Previous Session
 
 Completed Phase 27 Plan 04 (27-04-PLAN.md) — Locale switcher + mid-stream abort. SettingsScreen gains a 4-language picker at the top (D-19) that calls `i18n.changeLanguage`, persists `preferences.locale` (+ legacy `language` back-compat), and emits `LOCALE_CHANGED`. Row LABEL hardcoded as `Language / 语言 / Idioma / 言語` for cross-locale affordance. `providers/llm/index.ts` gains `CompletionOptions.signal?: AbortSignal` + a `composeSignal(callerSignal, ms)` helper that uses `AbortSignal.any` (Chromium 116+ / Safari 17.4+ / Node 20+) with manual-forwarder fallback; signal threaded through all 7 fetch call sites (openAI completion/stream, claude completion/stream, gemini completion/stream, plus localPost for Android-local streaming). `useQuestions.askStreaming` declares ONE shared AbortController at the top of the try, subscribes to LOCALE_CHANGED once, passes the same signal to BOTH Pass 1 and Pass 2 chatStream calls, and guards every buildAndSave path with 6 aborted-checks (loop entries, post-loop, pre-persistence, catch-level AbortError short-circuit) — toasts `ask.localeChangedDiscarded` and returns null on abort so partial half-English/half-Japanese output never persists (D-22). TDD cadence: RED commit landed failing test first, GREEN commit made all 4 assertions pass. 48 Wave 0 tests green; `npx vite build` green (3.0s); zero new tsc errors. Deviations: used direct `settingsService.getSync/.set` instead of `useSettings` hook (matches existing SettingsScreen convention); added `callerSignal?` param to `localPost` (LOCALE_CHANGED was silently not cancelling Android-local completions otherwise); removed dead `void options;` statements from claudeStream + geminiStream. Commits: `da5c69b5` (Task 1 — locale switcher), `c93ecf46` (Task 2 RED — failing test), `7e301831` (Task 2 GREEN — provider plumbing + useQuestions abort).
-**Stopped At:** Completed 28-01-PLAN.md
+**Stopped At:** Completed 28-03-PLAN.md — Phase 28 fully complete
 **Date:** 2026-04-16
 
 ## Latest Decisions (Phase 25)
