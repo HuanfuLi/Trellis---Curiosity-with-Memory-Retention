@@ -207,6 +207,7 @@ export function PlannerScreen() {
                   key={`dead-${node.anchor.id}`}
                   onPointerDown={() => focusAnchor(node.anchor.id)}
                   onClick={() => handleReplant(node)}
+                  className="active-squish"
                   style={{
                     display: 'flex', alignItems: 'center', gap: '12px',
                     // Phase 28 D-28 — 11px → 12px to land on the 4-grid.
@@ -259,6 +260,7 @@ export function PlannerScreen() {
                   key={`dying-${node.anchor.id}`}
                   onPointerDown={() => focusAnchor(node.anchor.id)}
                   onClick={() => handleHeal(node)}
+                  className="active-squish"
                   style={{
                     display: 'flex', alignItems: 'center', gap: '12px',
                     // Phase 28 D-28 — 11px → 12px on the 4-grid.

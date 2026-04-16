@@ -114,6 +114,7 @@
     "welcome": "你好！我是你的 AI 学习伙伴。问我任何问题来构建你的知识库。",
     "tryAsking": "试着问：",
     "recentQuestions": "最近的问题：",
+    "recentQuestionsEmpty": "暂无近期提问 — 先问一下吧。",
     "genericError": "出现问题，请重试。",
     "streamFailed": "无法继续此对话。",
     "responseDeleted": "回答已删除。",

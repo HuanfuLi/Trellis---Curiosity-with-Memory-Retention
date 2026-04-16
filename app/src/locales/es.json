@@ -114,6 +114,7 @@
     "welcome": "¡Hola! Soy tu compañero de aprendizaje con IA. Pregúntame lo que sea para ampliar tu base de conocimiento.",
     "tryAsking": "Prueba preguntar:",
     "recentQuestions": "Preguntas recientes:",
+    "recentQuestionsEmpty": "Aún no hay preguntas recientes — haz la primera abajo.",
     "genericError": "Algo salió mal. Inténtalo de nuevo.",
     "streamFailed": "No se pudo continuar esta conversación.",
     "responseDeleted": "Respuesta eliminada.",

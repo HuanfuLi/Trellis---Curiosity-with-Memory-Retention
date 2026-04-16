@@ -30,6 +30,40 @@ const SUGGESTED_PROMPT_KEYS = [
   'ask.suggestedPrompts.retention',
 ] as const;
 
+// ── Phase 28 Plan 03 — D-15 / D-16 pure helpers ────────────────────────────
+//
+// Extracted at module scope so Wave 0 tests (AskScreen.recent.test.mjs) can
+// contract-test them without a DOM render. Consumed by the recent-questions
+// section below (D-15 empty-state + D-16 active-squish press feedback).
+
+/** Marker returned by renderRecentQuestionsMarker — describes which branch of
+ *  the recent-questions render tree the JSX should walk. */
+export interface RecentQuestionsMarker {
+  kind: 'empty' | 'list';
+  i18nKey?: string;
+  count?: number;
+}
+
+/** D-15-LOGIC: return an empty-state marker referencing the i18n key
+ *  `ask.recentQuestionsEmpty` when there are no recent questions; otherwise
+ *  return a list marker carrying the count. The JSX below consumes this to
+ *  decide which branch to render. */
+export const renderRecentQuestionsMarker = (
+  questions: Array<{ id: string; content: string }>,
+): RecentQuestionsMarker => {
+  if (questions.length === 0) return { kind: 'empty', i18nKey: 'ask.recentQuestionsEmpty' };
+  return { kind: 'list', count: questions.length };
+};
+
+/** D-16: compose the className for a recent-question row. Interactive rows
+ *  receive `active-squish` for the scale-0.96 press-feedback utility defined
+ *  in index.css:336-342. Non-interactive rows (hypothetical placeholders,
+ *  skeletons) skip it. */
+export const buildRowClassName = ({ interactive }: { interactive: boolean }): string => {
+  const base = 'ask-recent-row';
+  return interactive ? `${base} active-squish` : base;
+};
+
 // Transient streaming overlay — not persisted
 interface StreamingOverlay {
   placeholderId: string;
@@ -593,49 +627,88 @@ export function AskScreen() {
                 })}
               </div>
 
-              {questions.length > 0 && (
-                <>
-                  <p style={{ fontSize: '0.78rem', color: 'var(--muted-foreground)', marginBottom: '10px', paddingLeft: '4px' }}>
-                    {t('ask.recentQuestions')}
-                  </p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {questions.slice(0, 3).map((q) => (
-                      <button
-                        key={q.id}
-                        onClick={() => navigate(`/ask/${q.id}`)}
-                        style={{
-                          textAlign: 'left',
-                          // TODO(Plan 28-03 D-15): row becomes a full <button> with
-                          // refactored structure; padding then follows UI-SPEC D-15.
-                          padding: '11px 16px',
-                          borderRadius: '18px',
-                          border: '1.5px solid var(--border)',
-                          backgroundColor: 'var(--card)',
-                          color: 'var(--foreground)',
-                          fontSize: '0.875rem',
-                          cursor: 'pointer',
-                          lineHeight: 1.4,
-                          transition: 'border-color 0.15s, background-color 0.15s',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                        }}
-                        onPointerEnter={(e) => {
-                          e.currentTarget.style.borderColor = 'var(--primary-40)';
-                          e.currentTarget.style.backgroundColor = 'var(--surface-container-high)';
-                        }}
-                        onPointerLeave={(e) => {
-                          e.currentTarget.style.borderColor = 'var(--border)';
-                          e.currentTarget.style.backgroundColor = 'var(--card)';
-                        }}
-                      >
-                        <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '85%' }}>• {q.content}</span>
-                        <span style={{ fontSize: '1.2rem', color: 'var(--muted-foreground)' }}>→</span>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
+              {/* Phase 28 D-15 — recent-questions section: <button> rows with
+                  2-line clamp, empty-state via ask.recentQuestionsEmpty, D-28
+                  padding 12px 16px, D-16 active-squish press feedback via
+                  buildRowClassName. renderRecentQuestionsMarker drives the
+                  branch — Wave 0 tests in AskScreen.recent.test.mjs cover the
+                  pure-helper contracts. */}
+              {(() => {
+                const marker = renderRecentQuestionsMarker(questions);
+                if (marker.kind === 'empty' && marker.i18nKey) {
+                  return (
+                    <p style={{
+                      fontSize: '0.82rem',
+                      color: 'var(--muted-foreground)',
+                      paddingLeft: '4px',
+                      marginTop: '8px',
+                    }}>
+                      {t(marker.i18nKey)}
+                    </p>
+                  );
+                }
+                return (
+                  <>
+                    <p style={{ fontSize: '0.78rem', color: 'var(--muted-foreground)', marginBottom: '10px', paddingLeft: '4px' }}>
+                      {t('ask.recentQuestions')}
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {questions.slice(0, 3).map((q) => (
+                        <button
+                          key={q.id}
+                          onClick={() => navigate(`/ask/${q.id}`)}
+                          className={buildRowClassName({ interactive: true })}
+                          style={{
+                            textAlign: 'left',
+                            // Phase 28 D-28 — 11px → 12px on the 4-grid (completes
+                            // the deferred fix from Plan 28-01 Task 3; D-15 button
+                            // refactor was the scheduled vehicle per UI-SPEC).
+                            padding: '12px 16px',
+                            borderRadius: '18px',
+                            border: '1.5px solid var(--border)',
+                            backgroundColor: 'var(--card)',
+                            color: 'var(--foreground)',
+                            fontSize: '0.875rem',
+                            cursor: 'pointer',
+                            lineHeight: 1.4,
+                            transition: 'border-color 0.15s, background-color 0.15s',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            gap: '8px',
+                            minHeight: '44px',
+                            width: '100%',
+                          }}
+                          onPointerEnter={(e) => {
+                            e.currentTarget.style.borderColor = 'var(--primary-40)';
+                            e.currentTarget.style.backgroundColor = 'var(--surface-container-high)';
+                          }}
+                          onPointerLeave={(e) => {
+                            e.currentTarget.style.borderColor = 'var(--border)';
+                            e.currentTarget.style.backgroundColor = 'var(--card)';
+                          }}
+                        >
+                          {/* D-15: bullet '• ' prefix removed (no leading icon per
+                              UI-SPEC). 2-line clamp via WebkitLineClamp replaces
+                              the prior single-line ellipsis. */}
+                          <span style={{
+                            fontWeight: 500,
+                            overflow: 'hidden',
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            flex: 1,
+                            minWidth: 0,
+                          }}>
+                            {q.content}
+                          </span>
+                          <span style={{ fontSize: '1.2rem', color: 'var(--muted-foreground)', flexShrink: 0 }}>→</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </>
         )}

@@ -114,6 +114,7 @@
     "welcome": "Hi! I'm your AI learning companion. Ask me anything to build your knowledge base.",
     "tryAsking": "Try asking:",
     "recentQuestions": "Recent Questions:",
+    "recentQuestionsEmpty": "No recent questions yet — ask your first one below.",
     "genericError": "Something went wrong. Please try again.",
     "streamFailed": "Failed to continue this conversation.",
     "responseDeleted": "Response deleted.",

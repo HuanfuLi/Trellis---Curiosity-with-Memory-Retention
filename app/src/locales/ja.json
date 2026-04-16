@@ -114,6 +114,7 @@
     "welcome": "こんにちは！あなたの AI 学習パートナーです。知識ベースを作るため、何でも質問してください。",
     "tryAsking": "質問の例：",
     "recentQuestions": "最近の質問：",
+    "recentQuestionsEmpty": "最近の質問はまだありません — 下から最初の質問をどうぞ。",
     "genericError": "問題が発生しました。もう一度お試しください。",
     "streamFailed": "この会話を続けられませんでした。",
     "responseDeleted": "回答を削除しました。",
