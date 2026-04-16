@@ -47,7 +47,57 @@ Land the full set of UI/UX polish items surfaced by the 2026-04-16 Chrome-based 
 
 - **D-07 (B-1):** Sub-screen `Header` component grows a **scroll-aware shadow**. When the sub-screen scroll container's scrollTop > 4px, Header displays `boxShadow: 'var(--shadow-1)'`; at rest it has no separator. Header already has `backgroundColor: 'var(--surface)'` so no border is needed. Implementation: add an `onScroll` listener on the sub-screen Outlet wrapper in `App.tsx` (the `<div>` at lines 212–227) that sets a CSS variable (or passes a `scrolled` prop through a context) consumed by `Header`. Top-level screen headers keep their current flat look — they don't need this.
 - **D-08 (B-2):** Add a `borderTop: '1px solid var(--outline-variant)'` (or equivalent subtle divider) on `BottomNavigation` so the nav has a visible separator from the content above on top-level screens too. Currently it can look flush/floating on light surfaces.
-- **D-09 (B-3):** Any P1 visual-chrome findings from the audit report not explicitly covered above (spacing/padding inconsistencies on Planner cards, GraphScreen toolbar alignment, Settings row vertical rhythm, chip padding normalization) land here as a single consolidated "consistency pass" task. Planner decides the exact list based on the audit report.
+- **D-09 (B-3):** Any P1 visual-chrome findings from the audit report not explicitly covered above (GraphScreen toolbar alignment, chip padding normalization, residual spacing inconsistencies) land here as a single consolidated "consistency pass" task. Planner decides the exact list based on the audit report. **Spacing/padding consistency (the major audit finding) is now explicitly decomposed into D-26 through D-30 below** — those are NOT covered by D-09.
+
+### Wave B — Spacing Consistency (new sub-wave from dedicated padding audit)
+
+A dedicated padding audit (2026-04-16, post-UI-SPEC) identified MAJOR spacing inconsistency across the app. User locked all four recommended fixes. These replace the vague "spacing inconsistencies" scope in D-09.
+
+- **D-26 (Spacing Token System):** Introduce 8 new CSS custom properties on `:root` in `app/src/index.css`:
+  - `--space-xs: 4px`, `--space-sm: 8px`, `--space-md: 12px`, `--space-lg: 16px`, `--space-xl: 20px`, `--space-2xl: 24px`, `--space-3xl: 32px` — 4-grid scale
+  - `--bottom-nav-safe: calc(80px + var(--safe-area-bottom))` — canonical sub-screen bottom-padding value
+  - `--section-gap: 24px` — canonical between-sections vertical gap
+  
+  These tokens are used BY Phase 28 fixes (D-27/D-28/D-30). Existing hardcoded pixel values elsewhere in the codebase stay unless explicitly touched by this phase (no mass refactor). Future phases may migrate incrementally.
+
+- **D-27 (Sub-screen bottom padding consistency):** All sub-screens MUST use `paddingBottom: 'var(--bottom-nav-safe)'` for correct behavior on notched iOS + Android gesture zones. Scope:
+  - `app/src/screens/PlannerScreen.tsx` — currently hardcoded `96px`
+  - `app/src/screens/SettingsScreen.tsx` — currently hardcoded `96px`
+  - `app/src/screens/GraphScreen.tsx` — currently only `16px` (BUG: content scrolls under nav)
+  - `app/src/screens/PostDetailScreen.tsx` — currently has TWO different paddings (`104px` and `24px`); unify to `var(--bottom-nav-safe)`
+  - `app/src/screens/AnchorDetailScreen.tsx` — currently hardcoded `96px`
+  - `app/src/screens/ClusterDetailScreen.tsx` — currently hardcoded `96px`
+  - `app/src/screens/ReviewScreen.tsx` — audit if hardcoded; normalize
+  - `app/src/screens/PodcastScreen.tsx` — audit if hardcoded; normalize
+  - `app/src/screens/QuestionDetailScreen.tsx` — audit if hardcoded; normalize
+  
+  HomeScreen already uses `calc(96px + var(--safe-area-bottom))` (close to target); migrate to `var(--bottom-nav-safe)` for consistency. OnboardingScreen is an exception — no bottom nav present, leave its existing padding pattern untouched.
+
+- **D-28 (Off-grid value normalization):** Fix 4-grid violations identified in audit. Exact changes:
+  - `app/src/screens/PlannerScreen.tsx:179` (dead/dying row): `padding: '11px 0'` → `padding: '12px 0'`
+  - `app/src/screens/PlannerScreen.tsx:225` (second dead/dying row): same fix
+  - `app/src/screens/AskScreen.tsx:570` (suggested prompt button): `padding: '11px 16px'` → `padding: '12px 16px'`
+  - `app/src/screens/AskScreen.tsx:607` (recent question row): `padding: '11px 16px'` → `padding: '12px 16px'` (this task MERGES with D-15 AskScreen row refactor into a `<button>` — use `padding: 'var(--space-md) var(--space-lg)'` or the button variant defined in UI-SPEC)
+  - `app/src/screens/PostDetailScreen.tsx` (card `padding: '32px 28px'` outlier): `padding: '32px 28px'` → `padding: '32px 24px'`
+  - `app/src/screens/ReviewScreen.tsx:57` (flashcard Q-row): `padding: '16px 16px 12px'` → `padding: '16px'` (uniform)
+  - `app/src/screens/ReviewScreen.tsx:141` (flashcard A-row): `padding: '12px 16px 16px'` → `padding: '16px'` (uniform)
+  
+  `14px` uses observed in 4 places are NOT in scope unless co-located with a fix above. No mass-refactor — every change is surgical.
+
+- **D-29 (Touch-target accessibility fix — WCAG 2.5.8):** 4 interactive elements currently fail the 44×44 minimum touch-target requirement. Fix via inline `minWidth: '44px', minHeight: '44px'` + (if needed) `display: 'inline-flex', alignItems: 'center', justifyContent: 'center'` to preserve visual sizing:
+  - `app/src/components/ui/Header.tsx` back button (~36px currently) — fix at component level so all Header consumers benefit
+  - `app/src/screens/PlannerScreen.tsx:205` pruning scissors button (32px)
+  - `app/src/screens/AskScreen.tsx:718` flag button (~34×24)
+  - `app/src/components/ui/Badge.tsx` — when the Badge is rendered with `onClick` prop (i.e., interactive usage), apply 44×44 minimum; non-interactive Badge stays visually compact
+  
+  Broader a11y sweep (ARIA labels, focus rings, contrast) remains explicitly DEFERRED to a future phase — D-29 is a targeted fix, not a full a11y pass.
+
+- **D-30 (Section vertical rhythm):** Standardize section-to-section gaps to symmetric `var(--section-gap)` (24px). Intra-section gaps (title-to-content) stay at current 12px. Specific changes in `app/src/screens/PlannerScreen.tsx`:
+  - TrellisHero ↔ TrellisStatusPanel: currently `marginTop: 16px, marginBottom: 8px` → `marginTop: 'var(--section-gap)', marginBottom: 'var(--section-gap)'`
+  - TrellisStatusPanel ↔ Suggested Moves: currently `marginTop: 24px, marginBottom: 12px` → symmetric `var(--section-gap)` above, intra-section 12px title-to-content inside Suggested Moves block stays
+  - SectionHeader component (if it exists): `marginTop: 'var(--section-gap)'`, intra-section `marginBottom: 12px` is preserved (the vertical-rhythm asymmetry inside a section is intentional — it separates header from body)
+  
+  Card default padding stays at `20px` (no change). Overrides to 12/14/16px in individual Card consumers are NOT refactored in this phase, but any new Card override introduced in Phase 28 must include an inline comment explaining why it deviates.
 
 ### Wave C — Trellis Interaction & Naming
 
@@ -123,15 +173,25 @@ None — `todo match-phase 28` returned 0 matches.
 
 ### Files modified in this phase (primary)
 
+- `app/src/index.css` — Add 8 new CSS custom properties (D-26).
 - `app/src/App.tsx` — Sub-screen Outlet wrapper gets `onScroll` handler; `BottomNavigation` receives `isTopLevelScreen` prop.
 - `app/src/components/BottomNavigation.tsx` — Slide-down animation wrapper; optional border-top.
 - `app/src/components/SwipeTabContainer.tsx` — Resize listener + visualViewport handler + dev invariant.
-- `app/src/components/ui/Header.tsx` — Scroll-aware shadow.
+- `app/src/components/ui/Header.tsx` — Scroll-aware shadow (D-07); back-button touch-target fix (D-29).
+- `app/src/components/ui/Badge.tsx` — Conditional 44×44 touch target when `onClick` present (D-29).
 - `app/src/components/trellis/TrellisLeaf.tsx` — Shake-on-tap + pulse-on-focus + haptic.
-- `app/src/screens/PlannerScreen.tsx` — Suggested Moves section header; `focusedAnchorId` state + plumb to trellis.
-- `app/src/screens/GraphScreen.tsx` — "Mind Map" → `t('graph.title')`.
-- `app/src/screens/AskScreen.tsx` — Recent-questions polish pass; update stale comment.
-- `app/src/locales/{en,zh,es,ja}.json` — Add `graph.title` key + any new polish strings.
+- `app/src/screens/HomeScreen.tsx` — Bottom padding migration to `var(--bottom-nav-safe)` (D-27).
+- `app/src/screens/PlannerScreen.tsx` — Suggested Moves section header; `focusedAnchorId` state + plumb to trellis; bottom padding D-27; row padding 11→12px D-28; scissors touch target D-29; section rhythm D-30.
+- `app/src/screens/SettingsScreen.tsx` — Bottom padding D-27.
+- `app/src/screens/GraphScreen.tsx` — "Mind Map" → `t('graph.title')`; bottom padding D-27 (fix 16px bug).
+- `app/src/screens/AskScreen.tsx` — Recent-questions polish pass; update stale comment; row padding 11→12px D-28; flag button touch target D-29.
+- `app/src/screens/PostDetailScreen.tsx` — Bottom padding unification D-27 (fix dual-value bug); card `32px 28px` → `32px 24px` D-28.
+- `app/src/screens/AnchorDetailScreen.tsx` — Bottom padding D-27.
+- `app/src/screens/ClusterDetailScreen.tsx` — Bottom padding D-27.
+- `app/src/screens/ReviewScreen.tsx` — Bottom padding D-27; flashcard Q/A-row asymmetry fix D-28.
+- `app/src/screens/PodcastScreen.tsx` — Bottom padding D-27 (audit first).
+- `app/src/screens/QuestionDetailScreen.tsx` — Bottom padding D-27 (audit first).
+- `app/src/locales/{en,zh,es,ja}.json` — Add `graph.headerTitle` value swap + `ask.recentQuestionsEmpty` key.
 - `app/src/lib/haptics.ts` — (No change — consumer of existing `hapticImpactLight()`.)
 
 ### Files read but not modified

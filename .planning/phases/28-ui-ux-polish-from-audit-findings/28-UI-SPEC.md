@@ -340,13 +340,132 @@ Read-but-not-modified:
 
 ---
 
+## Amendment A — Spacing Consistency Contract (added 2026-04-16)
+
+A dedicated padding audit (post-initial-UI-SPEC) identified MAJOR spacing inconsistency. User locked four recommendations, captured as CONTEXT.md D-26..D-30. This amendment codifies the design contract.
+
+### Spacing Token System (D-26)
+
+Eight new CSS custom properties added to `:root` in `app/src/index.css`. These formalize the 4-grid scale already implicitly used as raw pixel values throughout the codebase — they are NOT new visual design decisions, just named references.
+
+| Token | Value | Purpose |
+|-------|-------|---------|
+| `--space-xs` | `4px` | Tight groupings (icon gaps) |
+| `--space-sm` | `8px` | Small gaps, chip internal padding |
+| `--space-md` | `12px` | Row vertical padding, section-to-title gap |
+| `--space-lg` | `16px` | Screen horizontal padding, card internal padding (compact) |
+| `--space-xl` | `20px` | Card default internal padding (unchanged) |
+| `--space-2xl` | `24px` | Section-to-section gap (see `--section-gap` alias) |
+| `--space-3xl` | `32px` | Large gaps, button-lg padding |
+| `--bottom-nav-safe` | `calc(80px + var(--safe-area-bottom))` | Canonical sub-screen bottom padding |
+| `--section-gap` | `24px` | Alias for `--space-2xl` — readability at call sites |
+
+**Usage rule:** New/modified inline styles in Phase 28 reference these tokens. Existing raw pixel values elsewhere in the codebase stay unless the file is being touched by another Phase 28 decision — no mass refactor. Future phases may migrate incrementally.
+
+### Sub-screen Bottom Padding Contract (D-27)
+
+Every sub-screen uses `paddingBottom: 'var(--bottom-nav-safe)'`. No exceptions except OnboardingScreen (no bottom nav present).
+
+**Before / After:**
+
+| File | Before | After |
+|------|--------|-------|
+| `HomeScreen.tsx:379` | `calc(96px + var(--safe-area-top) + var(--safe-area-bottom))` | `var(--bottom-nav-safe)` (drop the `--safe-area-top` addition — it belongs in `paddingTop`) |
+| `PlannerScreen.tsx:94` | `96px` | `var(--bottom-nav-safe)` |
+| `SettingsScreen.tsx:419` | `96px` | `var(--bottom-nav-safe)` |
+| `GraphScreen.tsx:500` | `16px` (bug) | `var(--bottom-nav-safe)` |
+| `PostDetailScreen.tsx` | `104px` AND `24px` (dual-value bug) | unified `var(--bottom-nav-safe)` |
+| `AnchorDetailScreen.tsx` | `96px` | `var(--bottom-nav-safe)` |
+| `ClusterDetailScreen.tsx` | `96px` | `var(--bottom-nav-safe)` |
+| `ReviewScreen.tsx` | audit; normalize | `var(--bottom-nav-safe)` |
+| `PodcastScreen.tsx` | audit; normalize | `var(--bottom-nav-safe)` |
+| `QuestionDetailScreen.tsx` | audit; normalize | `var(--bottom-nav-safe)` |
+| `OnboardingScreen.tsx` | `24px 16px` | unchanged — no bottom nav present |
+
+**Rationale:** Only HomeScreen currently respects `--safe-area-bottom`. All others fail on iOS notch/Dynamic Island and Android gesture navigation devices.
+
+### Off-Grid Value Normalization (D-28)
+
+Surgical pixel-value fixes — every change is co-located with an already-touched screen. No mass refactor of untouched files.
+
+| File:line | Before | After | Reason |
+|-----------|--------|-------|--------|
+| `PlannerScreen.tsx:179` | `padding: '11px 0'` | `padding: '12px 0'` | Off-grid → `--space-md` |
+| `PlannerScreen.tsx:225` | `padding: '11px 0'` | `padding: '12px 0'` | Off-grid → `--space-md` |
+| `AskScreen.tsx:570` | `padding: '11px 16px'` | `padding: '12px 16px'` | Off-grid → `--space-md var(--space-lg)` |
+| `AskScreen.tsx:607` | `padding: '11px 16px'` | Absorbed by D-15 `<button>` refactor per UI-SPEC "AskScreen Recent Questions Row" — final padding per that spec is `padding: '12px 16px'` | Off-grid + merged refactor |
+| `PostDetailScreen.tsx` (card) | `padding: '32px 28px'` | `padding: '32px 24px'` | 28 is off-grid → `--space-2xl` |
+| `ReviewScreen.tsx:57` (flashcard Q) | `padding: '16px 16px 12px'` | `padding: '16px'` | Asymmetric → uniform `--space-lg` |
+| `ReviewScreen.tsx:141` (flashcard A) | `padding: '12px 16px 16px'` | `padding: '16px'` | Asymmetric → uniform `--space-lg` |
+
+**Explicitly NOT in scope:** the `14px` values observed in 4 other locations. Those stay until a reason to touch the file emerges.
+
+### Touch-Target Minimum Contract (D-29)
+
+WCAG 2.5.8 requires 44×44 CSS px minimum for interactive elements. Four specific failures fixed surgically.
+
+| Element | File | Current | Target |
+|---------|------|---------|--------|
+| Header back button | `Header.tsx` (component-level fix) | ~36px implicit | `minWidth: '44px', minHeight: '44px'` |
+| Pruning scissors button | `PlannerScreen.tsx:205` | 32px | `minWidth: '44px', minHeight: '44px'` |
+| Flag button | `AskScreen.tsx:718` | ~34×24 | `minWidth: '44px', minHeight: '44px'` |
+| Badge (interactive) | `Badge.tsx` | ~20×20 text | Conditional — 44×44 only when `onClick` prop present |
+
+**Implementation pattern:**
+
+```tsx
+{
+  minWidth: '44px',
+  minHeight: '44px',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  // visual icon stays at its original size — the 44×44 is the TOUCH target, not the visible icon
+}
+```
+
+For Badge:
+
+```tsx
+// Badge.tsx
+const interactive = Boolean(props.onClick);
+const touchStyles = interactive
+  ? { minWidth: '44px', minHeight: '44px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }
+  : {};
+```
+
+**Explicitly NOT in scope:** Broader a11y sweep (ARIA labels, focus rings, keyboard navigation, contrast audit). D-29 is targeted to the 4 flagged elements only.
+
+### Section Vertical Rhythm Contract (D-30)
+
+Symmetric `var(--section-gap)` (24px) between sections. Intra-section title-to-content stays at 12px (intentional typographic separation).
+
+| Boundary | Before | After |
+|----------|--------|-------|
+| TrellisHero ↔ TrellisStatusPanel (`PlannerScreen.tsx:119`) | `marginTop: 16px, marginBottom: 8px` | `marginTop: 'var(--section-gap)', marginBottom: 'var(--section-gap)'` |
+| TrellisStatusPanel ↔ Suggested Moves (`PlannerScreen.tsx:127-128`) | `marginTop: 24px, marginBottom: 12px` | `marginTop: 'var(--section-gap)'`; the 12px intra-section gap from section header to first row stays |
+| SectionHeader component (if present) | `marginTop: 24px, marginBottom: 12px` | `marginTop: 'var(--section-gap)'`, `marginBottom: '12px'` preserved (title-to-content asymmetry is intentional) |
+
+**Card padding philosophy:** Default Card stays at `20px` (no change). Existing overrides to 12/14/16px in Card consumers are NOT refactored in Phase 28. Any NEW Card override introduced in Phase 28 MUST include an inline comment explaining why it deviates — e.g., `// compact: high-density list row`.
+
+### Contract Summary (Amendment A)
+
+- 8 new CSS vars on `:root` in `index.css` — named references to the existing 4-grid
+- ~10 sub-screens normalized to `var(--bottom-nav-safe)` for safe-area correctness
+- 7 off-grid pixel values corrected surgically
+- 4 touch targets brought to 44×44 minimum
+- Section rhythm locked to symmetric 24px via `--section-gap`
+- Card default 20px preserved; overrides require justification comment going forward
+
+---
+
 ## Checker Sign-Off
 
 - [ ] Dimension 1 Copywriting: PASS — 2 new strings locked EN; 4-bundle parity enforced by `bundle-parity.test.mjs`
 - [ ] Dimension 2 Visuals: PASS — all animations specified with concrete Framer Motion params
 - [ ] Dimension 3 Color: PASS — accent (`--primary-40`) reserved exclusively for leaf pulse glow; 60/30/10 inherited
 - [ ] Dimension 4 Typography: PASS — 2 weights (400/600), 3 sizes (0.82rem/0.875rem/1rem), all existing
-- [ ] Dimension 5 Spacing: PASS — strict 4-grid; only existing CSS-var sourced dimensions; exceptions documented
+- [ ] Dimension 5 Spacing: PASS — strict 4-grid; Amendment A adds 8 named CSS vars that REFERENCE the existing grid (no new visual tokens); all deltas surgical
 - [ ] Dimension 6 Registry Safety: PASS — no new packages, no third-party registries, no shadcn
 
-**Approval:** pending
+**Approval:** pending (Amendment A added 2026-04-16 — re-check recommended)

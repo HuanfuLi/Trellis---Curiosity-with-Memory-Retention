@@ -167,6 +167,12 @@ Run `/gsd:new-milestone` when ready to open v1.4 with a concrete scope, then `/g
 
 ## Latest Decisions (Phase 28)
 
+- [Phase 28 Amendment A — 2026-04-16] Dedicated padding audit identified MAJOR spacing inconsistency; user locked 4 new decisions D-26..D-30 expanding Wave B scope
+- [Phase 28 D-26] Introduce 8 CSS custom properties in index.css: --space-xs/sm/md/lg/xl/2xl/3xl (4/8/12/16/20/24/32px 4-grid) + --bottom-nav-safe (calc(80px + safe-area-bottom)) + --section-gap (24px alias)
+- [Phase 28 D-27] All sub-screens migrate to paddingBottom: var(--bottom-nav-safe) — fixes iOS notch/Android gesture-zone failures on 7 screens that hardcode 96px; fixes GraphScreen 16px bug; unifies PostDetailScreen dual-value bug
+- [Phase 28 D-28] Surgical off-grid fixes: 11px→12px (PlannerScreen:179,:225, AskScreen:570,:607), 32px 28px→32px 24px (PostDetailScreen card), flashcard asymmetric→uniform 16px (ReviewScreen:57,:141). No mass refactor — only co-located with already-touched files.
+- [Phase 28 D-29] WCAG 2.5.8 touch-target fix for 4 failing elements: Header back button, PlannerScreen:205 scissors, AskScreen:718 flag, Badge (conditional when onClick present). Broader a11y sweep stays deferred.
+- [Phase 28 D-30] Section vertical rhythm locked to symmetric var(--section-gap) (24px); intra-section title-to-content stays at 12px (intentional typographic hierarchy). Card default 20px preserved; new overrides require justification comment.
 - [Phase 28] Scope = full audit (Waves A+B+C+D) per user selection; P0 showstoppers, visual chrome, trellis interaction + naming, P2 micro-polish all included
 - [Phase 28] A-2 SwipeTabContainer desync root cause hypothesis: screenWidthRef captured once, never refreshes on visualViewport resize (keyboard/rotation/browser chrome); fix = resize + visualViewport.resize listeners + re-snap stripX when not mid-gesture + dev invariant
 - [Phase 28] Sub-screen bottom nav hides via slide-down animation (~200ms spring, reusing SwipeTabContainer SPRING constant) when isTopLevelScreen=false; 5 screens stay mounted per Phase 22 D-11
