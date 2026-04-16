@@ -1,11 +1,21 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Brain, Key, Zap, Shield, Smartphone, Cloud, Lock } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { useSettings } from '../state/useSettings';
-import type { LLMConfig } from '../types';
+import i18n from '../locales';
+import { detectDeviceLocale } from '../lib/locale';
+import { eventBus } from '../lib/event-bus';
+import type { LLMConfig, SupportedLocale } from '../types';
 
-type Step = 'welcome' | 'consent' | 'llm';
+type Step = 'welcome' | 'language' | 'consent' | 'llm';
+
+const LOCALE_OPTIONS: readonly { code: SupportedLocale; label: string }[] = [
+  { code: 'en', label: 'English' },
+  { code: 'zh', label: '简体中文' },
+  { code: 'es', label: 'Español' },
+  { code: 'ja', label: '日本語' },
+] as const;
 
 export function OnboardingScreen() {
   const navigate = useNavigate();
@@ -16,11 +26,24 @@ export function OnboardingScreen() {
   const [apiKey, setApiKey] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
+  // Seed from i18n.language synchronously, then refine via async device detection.
+  const [selectedLocale, setSelectedLocale] = useState<SupportedLocale>(() => {
+    const cur = i18n.language;
+    return (['en', 'zh', 'es', 'ja'] as const).includes(cur as SupportedLocale)
+      ? (cur as SupportedLocale)
+      : 'en';
+  });
+
+  useEffect(() => {
+    void detectDeviceLocale().then((detected) => setSelectedLocale(detected));
+  }, []);
+
   // "Skip for now" — completes onboarding, preserves consent value at time of call
   const handleSkip = async (consent: boolean) => {
     await set('preferences', {
       theme: 'system',
-      language: 'en',
+      locale: selectedLocale,
+      language: selectedLocale,   // legacy back-compat; matches locale
       onboardingCompleted: true,
       aiConsentGiven: consent,
     });
@@ -38,12 +61,20 @@ export function OnboardingScreen() {
     });
     await set('preferences', {
       theme: 'system',
-      language: 'en',
+      locale: selectedLocale,
+      language: selectedLocale,   // legacy back-compat; matches locale
       onboardingCompleted: true,
       aiConsentGiven: true,
     });
     setIsSaving(false);
     navigate('/home', { replace: true });
+  };
+
+  // Confirm the language selection: applies instantly, persists, emits LOCALE_CHANGED.
+  const handleConfirmLanguage = async () => {
+    await i18n.changeLanguage(selectedLocale);
+    eventBus.emit({ type: 'LOCALE_CHANGED', payload: { locale: selectedLocale } });
+    setStep('consent');
   };
 
   const providers: { value: LLMConfig['provider']; label: string; description: string }[] = [
@@ -111,7 +142,7 @@ export function OnboardingScreen() {
               ))}
             </div>
 
-            <Button fullWidth onClick={() => setStep('consent')}>Get Started</Button>
+            <Button fullWidth onClick={() => setStep('language')}>Get Started</Button>
             <button
               onClick={() => void handleSkip(false)}
               style={{ display: 'block', width: '100%', marginTop: '12px', padding: '12px', background: 'none', color: 'var(--muted-foreground)', fontSize: '0.875rem' }}
@@ -121,11 +152,61 @@ export function OnboardingScreen() {
           </div>
         )}
 
+        {/* ── Language step (D-18) ──────────────────────────────────── */}
+        {step === 'language' && (
+          <div>
+            <button
+              onClick={() => setStep('welcome')}
+              style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center', marginBottom: '24px' }}
+            >
+              <ArrowLeft size={20} />
+            </button>
+
+            {/* 4-language header so user recognizes step regardless of current locale (D-18). */}
+            <h2 style={{ textAlign: 'center', marginBottom: '8px' }}>
+              Language / 语言 / Idioma / 言語
+            </h2>
+            <p style={{ fontSize: '0.875rem', textAlign: 'center', color: 'var(--muted-foreground)', marginBottom: '24px' }}>
+              Choose your language · 选择语言 · Elige tu idioma · 言語を選択
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
+              {LOCALE_OPTIONS.map((opt) => {
+                const isSelected = selectedLocale === opt.code;
+                return (
+                  <button
+                    key={opt.code}
+                    onClick={() => setSelectedLocale(opt.code)}
+                    style={{
+                      padding: '16px 20px',
+                      borderRadius: 'var(--radius-xl)',
+                      border: `2px solid ${isSelected ? 'var(--primary-40)' : 'var(--border)'}`,
+                      backgroundColor: isSelected ? 'var(--primary-90)' : 'var(--surface-variant)',
+                      color: 'var(--foreground)',
+                      fontSize: '1rem',
+                      fontWeight: isSelected ? 600 : 400,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'background-color 0.15s, border-color 0.15s',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <Button fullWidth onClick={() => void handleConfirmLanguage()}>
+              Continue · 继续 · Continuar · 続ける
+            </Button>
+          </div>
+        )}
+
         {/* ── Consent step ──────────────────────────────────────────── */}
         {step === 'consent' && (
           <div>
             <button
-              onClick={() => setStep('welcome')}
+              onClick={() => setStep('language')}
               style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center', marginBottom: '24px' }}
             >
               <ArrowLeft size={20} />
