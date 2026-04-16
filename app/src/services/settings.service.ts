@@ -1,4 +1,4 @@
-import type { AppSettings, ServiceResult } from '../types';
+import type { AppPreferences, AppSettings, ServiceResult, SupportedLocale } from '../types';
 
 const STORAGE_KEY = 'echolearn_settings';
 
@@ -47,6 +47,7 @@ const defaultSettings: AppSettings = {
   },
   preferences: {
     theme: 'system',
+    locale: 'en',
     language: 'en',
     onboardingCompleted: false,
     aiConsentGiven: false,
@@ -85,11 +86,24 @@ function deepMerge(defaults: AppSettings, stored: Partial<AppSettings>): AppSett
   return result;
 }
 
+const SUPPORTED_LOCALE_CODES: readonly SupportedLocale[] = ['en', 'zh', 'es', 'ja'];
+
 function load(): AppSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...defaultSettings };
-    return deepMerge(defaultSettings, JSON.parse(raw) as Partial<AppSettings>);
+    const parsed = JSON.parse(raw) as Partial<AppSettings>;
+    const merged = deepMerge(defaultSettings, parsed);
+    // Migration (D-20): if stored preferences have no `locale` but do have legacy `language`,
+    // copy it across (normalized to a supported code; unsupported → 'en').
+    const storedPrefs = (parsed.preferences ?? {}) as Partial<AppPreferences>;
+    if (!storedPrefs.locale && storedPrefs.language) {
+      const candidate = String(storedPrefs.language).toLowerCase().split('-')[0];
+      merged.preferences.locale = (
+        (SUPPORTED_LOCALE_CODES as readonly string[]).includes(candidate) ? candidate : 'en'
+      ) as SupportedLocale;
+    }
+    return merged;
   } catch {
     return { ...defaultSettings };
   }

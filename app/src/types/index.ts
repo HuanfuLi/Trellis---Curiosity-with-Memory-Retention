@@ -293,8 +293,8 @@ export type SupportedLocale = 'en' | 'zh' | 'es' | 'ja';
 
 export interface AppPreferences {
   theme: 'light' | 'dark' | 'system';
-  /** Canonical display locale (D-20). Populated by migration from legacy `language` field on first load in Task 3 of Phase 27-01. */
-  locale?: SupportedLocale;
+  /** Canonical display locale (D-20). Populated from legacy `language` field on first load when missing. */
+  locale: SupportedLocale;
   /** @deprecated Use `locale` instead. Kept for one-time migration only. */
   language?: string;
   onboardingCompleted: boolean;
