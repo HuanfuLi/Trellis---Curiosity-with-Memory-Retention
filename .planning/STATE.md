@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
 status: Milestone complete
-stopped_at: Completed 26-04-PLAN.md (Phase 26 all plans done)
-last_updated: "2026-04-15T07:20:27.634Z"
+stopped_at: Phase 27 context gathered
+last_updated: "2026-04-16T06:46:21.463Z"
 progress:
-  total_phases: 20
+  total_phases: 21
   completed_phases: 6
   total_plans: 28
   completed_plans: 27
@@ -112,7 +112,7 @@ Phase 26 — Trellis Harvest Panel, Dying/Dead Node Actions, and Suggested Moves
 ## Last Session
 
 Completed Phase 26 Plan 02 (26-02-PLAN.md) — TrellisStatusPanel (3-column fruit/dying/dead counts + bottom sheets), harvest flow (clear blossom dates + credits + fly-to-counter + confetti), Planner header fruit counter pill
-**Stopped At:** Completed 26-04-PLAN.md (Phase 26 all plans done)
+**Stopped At:** Phase 27 context gathered
 **Date:** 2026-04-15
 
 ## Latest Decisions (Phase 25)
@@ -235,3 +235,4 @@ Completed Phase 26 Plan 02 (26-02-PLAN.md) — TrellisStatusPanel (3-column frui
 - Phase 20 added: Orchestration Strategy & Diagnostic Dialogue (from original Milestone 2 ROADMAP.md Phases 17-18, renumbered)
 - Phase 22 added: Swipe navigation between first-level screens
 - Phase 26 added: Trellis harvest panel, dying/dead node actions, and suggested moves refactor to reflect trellis status
+- Phase 27 added: Add i18n/L10n support
