@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
-status: Executing Phase 27 (awaiting Task 3 human UAT sign-off)
-stopped_at: Completed 27-07-PLAN.md autonomous tasks; awaiting human UAT
-last_updated: "2026-04-16T13:22:00.000Z"
+status: Phase 27 complete — i18n/L10n shipped
+stopped_at: Phase 27 verified (24/24 decisions), operator UAT approved
+last_updated: "2026-04-16T14:00:00.000Z"
 progress:
   total_phases: 22
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 35
-  completed_plans: 34
+  completed_plans: 35
 ---
 
 # Project State: Milestone 1.1
@@ -24,7 +24,9 @@ Enhance user engagement through rich post formats (Rednote-style), smarter miles
 
 ## Current Phase
 
-Phase 27 — Add i18n/L10n support (Plan 07 of 07 autonomous portion complete; awaiting Task 3 human-verify UAT sign-off. CLAUDE.md authored at project root with durable i18n Workflow section (D-09); zh/es/ja bundles fully translated at 92.7%/90.2%/92.4% leaf coverage with proper nouns preserved and interpolation placeholders intact (D-02/D-03); `app/scripts/translate-locales.md` Sonnet subagent prompt template archived for future re-runs (D-07/D-08); 27-VALIDATION.md marked nyquist_compliant=true + wave_0_complete=true; UAT walkthrough template at `uat-screenshots/README.md` with 16-screen × 4-locale coverage matrix. All 40 Wave 0 tests green; `npx vite build` green; bundle-parity test green. Physical UAT walkthrough + human sign-off is the Task 3 checkpoint.)
+Phase 27 ✓ COMPLETE (2026-04-16) — i18n/L10n shipped across 4 locales (EN/ZH/ES/JA). 24/24 decisions verified by gsd-verifier; 43/43 Phase 27 tests green; `npx vite build` green; operator UAT approved (see `uat-screenshots/README.md`). Pre-existing tsc/Node 25 issues in unrelated files (GraphScreen, canonical-knowledge, review, trellis-state) documented in `deferred-items.md` — out of scope for Phase 27.
+
+Next: Phase 28 (UI/UX polish from audit findings) — awaiting planning.
 
 ## Latest Decisions (Phase 27-07)
 

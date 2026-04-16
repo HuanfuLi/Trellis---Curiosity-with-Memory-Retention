@@ -657,7 +657,7 @@ Plans:
 - [x] 26-03-PLAN.md — Node actions: heal (review + podcast), re-plant (schedule reset + post), prune (archive + animation) + pruned section
 - [x] 26-04-PLAN.md — Suggested moves refactor: remove suggestedChunks, trellis-health-driven priority ordering, autoGen dedup
 
-### Phase 27: Add i18n/L10n support
+### Phase 27: Add i18n/L10n support ✓ COMPLETE (2026-04-16)
 
 **Goal:** Introduce i18n/L10n plumbing across EchoLearn (UI chrome, dates, LLM response locale, TTS voice, YouTube params) shipping 4 fully-translated locales (EN canonical + Simplified Chinese + Spanish + Japanese). Auto-detected at launch, confirmed during onboarding, switchable instantly from Settings, persisted in UserPreferences. No RTL, no retroactive translation of stored content, no runtime LLM translation (dev-time Sonnet subagent only).
 **Requirements**: D-01..D-24 (see 27-CONTEXT.md — no tracked REQ-IDs; decisions are the requirement surface)
