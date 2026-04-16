@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
-status: Milestone complete
-stopped_at: Phase 27 context gathered
-last_updated: "2026-04-16T06:46:21.463Z"
+status: Executing Phase 28
+stopped_at: Phase 28 context gathered
+last_updated: "2026-04-16T09:00:00.000Z"
 progress:
-  total_phases: 21
+  total_phases: 22
   completed_phases: 6
-  total_plans: 28
+  total_plans: 35
   completed_plans: 27
 ---
 
@@ -36,6 +36,19 @@ Phase 26 — Trellis Harvest Panel, Dying/Dead Node Actions, and Suggested Moves
 - **Phase 12:** Portal Navigation & Rich Moves Linking (12-01-PLAN.md — COMPLETE, 12-02-PLAN.md — COMPLETE)
 - **Phase 13:** Planner Redesign (13-01-PLAN.md — COMPLETE)
 - **Phase 14:** Knowledge Graph Classification & Anchor Nodes (14-01-PLAN.md — COMPLETE, 14-02-PLAN.md — COMPLETE, 14-03-PLAN.md — COMPLETE, 14-04-PLAN.md — COMPLETE)
+
+## Latest Decisions (Phase 28)
+
+- [Phase 28] Scope = full audit (Waves A+B+C+D) per user selection; P0 showstoppers, visual chrome, trellis interaction + naming, P2 micro-polish all included
+- [Phase 28] A-2 SwipeTabContainer desync root cause hypothesis: screenWidthRef captured once, never refreshes on visualViewport resize (keyboard/rotation/browser chrome); fix = resize + visualViewport.resize listeners + re-snap stripX when not mid-gesture + dev invariant
+- [Phase 28] Sub-screen bottom nav hides via slide-down animation (~200ms spring, reusing SwipeTabContainer SPRING constant) when isTopLevelScreen=false; 5 screens stay mounted per Phase 22 D-11
+- [Phase 28] Sub-screen Header gets scroll-aware shadow (--shadow-1 when scrollTop > 4px); background already opaque --surface, no border needed
+- [Phase 28] Trellis leaf shake = 300ms rotate variant (0° → +4° → -4° → +2° → 0°) + hapticImpactLight on tap (any state); purely decorative, no tooltip/nav/sheet — preserves "no new mental model"
+- [Phase 28] Trellis pulse-on-focus = scale 1→1.15→1 (600ms) + drop-shadow glow (--primary-40, 2s fade) when Suggested Move row tap matches anchorId; clears on action or navigate
+- [Phase 28] Leaf animation perf guard: when leaves.length > 30, shake/pulse run only on viewport-visible leaves (IntersectionObserver or whileInView) — extends Phase 25 D-55 convention
+- [Phase 28] "Mind Map" → "Knowledge Graph" rename via graph.title key in all 4 locale bundles (en/zh/es/ja) using Phase 27 Sonnet-subagent workflow; graceful degradation to direct string edit + TODO comment if Phase 27 key-extraction hasn't run
+- [Phase 28] Withdrawn audit findings (Dev Mode default, Suggested Moves debug labels, harvest chip decrement) NOT in scope — were Dev-Mode-enabled artifacts, not bugs
+- [Phase 28] Depends on Phase 27 (i18n scaffold); planner may split into 2 plans (A+B, then C+D)
 
 ## Latest Decisions (Phase 26-04)
 
@@ -236,3 +249,4 @@ Completed Phase 26 Plan 02 (26-02-PLAN.md) — TrellisStatusPanel (3-column frui
 - Phase 22 added: Swipe navigation between first-level screens
 - Phase 26 added: Trellis harvest panel, dying/dead node actions, and suggested moves refactor to reflect trellis status
 - Phase 27 added: Add i18n/L10n support
+- Phase 28 added: UI/UX polish from audit findings

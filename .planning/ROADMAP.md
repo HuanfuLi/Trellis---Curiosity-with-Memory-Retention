@@ -673,6 +673,16 @@ Plans:
 - [ ] 27-06-PLAN.md — Component + UI + trellis + toast string extraction (D-10) (wave 2)
 - [ ] 27-07-PLAN.md — Sonnet-subagent translation of zh/es/ja + CLAUDE.md creation with i18n Workflow section (D-02/D-03/D-07/D-08/D-09) + D-24 UAT walkthrough (wave 5)
 
+### Phase 28: UI/UX polish from audit findings
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 27
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 28 to break down)
+
 ---
 
 _Created: 2026-03-26 | v1.1 Roadmap | 17 phases | 91 requirements mapped_
