@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Brain, Volume2, Network, Radio, BookOpen, Palette, RotateCcw, CheckCircle, XCircle, Shield, Download, Upload, Trash2, Sparkles, Loader2, Image, CalendarClock, BarChart3, Youtube, Globe } from 'lucide-react';
+import { SUPPORTED_LOCALES } from '../locales';
+import type { SupportedLocale } from '../types';
+import { eventBus } from '../lib/event-bus';
 import { tokenUsageReporter, type ServiceAggregate } from '../services/token-usage.service';
 import { getRateLimitStatus } from '../services/ask-rate-limiter.service';
 import { plannerAutoGenService } from '../services/plannerAutoGen.service';
@@ -122,7 +125,30 @@ function TextInput({ value, onChange, onBlur, type = 'text', placeholder }: { va
 }
 
 export function SettingsScreen() {
-  const { t } = useTranslation();
+  const { t, i18n: i18nInstance } = useTranslation();
+
+  // Locale switcher (D-19) — local state reflects current i18n.language so the
+  // select box stays in sync after handleLocaleChange. NOTE: we read + write
+  // preferences via settingsService directly (rather than the useSettings hook)
+  // because every other row in this screen already uses settingsService.getSync
+  // + settingsService.set for its own state; introducing the hook here would
+  // create two parallel sources of truth for the settings snapshot. Documented
+  // deviation — see SUMMARY.
+  const [locale, setLocale] = useState<SupportedLocale>(() => {
+    const cur = i18nInstance.language;
+    return (SUPPORTED_LOCALES as readonly string[]).includes(cur)
+      ? (cur as SupportedLocale)
+      : 'en';
+  });
+
+  const handleLocaleChange = async (next: SupportedLocale) => {
+    await i18nInstance.changeLanguage(next);
+    const prefs = settingsService.getSync().preferences;
+    await settingsService.set('preferences', { ...prefs, locale: next, language: next });
+    eventBus.emit({ type: 'LOCALE_CHANGED', payload: { locale: next } });
+    setLocale(next);
+  };
+
   const [testResult, setTestResult] = useState<Record<string, string | null>>({});
   const [isTesting, setIsTesting] = useState<Record<string, boolean>>({});
 
@@ -392,6 +418,28 @@ export function SettingsScreen() {
   return (
     <div style={{ padding: `${HEADER_HEIGHT + 8}px 16px 96px`, maxWidth: '448px', margin: '0 auto' }}>
       <Header title={t('settings.title')} />
+
+      {/* Locale Switcher (D-19) — Top of list so users stuck in an unreadable locale
+          can still find it. Label is hardcoded in all 4 scripts (cross-locale affordance
+          per D-18/D-19); description is translated. Per-option labels stay in their
+          native scripts. */}
+      <Card style={{ marginBottom: '8px' }}>
+        <SettingRow
+          label="Language / 语言 / Idioma / 言語"
+          description={t('settings.language.description')}
+        >
+          <SelectInput
+            value={locale}
+            onChange={(v) => void handleLocaleChange(v as SupportedLocale)}
+            options={[
+              { value: 'en', label: 'English' },
+              { value: 'zh', label: '简体中文' },
+              { value: 'es', label: 'Español' },
+              { value: 'ja', label: '日本語' },
+            ]}
+          />
+        </SettingRow>
+      </Card>
 
       {/* LLM Section */}
       <SectionHeader icon={<Brain size={20} />} title={t('settings.sections.languageModel')} />
