@@ -4,7 +4,7 @@ milestone: v1.1
 milestone_name: milestone
 status: Executing Phase 27
 stopped_at: Completed 27-02-PLAN.md
-last_updated: "2026-04-16T12:08:39.679Z"
+last_updated: "2026-04-16T12:08:51.806Z"
 progress:
   total_phases: 22
   completed_phases: 6
@@ -24,7 +24,7 @@ Enhance user engagement through rich post formats (Rednote-style), smarter miles
 
 ## Current Phase
 
-Phase 27 — Add i18n/L10n support (Plan 06 of 07 complete — components/trellis + service-layer toast i18n landed; 4 of 7 plans done: 01, 02, 03, 06)
+Phase 27 — Add i18n/L10n support (Plan 02 of 07 complete — central LLM/TTS/YouTube locale injection + date.ts refactor + Tavily neutrality guard landed; 4 of 7 plans done: 01, 02, 03, 06)
 
 ## Roadmap
 
@@ -36,6 +36,23 @@ Phase 27 — Add i18n/L10n support (Plan 06 of 07 complete — components/trelli
 - **Phase 12:** Portal Navigation & Rich Moves Linking (12-01-PLAN.md — COMPLETE, 12-02-PLAN.md — COMPLETE)
 - **Phase 13:** Planner Redesign (13-01-PLAN.md — COMPLETE)
 - **Phase 14:** Knowledge Graph Classification & Anchor Nodes (14-01-PLAN.md — COMPLETE, 14-02-PLAN.md — COMPLETE, 14-03-PLAN.md — COMPLETE, 14-04-PLAN.md — COMPLETE)
+
+## Latest Decisions (Phase 27-02)
+
+- [Phase 27-02] `applyLocaleDirective` extracted to `app/src/providers/llm/locale-directive.ts` (standalone module) — `providers/llm/index.ts` re-exports it for backward-compat; called once at top of `chatCompletion` and `chatStream` (2 sites). Extraction driven by Node 25 JSON-import-attribute failure chain: the provider index transitively imports `token-usage.service` → JSON bundles which Node 25 rejects without `with { type: 'json' }`; standalone module imports `i18next` directly and can be node:test-loaded.
+- [Phase 27-02] `LOCALE_NAMES` duplicated inside `locale-directive.ts` (4 entries) to avoid importing `src/locales/index.ts` (same JSON-chain reason). Documented "keep in lockstep" comment. Literal `'Simplified Chinese'` used (not `'Chinese'` or `'zh-CN'`) to steer LLMs away from Traditional/Cantonese defaults.
+- [Phase 27-02] Idempotency: `applyLocaleDirective` uses `existing.content.includes(directive)` substring check; prevents double-inject when called twice (asserted by Task 1 test 3).
+- [Phase 27-02] Same extraction pattern applied to YouTube: `buildYoutubeSearchUrl` in `app/src/services/youtube-locale-url.ts` with `YOUTUBE_LOCALE_PARAMS` map; `youtube.service.ts` delegates URL construction via 1-line call. Enables `youtube-locale.test.mjs` to run under `node --test` directly.
+- [Phase 27-02] TTS `LOCALE_VOICE_FALLBACK` kept INLINE in `providers/tts/index.ts` (not extracted) — TTS module is NOT in the JSON-import failure chain so no extraction needed; inline map is simplest. Voice map: en=alloy, zh/es/ja=nova.
+- [Phase 27-02] TTS user-override respect: `config.voice && config.voice !== 'alloy'` → honor user's Settings pick as-is regardless of locale; only the default `'alloy'` gets locale-remapped. Prevents surprise-override when user explicitly picked a voice in Settings.
+- [Phase 27-02] YouTube locale params: en→hl=en-US/regionCode=US/relevanceLanguage=en; zh→hl=zh-CN/CN/zh; es→hl=es/ES/es; ja→hl=ja/JP/ja. Transcript-fetch Accept-Language header left unchanged (documented known limitation per RESEARCH.md — out of scope).
+- [Phase 27-02] Tavily web-search.service.ts has ZERO diff — D-15 neutrality enforced by `app/tests/services/web-search-no-locale.test.mjs` with 10-marker FORBIDDEN list + URL param guard. Test asserts that under `i18n.language='zh'` AND `i18n.language='ja'`, the Tavily request body contains none of `'Simplified Chinese'|'Spanish'|'Japanese'|'"locale"'|'"hl"'|'"regionCode"'|'"relevanceLanguage"'|'"lang"'|'"language"'|'zh-CN'|'ja-JP'|'es-ES'` and URL has no `[?&](hl|locale|lang|regionCode|relevanceLanguage)=` params.
+- [Phase 27-02] `date.ts` imports `i18next` directly (not `'../locales'`) — same Node 25 JSON-chain reason; runtime behavior identical (singleton instance configured at app startup). Exports `currentIntlLocale()` helper consumed by `ask-rate-limiter.service.ts` to replace hardcoded `'en-US'`.
+- [Phase 27-02] INTL_LOCALE map in date.ts: en→en-US, zh→zh-CN, es→es-ES, ja→ja-JP. Unknown locale (e.g. 'ko') falls back to 'en' → 'en-US'.
+- [Phase 27-02] `formatDate` + `formatDateLabel` use `Intl.DateTimeFormat` via `toLocaleDateString(currentIntlLocale(), …)`; `formatDateLabel` today-case uses `i18next.t('common.today')`; `getGreeting()` uses `i18next.t('common.greeting.morning|afternoon|evening')`.
+- [Phase 27-02] 5 Wave 0 skeletons filled with live tests: llm-locale-injection (5 cases), tts-locale (3), youtube-locale (5), web-search-no-locale (3), date.locale (6). 40-test Wave 0 suite green.
+- [Phase 27-02] Executor continuity: Task 3 (D-11) work was present in working tree after a prior executor was interrupted post-Task-2; continuation agent verified tests + committed as `dc8455a7` with explicit file paths (no `-A`) to avoid capturing parallel Plan 27-06 files.
+- [Phase 27-02] Pre-existing tsc errors (8, from Plan 01 deferred-items.md) remain — zero new errors in files touched by this plan.
 
 ## Latest Decisions (Phase 27-06)
 
@@ -170,7 +187,7 @@ Phase 27 — Add i18n/L10n support (Plan 06 of 07 complete — components/trelli
 
 ## Last Session
 
-Completed Phase 27 Plan 06 (27-06-PLAN.md) — Components + service-layer toast i18n: 18 tsx files + 6 service-layer toast() call sites + 1 React hook driven by t()/i18n.t(); 118 new keys added to en.json (20 → 138 total); bundle-parity enforced across all 4 locales. Task 1 (`21e87579`) landed in initial run; Task 2 (`b7ac54cf`) resumed and completed after executor interruption. Ran parallel with 27-02 (which also completed via `dc8455a7`).
+Completed Phase 27 Plan 02 (27-02-PLAN.md) — Central integrations: LLM locale injection via `applyLocaleDirective` at every chatCompletion/chatStream entry (D-12); TTS nova voice for zh/es/ja with user-override respect (D-13); YouTube URL `hl/regionCode/relevanceLanguage` per locale (D-14); Tavily neutrality locked by negative test (D-15); `date.ts` + `ask-rate-limiter` use Intl with active locale, `getGreeting` routes through `t()` (D-11). `applyLocaleDirective` + `buildYoutubeSearchUrl` extracted to standalone modules (`providers/llm/locale-directive.ts`, `services/youtube-locale-url.ts`) for Node 25 node:test compatibility. Continuation agent (parallel with 27-06) committed final D-11 task `dc8455a7`; Tasks 1+2 from prior session (`be59b5bf`, `9b8b3c5c`). 40-test Wave 0 suite green. Plan 27-06 also completed in parallel (`21e87579`, `b7ac54cf`).
 **Stopped At:** Completed 27-02-PLAN.md
 **Date:** 2026-04-16
 
