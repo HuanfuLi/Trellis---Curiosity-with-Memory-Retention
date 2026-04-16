@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { MoreVertical, Trash2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface DetailMenuProps {
   onDelete: () => void;
@@ -7,10 +8,12 @@ interface DetailMenuProps {
   deleteLabel?: string;
 }
 
-export function DetailMenu({ onDelete, deleteLabel = 'this item' }: DetailMenuProps) {
+export function DetailMenu({ onDelete, deleteLabel }: DetailMenuProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const resolvedDeleteLabel = deleteLabel ?? t('detailMenu.defaultLabel');
 
   // Close menu on outside click
   useEffect(() => {
@@ -29,7 +32,7 @@ export function DetailMenu({ onDelete, deleteLabel = 'this item' }: DetailMenuPr
     <div ref={menuRef} style={{ position: 'relative' }}>
       <button
         onClick={() => { setOpen((v) => !v); setConfirming(false); }}
-        aria-label="More options"
+        aria-label={t('detailMenu.moreOptionsAria')}
         style={{
           background: 'none',
           border: 'none',
@@ -78,12 +81,12 @@ export function DetailMenu({ onDelete, deleteLabel = 'this item' }: DetailMenuPr
               }}
             >
               <Trash2 size={16} />
-              Delete
+              {t('detailMenu.delete')}
             </button>
           ) : (
             <div style={{ padding: '14px 16px' }}>
               <p style={{ fontSize: '0.82rem', color: 'var(--foreground)', marginBottom: '12px', lineHeight: 1.4 }}>
-                Delete {deleteLabel}? This cannot be undone.
+                {t('detailMenu.confirmPrompt', { label: resolvedDeleteLabel })}
               </p>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button
@@ -100,7 +103,7 @@ export function DetailMenu({ onDelete, deleteLabel = 'this item' }: DetailMenuPr
                     cursor: 'pointer',
                   }}
                 >
-                  Delete
+                  {t('detailMenu.delete')}
                 </button>
                 <button
                   onClick={() => { setOpen(false); setConfirming(false); }}
@@ -116,7 +119,7 @@ export function DetailMenu({ onDelete, deleteLabel = 'this item' }: DetailMenuPr
                     cursor: 'pointer',
                   }}
                 >
-                  Cancel
+                  {t('detailMenu.cancel')}
                 </button>
               </div>
             </div>

@@ -6,6 +6,7 @@
  * a text-only card in that case.
  */
 
+import { useTranslation } from 'react-i18next';
 import type { GeneratedImage } from '../types';
 
 interface FeedPostImageProps {
@@ -84,6 +85,7 @@ export function FeedPostImage({
   minHeight = 220,
   className,
 }: FeedPostImageProps) {
+  const { t } = useTranslation();
   // No image available — render nothing. Posts display text-only.
   if (!imageData) {
     return null;
@@ -95,7 +97,7 @@ export function FeedPostImage({
     <AspectBox minHeight={minHeight} aspectPadding={aspectPadding} className={className}>
       <img
         src={imageSrc}
-        alt="Post preview image"
+        alt={t('feedPostImage.alt')}
         loading="lazy"
         style={{
           position: 'absolute',

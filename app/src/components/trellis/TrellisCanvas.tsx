@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import type { TrellisLayout } from '../../services/trellis-state.service.ts';
 import { TRELLIS_VIEWBOX_W, TRELLIS_VIEWBOX_H } from '../../services/trellis-layout.service.ts';
 import { TrellisLeaf } from './TrellisLeaf.tsx';
@@ -12,6 +13,7 @@ export interface TrellisCanvasProps {
 const AMBIENT_SWAY_THRESHOLD = 20;
 
 export function TrellisCanvas({ layout, ambientEnabled }: TrellisCanvasProps) {
+  const { t } = useTranslation();
   const { vines, nodes } = layout;
   const leafCount = nodes.length;
   const swayEnabled = leafCount <= AMBIENT_SWAY_THRESHOLD;
@@ -29,7 +31,7 @@ export function TrellisCanvas({ layout, ambientEnabled }: TrellisCanvasProps) {
       height="100%"
       style={{ position: 'absolute', inset: 0, zIndex: 20, pointerEvents: 'none', display: 'block' }}
       role="img"
-      aria-label="Knowledge garden — your review health visualization"
+      aria-label={t('planner.trellis.ariaLabel')}
     >
       {/* Vines — staggered draw-on animation */}
       <g>

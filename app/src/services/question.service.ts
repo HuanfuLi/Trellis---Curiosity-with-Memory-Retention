@@ -2,6 +2,7 @@ import type { Question, ServiceResult, AskResult, SessionMessage } from '../type
 import { today } from '../lib/date.ts';
 import { eventBus } from '../lib/event-bus.ts';
 import { toast } from '../lib/toast.ts';
+import i18n from '../locales/index.ts';
 import { settingsService } from './settings.service.ts';
 import { chatCompletion } from '../providers/llm/index.ts';
 import { embedText, cosine } from '../providers/embedding/index.ts';
@@ -88,7 +89,7 @@ function saveStore(questions: Question[]): void {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(questions));
   } catch (e) {
     if (e instanceof DOMException && e.name === 'QuotaExceededError') {
-      toast('Storage full — your question may not be saved. Clear old data in Settings.', 'error');
+      toast(i18n.t('common.toast.storageFullQuestion'), 'error');
     }
   }
 }

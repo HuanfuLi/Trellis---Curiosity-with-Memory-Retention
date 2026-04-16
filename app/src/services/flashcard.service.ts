@@ -2,6 +2,7 @@ import type { FlashCard, ChatSession, ReviewSchedule } from '../types';
 import { today } from '../lib/date';
 import { eventBus } from '../lib/event-bus';
 import { toast } from '../lib/toast';
+import i18n from '../locales';
 import { settingsService } from './settings.service';
 import { chatCompletion } from '../providers/llm';
 import { questionService } from './question.service';
@@ -77,7 +78,7 @@ function saveAll(cards: FlashCard[]): void {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
   } catch (e) {
     if (e instanceof DOMException && e.name === 'QuotaExceededError') {
-      toast('Storage full — flashcards may not be saved. Clear old data in Settings.', 'error');
+      toast(i18n.t('common.toast.storageFullFlashcards'), 'error');
     }
   }
 }

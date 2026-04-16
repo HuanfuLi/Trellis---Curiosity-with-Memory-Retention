@@ -1,6 +1,7 @@
 import type { DailyPodcast, Question, ServiceResult } from '../types';
 import { eventBus } from '../lib/event-bus';
 import { toast } from '../lib/toast';
+import i18n from '../locales';
 import { settingsService } from './settings.service';
 import { questionService } from './question.service';
 import { chatCompletion } from '../providers/llm';
@@ -124,7 +125,7 @@ function saveStore(podcasts: DailyPodcast[]): void {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
   } catch (e) {
     if (e instanceof DOMException && e.name === 'QuotaExceededError') {
-      toast('Storage full — podcast data may not be saved.', 'error');
+      toast(i18n.t('common.toast.storageFullPodcast'), 'error');
     }
   }
 }

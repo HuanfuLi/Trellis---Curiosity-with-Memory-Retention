@@ -33,7 +33,18 @@
       "restoredToTrellis": "Restored to trellis",
       "permanentlyDeleted": "Permanently deleted",
       "transcriptionMissingKey": "Add your API key in Text-to-Speech & Speech Recognition settings.",
-      "transcriptionFailed": "Transcription failed: {{message}}"
+      "transcriptionFailed": "Transcription failed: {{message}}",
+      "storageFullChatHistory": "Storage full — chat history may not be saved. Clear old data in Settings.",
+      "storageFullActiveSession": "Storage full — unable to track active session.",
+      "storageFullPodcast": "Storage full — podcast data may not be saved.",
+      "storageFullFlashcards": "Storage full — flashcards may not be saved. Clear old data in Settings.",
+      "storageFullQuestion": "Storage full — your question may not be saved. Clear old data in Settings.",
+      "chatHistoryLoadFailed": "Failed to load chat history — data may be corrupted.",
+      "generatingDailyPodcast": "Generating your daily podcast...",
+      "reviewReminder": "Time to review your flashcards!",
+      "addedToPlanner": "Added to Planner!",
+      "suggestionsRefreshed": "Suggestions refreshed!",
+      "refreshFailed": "Refresh failed"
     }
   },
   "home": {

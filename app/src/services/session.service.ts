@@ -1,6 +1,7 @@
 import type { ChatSession, DailyPost, SessionOrigin } from '../types';
 import { eventBus } from '../lib/event-bus';
 import { toast } from '../lib/toast';
+import i18n from '../locales';
 import { conceptFeedService } from './concept-feed.service';
 
 const SESSIONS_KEY = 'echolearn_sessions';
@@ -17,7 +18,7 @@ function loadAll(): ChatSession[] {
     if (!raw) return [];
     return JSON.parse(raw) as ChatSession[];
   } catch (e) {
-    toast('Failed to load chat history — data may be corrupted.', 'error');
+    toast(i18n.t('common.toast.chatHistoryLoadFailed'), 'error');
     console.error('sessionService.loadAll:', e);
     return [];
   }
@@ -28,7 +29,7 @@ function saveAll(sessions: ChatSession[]): void {
     localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
   } catch (e) {
     if (e instanceof DOMException && e.name === 'QuotaExceededError') {
-      toast('Storage full — chat history may not be saved. Clear old data in Settings.', 'error');
+      toast(i18n.t('common.toast.storageFullChatHistory'), 'error');
     }
   }
 }
@@ -69,7 +70,7 @@ export const sessionService = {
       localStorage.setItem(ACTIVE_ID_KEY, id);
     } catch (e) {
       if (e instanceof DOMException && e.name === 'QuotaExceededError') {
-        toast('Storage full — unable to track active session.', 'error');
+        toast(i18n.t('common.toast.storageFullActiveSession'), 'error');
       }
     }
   },

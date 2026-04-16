@@ -5,6 +5,7 @@
 
 import { useEffect, useState } from 'react';
 import { Scissors, RotateCcw, Trash2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { questionService } from '../../services/question.service';
 import { trellisActionsService } from '../../services/trellis-actions.service';
 import { eventBus } from '../../lib/event-bus';
@@ -12,6 +13,7 @@ import { toast } from '../../lib/toast';
 import type { Question } from '../../types';
 
 export function PrunedSection() {
+  const { t } = useTranslation();
   const [prunedNodes, setPrunedNodes] = useState<Question[]>(() =>
     questionService.getPrunedQuestions(),
   );
@@ -27,12 +29,12 @@ export function PrunedSection() {
 
   const handleUnprune = (q: Question) => {
     trellisActionsService.unpruneQuestion(q.id);
-    toast('Restored to trellis', 'success');
+    toast(t('common.toast.restoredToTrellis'), 'success');
   };
 
   const handleHardDelete = async (q: Question) => {
     await trellisActionsService.hardDelete(q.id);
-    toast('Permanently deleted', 'success');
+    toast(t('common.toast.permanentlyDeleted'), 'success');
   };
 
   if (prunedNodes.length === 0) return null;
@@ -55,7 +57,7 @@ export function PrunedSection() {
         }}
       >
         <Scissors size={12} />
-        Pruned ({prunedNodes.length})
+        {t('planner.trellis.pruned', { count: prunedNodes.length })}
         <span style={{ marginLeft: '2px' }}>{showPruned ? '▾' : '▸'}</span>
       </button>
       {showPruned && (
@@ -88,8 +90,8 @@ export function PrunedSection() {
               </span>
               <button
                 onClick={() => handleUnprune(q)}
-                aria-label="Restore"
-                title="Restore to trellis"
+                aria-label={t('common.action.restore')}
+                title={t('planner.trellis.restoreTitle')}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -104,12 +106,12 @@ export function PrunedSection() {
                 }}
               >
                 <RotateCcw size={12} />
-                Restore
+                {t('common.action.restore')}
               </button>
               <button
                 onClick={() => { void handleHardDelete(q); }}
-                aria-label="Delete forever"
-                title="Delete forever"
+                aria-label={t('common.action.deleteForever')}
+                title={t('planner.trellis.deleteForeverTitle')}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -124,7 +126,7 @@ export function PrunedSection() {
                 }}
               >
                 <Trash2 size={12} />
-                Delete
+                {t('common.delete')}
               </button>
             </div>
           ))}

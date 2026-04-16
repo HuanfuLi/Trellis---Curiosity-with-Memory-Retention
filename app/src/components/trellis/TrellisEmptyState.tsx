@@ -1,7 +1,9 @@
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Button } from '../ui/Button.tsx';
 
 export function TrellisEmptyState() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   return (
     <div
@@ -16,11 +18,11 @@ export function TrellisEmptyState() {
       aria-live="polite"
     >
       <div style={{ fontSize: 32, lineHeight: 1 }} role="img" aria-label="Seed">🌱</div>
-      <h2 style={{ fontSize: '1.25rem', fontWeight: 600, margin: 0, color: 'var(--foreground)' }}>Plant your first seed</h2>
+      <h2 style={{ fontSize: '1.25rem', fontWeight: 600, margin: 0, color: 'var(--foreground)' }}>{t('planner.trellis.emptyTitle')}</h2>
       <p style={{ fontSize: '0.875rem', color: 'var(--muted-foreground)', margin: 0, maxWidth: 280 }}>
-        Your knowledge garden grows as you ask questions. Ask one to start.
+        {t('planner.trellis.emptyBody')}
       </p>
-      <Button size="md" variant="primary" onClick={() => navigate('/ask')}>Ask a question →</Button>
+      <Button size="md" variant="primary" onClick={() => navigate('/ask')}>{t('planner.trellis.askCta')}</Button>
     </div>
   );
 }

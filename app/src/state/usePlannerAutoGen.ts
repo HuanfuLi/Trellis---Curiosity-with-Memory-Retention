@@ -9,6 +9,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { PlannedMove } from '../types';
 import { plannerAutoGenService } from '../services/plannerAutoGen.service';
 import { eventBus } from '../lib/event-bus';
@@ -24,6 +25,7 @@ interface UsePlannerAutoGenReturn {
 }
 
 export function usePlannerAutoGen(): UsePlannerAutoGenReturn {
+  const { t } = useTranslation();
   const [moves, setMoves] = useState<PlannedMove[]>(() => plannerAutoGenService.getMoves());
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -71,9 +73,9 @@ export function usePlannerAutoGen(): UsePlannerAutoGenReturn {
     const ok = plannerAutoGenService.acceptMove(moveId);
     if (ok) {
       setMoves(plannerAutoGenService.getMoves());
-      toast('Added to Planner!', 'success');
+      toast(t('common.toast.addedToPlanner'), 'success');
     }
-  }, []);
+  }, [t]);
 
   const dismiss = useCallback((moveId: string) => {
     plannerAutoGenService.dismissMove(moveId);
@@ -91,13 +93,13 @@ export function usePlannerAutoGen(): UsePlannerAutoGenReturn {
     try {
       await plannerAutoGenService.generateAndStoreSuggestions(true);
       setMoves(plannerAutoGenService.getMoves());
-      toast('Suggestions refreshed!', 'success');
+      toast(t('common.toast.suggestionsRefreshed'), 'success');
     } catch {
-      toast('Refresh failed', 'error');
+      toast(t('common.toast.refreshFailed'), 'error');
     } finally {
       setIsRefreshing(false);
     }
-  }, [isRefreshing]);
+  }, [isRefreshing, t]);
 
   return { moves, isRefreshing, accept, dismiss, skipAll, refresh };
 }

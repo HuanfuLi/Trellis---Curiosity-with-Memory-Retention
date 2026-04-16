@@ -10,6 +10,7 @@
 import { useRef, useState } from 'react';
 import type { CSSProperties, RefObject } from 'react';
 import { Cherry, Leaf, XCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Confetti } from '../Confetti';
 import { clearBlossomDate } from '../../services/trellis-blossom-dates.service';
 import { trellisCreditsService } from '../../services/trellis-credits.service';
@@ -33,6 +34,7 @@ const DYING_COLOR = '#D4A017';
 const DEAD_COLOR = '#9E9E9E';
 
 export function TrellisStatusPanel({ nodes, onCreditsChange, counterRef }: TrellisStatusPanelProps) {
+  const { t } = useTranslation();
   const [flyParticles, setFlyParticles] = useState<FlyParticle[]>([]);
   const [showConfetti, setShowConfetti] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -138,7 +140,7 @@ export function TrellisStatusPanel({ nodes, onCreditsChange, counterRef }: Trell
         style={{
           display: 'flex',
           gap: '12px',
-          padding: '12px 16px',
+          padding: '12px 0',
           alignItems: 'stretch',
         }}
       >
@@ -146,7 +148,7 @@ export function TrellisStatusPanel({ nodes, onCreditsChange, counterRef }: Trell
         <div style={columnBase}>
           <Leaf size={18} color={DYING_COLOR} />
           <span style={countTextStyle}>{dyingNodes.length}</span>
-          <span style={labelTextStyle}>Dying</span>
+          <span style={labelTextStyle}>{t('planner.trellis.dying')}</span>
         </div>
 
         {/* Fruit — primary harvest action */}
@@ -156,12 +158,12 @@ export function TrellisStatusPanel({ nodes, onCreditsChange, counterRef }: Trell
           disabled={fruitNodes.length === 0}
           className={fruitNodes.length > 0 ? 'active-squish' : undefined}
           style={fruitButtonStyle}
-          aria-label={`Harvest ${fruitNodes.length} fruit`}
+          aria-label={t('planner.trellis.harvestAria', { count: fruitNodes.length })}
         >
           <Cherry size={18} />
           <span style={{ fontSize: '0.95rem', fontWeight: 700 }}>{fruitNodes.length}</span>
           <span style={{ fontSize: '0.78rem', fontWeight: 600, opacity: 0.9 }}>
-            {fruitNodes.length > 0 ? 'Harvest' : 'Fruits'}
+            {fruitNodes.length > 0 ? t('planner.trellis.harvest') : t('planner.trellis.fruits')}
           </span>
         </button>
 
@@ -169,7 +171,7 @@ export function TrellisStatusPanel({ nodes, onCreditsChange, counterRef }: Trell
         <div style={columnBase}>
           <XCircle size={18} color={DEAD_COLOR} />
           <span style={countTextStyle}>{deadNodes.length}</span>
-          <span style={labelTextStyle}>Dead</span>
+          <span style={labelTextStyle}>{t('planner.trellis.dead')}</span>
         </div>
       </div>
 
