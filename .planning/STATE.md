@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: gap closure)
-status: Executing Phase 28
-stopped_at: Phase 29 context gathered
-last_updated: "2026-04-16T20:25:49.244Z"
+status: Executing Phase 28 — Plan 01 complete; Plans 02-03 pending
+stopped_at: Completed 28-01-PLAN.md
+last_updated: "2026-04-16T20:45:25.252Z"
 progress:
   total_phases: 21
   completed_phases: 0
@@ -12,11 +12,11 @@ progress:
   completed_plans: 0
 ---
 
-# Project State: Milestone v1.3 complete
+# Project State: Phase 28 in progress (Plan 01 complete)
 
 ## Current Milestone
 
-Milestone v1.3 (pre-release) ✓ COMPLETE (2026-04-16) — Orchestration & Engagement Polish.
+Milestone v1.3 (pre-release) ✓ COMPLETE (2026-04-16). Phase 28 runs as the first phase of v1.4 (UI/UX polish from audit findings).
 
 ## Milestone Goal
 
@@ -24,9 +24,28 @@ Shipped: diagnostic dialogue (Phase 20), post streaming (21), swipe nav (22), in
 
 ## Current Phase
 
-No active phase — awaiting v1.4 scope. Phase 28 (UI/UX polish from audit findings) is queued as the first phase of v1.4. Pre-existing tsc/Node 25 issues documented in v1.3 archive (`.planning/milestones/v1.3-phases/27-*/deferred-items.md`) should be rolled into v1.4 planning.
+Phase 28 — UI/UX Polish from Audit Findings. Plan 01 (Wave A+B+B-spacing foundations) ✓ COMPLETE 2026-04-16. Plans 02 (Wave C — trellis interactions + Mind Map → Knowledge Graph rename) and 03 (Wave D — AskScreen polish + residual P2 items) pending.
 
-Run `/gsd:new-milestone` when ready to open v1.4 with a concrete scope, then `/gsd:plan-phase 28` to break down Phase 28.
+Next: run `/gsd:execute-phase 28` to continue with 28-02-PLAN.md, or `/gsd:verify 28` for a mid-phase verifier pass.
+
+## Latest Decisions (Phase 28-01)
+
+- [Phase 28-01] 9 CSS custom properties landed on `:root` in `app/src/index.css` — `--space-xs: 4px`, `--space-sm: 8px`, `--space-md: 12px`, `--space-lg: 16px`, `--space-xl: 20px`, `--space-2xl: 24px`, `--space-3xl: 32px`, `--bottom-nav-safe: calc(80px + var(--safe-area-bottom))`, `--section-gap: 24px`. Additive (zero existing tokens modified) — foundation for Wave B-spacing consumers (D-27/D-28/D-30).
+- [Phase 28-01] SwipeTabContainer desync fix (D-05) — new `useEffect` installs `window.resize` + `window.visualViewport?.resize` listeners that refresh `screenWidthRef` and re-snap `stripX` when not mid-gesture/mid-animation. Existing `useLayoutEffect` route-sync now refreshes `screenWidthRef` BEFORE reading (previously captured once at mount). Dev invariant logs `[SwipeTabContainer] stripX drift` warning when `|stripX - expected| > 2px` — `import.meta.env.DEV` branch stripped in production.
+- [Phase 28-01] Pure helper `computeTargetX(index, width) = -index * width` exported from `swipe-tab-logic.ts`. Consumed by the resize listener + useLayoutEffect + new Wave 0 test (5 viewport/index pairs asserted). Node 25 `-0 ≠ 0` quirk handled in the zero-input test via `Math.abs`.
+- [Phase 28-01] BottomNavigation (D-06) — `<nav>` → `<motion.nav>` with `initial={{ y: 0 }}` (prevents first-mount flash), `animate={{ y: getNavYTarget(isTopLevelScreen) }}`, `transition=SLIDE_SPRING` where `SLIDE_SPRING = { stiffness: 300, damping: 30, mass: 0.8 }` matches SwipeTabContainer's SPRING. Pure helper `getNavYTarget(isTop)` exported; new Wave 0 test asserts `true → 0`, `false → '100%'`.
+- [Phase 28-01] Header scroll-shadow (D-07) — new `scrolled?: boolean` prop; falls back to `useContext(HeaderScrollContext)?.scrolled ?? false` when prop omitted. Paints `boxShadow: var(--shadow-1)` with `transition: 'box-shadow 150ms ease-out'` when scrolled. 4px scroll threshold (natural hysteresis). HeaderScrollContext extracted to `app/src/lib/header-scroll-context.ts` (single-purpose module) to avoid `Header ↔ App.tsx` circular import.
+- [Phase 28-01] App.tsx RootLayout — `headerScrolled` state; sub-screen Outlet wrapper gains `onScroll={(e) => { ... scrollTop > 4 }}` handler; Outlet wrapped in `<HeaderScrollContext.Provider value={{ scrolled: headerScrolled }}>`; `isTopLevelScreen={isTopLevelScreen}` passed to BottomNavigation.
+- [Phase 28-01] D-08 verified no-op: BottomNavigation already had `borderTop: '1px solid var(--border)'` — no change needed, retained explicitly in the motion.nav style prop.
+- [Phase 28-01] PlannerScreen Suggested Moves h2 (D-04) restyled with explicit `fontSize: '1rem', fontWeight: 600, lineHeight: 1.4, color: 'var(--foreground)', letterSpacing: '-0.01em'` + marginTop `var(--section-gap)` on parent row. Copy untouched (UI-SPEC D-04 is styling-only per D-24 i18n coordination).
+- [Phase 28-01] Sub-screen paddingBottom (D-27) migrated to `var(--bottom-nav-safe)` on 10 screens: HomeScreen, PlannerScreen, SettingsScreen, GraphScreen (fixed 16px bug → content no longer scrolls under nav), PostDetailScreen (unified three inline paddings: 104px main + 24px loading + 24px not-found), AnchorDetailScreen, ClusterDetailScreen, ReviewScreen (3 branches: library + done + active), PodcastScreen (2 branches), QuestionDetailScreen. Combined `padding: '… … …'` shorthand split into explicit properties so bottom padding is controlled independently.
+- [Phase 28-01] Deviation [Rule 1 — Bug]: HomeScreen original `paddingBottom: 'calc(96px + var(--safe-area-top) + var(--safe-area-bottom))'` incorrectly included `--safe-area-top` (belongs in paddingTop). Plan D-27 text called it out; fixed inline during migration.
+- [Phase 28-01] Off-grid normalization (D-28) — PlannerScreen dead+dying rows `11px 0` → `12px 0` (2 sites); AskScreen suggested-prompt button `11px 16px` → `12px 16px`; AskScreen recent-question row LEFT with TODO comment (deferred to Plan 28-03 D-15 `<button>` refactor); PostDetailScreen text-art card `32px 28px` → `32px 24px`; ReviewScreen flashcard Q row `16px 16px 12px` → `16px` uniform; ReviewScreen flashcard A row `12px 16px 16px` → `16px` uniform.
+- [Phase 28-01] Touch targets (D-29) → WCAG 2.5.8 minimum 44×44 — Header component-level fix: left + right slots wrap children in `<div style={{ minWidth: '44px', minHeight: '44px', ... }}>` for BOTH centered and non-centered code paths, so all consumer back buttons benefit without per-screen edits. PlannerScreen scissors (dead + dying rows): 32×32 → 44×44. AskScreen flag button: ~34×24 → 44×44 (minWidth/minHeight + justifyContent:'center'). Badge.tsx: added `onClick?: MouseEventHandler<HTMLSpanElement>` + `style?: CSSProperties` props; when `onClick` present, merges `{ minWidth: '44px', minHeight: '44px', justifyContent: 'center', cursor: 'pointer' }` into the span's style. Non-interactive Badge stays visually compact.
+- [Phase 28-01] Section rhythm (D-30) — PlannerScreen TrellisHero ↔ TrellisStatusPanel: `marginTop: '16px', marginBottom: '8px'` → `marginTop: 'var(--section-gap)', marginBottom: 'var(--section-gap)'` (symmetric 24px). PlannerScreen TrellisStatusPanel ↔ Suggested Moves: `marginTop: '24px'` → `marginTop: 'var(--section-gap)'`. Intra-section `marginBottom: '12px'` (title-to-content) preserved as intentional typographic hierarchy.
+- [Phase 28-01] All 18 Wave 0 tests green (swipe-tab-logic 14 + BottomNavigation.slide 3 + bundle-parity 1); `npx vite build` green in 3.03s; zero new tsc errors in touched files (8 pre-existing errors in GraphScreen/canonical-knowledge/review/trellis-state unchanged per deferred-items.md).
+- [Phase 28-01] gsd-tools `verify key-links` reports false negatives on all 4 links due to a YAML escape bug (kvMatch regex captures `"pattern: \\\\{...\\\\}"` literally, producing a regex that matches `\{` instead of `{`). All patterns manually verified via grep — present in source as expected. Tool issue, not a plan issue.
+- [Phase 28-01] Commits: `38e64309` (feat — D-26 tokens + D-05 desync fix + Wave 0 tests), `efbb2f7f` (feat — D-06 nav slide-down + D-07 scroll shadow + D-04 heading), `58cfec24` (feat — D-27 padding unification + D-28 off-grid + D-29 touch targets + D-30 rhythm). 11 minutes total; 3 tasks / 16 files (13 modified + 3 created).
 
 ## Latest Decisions (Phase 27-07)
 
@@ -248,6 +267,10 @@ Run `/gsd:new-milestone` when ready to open v1.4 with a concrete scope, then `/g
 
 ## Last Session
 
+Completed Phase 28 Plan 01 (28-01-PLAN.md) — Wave A/B/B-spacing UI/UX polish foundation. Landed 9 CSS custom properties (D-26: `--space-xs..3xl` + `--bottom-nav-safe` + `--section-gap`) on `:root`; SwipeTabContainer desync fix (D-05: `window.resize` + `window.visualViewport.resize` listeners re-snap `stripX`, hardened useLayoutEffect refreshes `screenWidthRef` before reading, dev invariant warns on >2px drift); BottomNavigation slide-down via `motion.nav` + SLIDE_SPRING matching SwipeTabContainer's SPRING (D-06: `isTopLevelScreen` prop toggles y: 0 ↔ '100%', `initial={{y:0}}` prevents first-mount flash); Header scroll-shadow via `HeaderScrollContext` published from App.tsx Outlet `onScroll` (D-07: 4px threshold, 150ms ease-out transition); 10 sub-screens' paddingBottom unified on `var(--bottom-nav-safe)` (D-27: fixed GraphScreen 16px bug, PostDetailScreen dual-value bug, HomeScreen safe-area-top-in-paddingBottom bug); 7 off-grid pixel values normalized (D-28: 11→12 row padding on Planner + Ask, 32×28→32×24 on PostDetail card, Review flashcard Q/A asymmetry → uniform 16px); 4 touch targets to WCAG 44×44 (D-29: Header slots component-level — benefits all back buttons; Planner scissors; Ask flag; Badge conditional on onClick); PlannerScreen section rhythm (D-30: symmetric `var(--section-gap)` boundaries, 12px intra-section preserved) + Suggested Moves h2 visual polish (D-04: 1rem/600 weight, letterSpacing -0.01em). Pure helpers `computeTargetX` + `getNavYTarget` exported for node --test coverage (Wave 0). 18/18 Wave 0 tests green; `npx vite build` green in 3.03s; zero new tsc errors. 2 auto-fixes: HomeScreen paddingBottom arithmetic bug (Rule 1), Node 25 `-0` assert.equal quirk in test (Rule 3). Commits: `38e64309`, `efbb2f7f`, `58cfec24`. Plans 28-02 + 28-03 remain pending.
+
+### Previous session
+
 Completed Phase 27 Plan 07 autonomous tasks (27-07-PLAN.md) — Task 1 landed project-root `CLAUDE.md` with durable i18n Workflow section (D-09: namespaces, bundle paths, EN-first rule, Sonnet subagent workflow, no-runtime-LLM-translation rule, what-NOT-to-translate allowlist) + `app/scripts/translate-locales.md` copy-paste-ready Sonnet subagent prompt template. Task 2 translated zh.json (92.7%), es.json (90.2%), ja.json (92.4%) leaf coverage — remaining ~8-10% are proper nouns / URLs / model IDs / emoji prefixes / EN LLM system prompts / cross-locale branded labels, all deliberate per D-07/D-18 and `what NOT to translate`. All 602 keys parity-intact; bundle-parity test green; 40/40 Wave 0 tests green; `npx vite build` green (3.08s); interpolation placeholders preserved verbatim across all keys × all 3 locales; proper nouns (EchoLearn, OpenAI, Claude, Gemini, YouTube, Tavily, Nano Banana, ZeroTier) grep-positive in every non-EN bundle. Also marked 27-VALIDATION.md frontmatter status=ready, nyquist_compliant=true, wave_0_complete=true. Authored UAT walkthrough template at `uat-screenshots/README.md` (16-screen × 4-locale coverage matrix + walkthrough instructions + flags-to-file list + known-safe notes). Deviations: (1) executor-inline translation instead of Task-tool Sonnet subagent spawn — environment has no Task tool, D-07 constraint satisfied identically by dev-time human-in-the-loop executor translation with 4 automated validation gates, template remains Task-tool-shaped for future re-runs; (2) UAT walkthrough template authored instead of physical screenshot capture — physical operator action cannot be executor-automated, `uat-screenshots/README.md` codifies the walkthrough as Task 3's checkpoint:human-verify gate awaiting `approved` reply. Commits: `bfe989d6` (docs — CLAUDE.md + scripts/translate-locales.md), `6015baba` (feat — zh/es/ja translations), `6edd8da5` (docs — validation frontmatter + UAT template).
 
 ---
@@ -255,7 +278,7 @@ Completed Phase 27 Plan 07 autonomous tasks (27-07-PLAN.md) — Task 1 landed pr
 ## Previous Session
 
 Completed Phase 27 Plan 04 (27-04-PLAN.md) — Locale switcher + mid-stream abort. SettingsScreen gains a 4-language picker at the top (D-19) that calls `i18n.changeLanguage`, persists `preferences.locale` (+ legacy `language` back-compat), and emits `LOCALE_CHANGED`. Row LABEL hardcoded as `Language / 语言 / Idioma / 言語` for cross-locale affordance. `providers/llm/index.ts` gains `CompletionOptions.signal?: AbortSignal` + a `composeSignal(callerSignal, ms)` helper that uses `AbortSignal.any` (Chromium 116+ / Safari 17.4+ / Node 20+) with manual-forwarder fallback; signal threaded through all 7 fetch call sites (openAI completion/stream, claude completion/stream, gemini completion/stream, plus localPost for Android-local streaming). `useQuestions.askStreaming` declares ONE shared AbortController at the top of the try, subscribes to LOCALE_CHANGED once, passes the same signal to BOTH Pass 1 and Pass 2 chatStream calls, and guards every buildAndSave path with 6 aborted-checks (loop entries, post-loop, pre-persistence, catch-level AbortError short-circuit) — toasts `ask.localeChangedDiscarded` and returns null on abort so partial half-English/half-Japanese output never persists (D-22). TDD cadence: RED commit landed failing test first, GREEN commit made all 4 assertions pass. 48 Wave 0 tests green; `npx vite build` green (3.0s); zero new tsc errors. Deviations: used direct `settingsService.getSync/.set` instead of `useSettings` hook (matches existing SettingsScreen convention); added `callerSignal?` param to `localPost` (LOCALE_CHANGED was silently not cancelling Android-local completions otherwise); removed dead `void options;` statements from claudeStream + geminiStream. Commits: `da5c69b5` (Task 1 — locale switcher), `c93ecf46` (Task 2 RED — failing test), `7e301831` (Task 2 GREEN — provider plumbing + useQuestions abort).
-**Stopped At:** Phase 29 context gathered
+**Stopped At:** Completed 28-01-PLAN.md
 **Date:** 2026-04-16
 
 ## Latest Decisions (Phase 25)

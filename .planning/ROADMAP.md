@@ -694,10 +694,10 @@ Plans:
 **Goal:** Ship the full audit — Waves A (P0 showstoppers: SwipeTabContainer desync, Suggested Moves section header, BottomNavigation slide-down on sub-screens) + B (visual chrome: sub-screen header scroll-shadow, nav border) + B-spacing (8 CSS spacing tokens, sub-screen bottom-padding unification via var(--bottom-nav-safe), 7 off-grid pixel fixes, 4 WCAG 44×44 touch targets, section rhythm at symmetric 24px) + C (trellis interactions: leaf shake-on-tap + haptic, pulse-on-focus when Suggested Move row tapped, 30-leaf perf guard; "Mind Map" → "Knowledge Graph" rename across 4 locale bundles) + D (P2 micro-polish: AskScreen recent-questions refactor to tappable buttons with 2-line clamp + empty state, chip squish feedback, empty-state consistency sweep, Graph micro-tweaks, residual items). Scope locked across 30 decisions D-01..D-30 (25 original + 5 spacing amendment).
 **Requirements**: None net-new REQ-IDs — decisions D-01..D-30 (see 28-CONTEXT.md) are the scope surface
 **Depends on:** Phase 27 (v1.3 — i18n scaffold live)
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 
 Plans:
-- [ ] 28-01-PLAN.md — Wave A + Wave B-spacing foundation: CSS spacing tokens (D-26), SwipeTabContainer desync fix (D-05), BottomNavigation slide-down (D-06), Header scroll-shadow (D-07), Nav border (D-08), Suggested Moves header polish (D-04), sub-screen padding unification (D-27), off-grid fixes (D-28), touch targets (D-29), section rhythm (D-30) — 3 tasks, Wave 1
+- [x] 28-01-PLAN.md — Wave A + Wave B-spacing foundation: CSS spacing tokens (D-26), SwipeTabContainer desync fix (D-05), BottomNavigation slide-down (D-06), Header scroll-shadow (D-07), Nav border (D-08), Suggested Moves header polish (D-04), sub-screen padding unification (D-27), off-grid fixes (D-28), touch targets (D-29), section rhythm (D-30) — 3 tasks, Wave 1
 - [ ] 28-02-PLAN.md — Wave C: Trellis shake-on-tap + haptic (D-10/D-11), pulse-on-focus (D-12), 30-leaf perf guard (D-13), "Knowledge Graph" rename across 4 locale bundles (D-14) — 3 tasks, Wave 2 (depends on 28-01 for CSS vars)
 - [ ] 28-03-PLAN.md — Wave D: AskScreen recent-questions refactor + ask.recentQuestionsEmpty key (D-15), chip squish (D-16), empty-state sweep (D-17), Graph micro-tweaks (D-18), residual polish (D-09/D-19) — 2 tasks, Wave 2 (depends on 28-01)
 
