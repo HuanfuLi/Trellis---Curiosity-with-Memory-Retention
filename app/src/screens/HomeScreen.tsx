@@ -381,10 +381,14 @@ export function HomeScreen() {
       if (ticking) return;
       ticking = true;
       requestAnimationFrame(() => {
-        const card = container.querySelector('[data-concept-progress-card]');
-        if (card) {
-          const rect = card.getBoundingClientRect();
-          setCardHidden(rect.bottom <= 0);
+        if (container.scrollTop === 0) {
+          setCardHidden(false);
+        } else {
+          const card = container.querySelector('[data-concept-progress-card]');
+          if (card) {
+            const rect = card.getBoundingClientRect();
+            setCardHidden(rect.bottom <= 0);
+          }
         }
         ticking = false;
       });
@@ -411,28 +415,26 @@ export function HomeScreen() {
   return (
     <>
       <Confetti active={showConfetti} />
-      {/* Compact progress bar — replaces Header when card scrolls away */}
-      <div style={{
-        position: 'fixed',
-        top: 'var(--safe-area-top)',
-        left: 0,
-        right: 0,
-        height: `${HEADER_HEIGHT}px`,
-        zIndex: 190,
-        backgroundColor: isComplete ? 'color-mix(in srgb, #E8A838 8%, var(--surface))' : 'var(--surface)',
-        boxShadow: showCompactBar ? 'var(--shadow-1)' : 'none',
-        display: 'flex',
-        alignItems: 'center',
-        padding: '0 16px',
-        opacity: showCompactBar ? 1 : 0,
-        transform: showCompactBar ? 'translateY(0)' : 'translateY(-100%)',
-        transition: 'opacity 300ms ease, transform 300ms ease, box-shadow 300ms ease',
-        pointerEvents: showCompactBar ? 'auto' : 'none',
-      }}>
-        <div style={{ maxWidth: '448px', margin: '0 auto', width: '100%' }}>
-          <CompactProgressBar explored={exploredCount} total={conceptQuota} isComplete={isComplete} />
+      {/* Compact progress bar — slides in as header when inline card scrolls away */}
+      {showCompactBar && (
+        <div style={{
+          position: 'fixed',
+          top: 'var(--safe-area-top)',
+          left: 0,
+          right: 0,
+          height: '64px',
+          zIndex: 190,
+          backgroundColor: isComplete ? 'color-mix(in srgb, #E8A838 8%, var(--surface))' : 'var(--surface)',
+          boxShadow: 'var(--shadow-1)',
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 16px',
+        }}>
+          <div style={{ maxWidth: '448px', margin: '0 auto', width: '100%' }}>
+            <CompactProgressBar explored={exploredCount} total={conceptQuota} isComplete={isComplete} />
+          </div>
         </div>
-      </div>
+      )}
       <div
         ref={containerRef}
         data-home-scroll
