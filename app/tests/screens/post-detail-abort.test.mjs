@@ -46,14 +46,15 @@ test('TD-02 plumbing: post-essay.service.ts generateEssayMeta accepts options.si
 test('TD-02 plumbing: all 4 dispatch generators pass signal to chatStream', () => {
   const src = readFileSync(postEssayPath, 'utf8');
   // generateStandardEssay, generateVideoEssay, generateNewsEssay, generateTextArtEssay
-  // All four should include `signal` (either directly or destructured from options) in their chatStream options.
-  const chatStreamWithSignalCount = (src.match(/chatStream\([^)]*signal[^)]*\)/gs) || []).length;
+  // All four should include `signal` in their chatStream options object.
+  // chatStream calls are multiline so use [\s\S] to span lines.
+  const chatStreamWithSignalCount = (src.match(/chatStream\([\s\S]*?signal[\s\S]*?\);/g) || []).length;
   assert.ok(chatStreamWithSignalCount >= 4, `expected >= 4 chatStream calls with signal, got ${chatStreamWithSignalCount}`);
 });
 
 test('TD-02 plumbing: generateEssayMeta passes signal to chatCompletion', () => {
   const src = readFileSync(postEssayPath, 'utf8');
-  assert.match(src, /chatCompletion\([^)]*signal[^)]*\)/s);
+  assert.match(src, /chatCompletion\([\s\S]*?signal[\s\S]*?\)/);
 });
 
 test('TD-02 D-08: PostDetailScreen does NOT patchPostEssayInCache on aborted path', () => {

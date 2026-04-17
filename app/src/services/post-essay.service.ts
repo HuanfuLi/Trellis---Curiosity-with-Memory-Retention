@@ -8,6 +8,10 @@ import { settingsService } from './settings.service.ts';
  * whyCare/takeaway/quickAskPrompts (non-streaming) when a user opens a post.
  */
 
+export interface EssayOptions {
+  signal?: AbortSignal;
+}
+
 export interface EssayContent {
   bodyMarkdown: string;
   whyCare: string;
@@ -20,15 +24,15 @@ export interface EssayContent {
  * After streaming completes, caller should invoke generateEssayMeta()
  * for whyCare, takeaway, quickAskPrompts.
  */
-export async function* generatePostEssay(post: DailyPost, questions: Question[]): AsyncGenerator<string> {
+export async function* generatePostEssay(post: DailyPost, questions: Question[], options?: EssayOptions): AsyncGenerator<string> {
   if (post.sourceType === 'video') {
-    yield* generateVideoEssay(post);
+    yield* generateVideoEssay(post, options);
   } else if (post.sourceType === 'news') {
-    yield* generateNewsEssay(post);
+    yield* generateNewsEssay(post, options);
   } else if (post.presentationStyle === 'text-art') {
-    yield* generateTextArtEssay(post, questions);
+    yield* generateTextArtEssay(post, questions, options);
   } else {
-    yield* generateStandardEssay(post, questions);
+    yield* generateStandardEssay(post, questions, options);
   }
 }
 
@@ -36,7 +40,7 @@ export async function* generatePostEssay(post: DailyPost, questions: Question[])
  * Generate whyCare, takeaway, quickAskPrompts in a single fast non-streaming call.
  * Called after bodyMarkdown streaming completes.
  */
-export async function generateEssayMeta(post: DailyPost, bodyMarkdown: string): Promise<Omit<EssayContent, 'bodyMarkdown'>> {
+export async function generateEssayMeta(post: DailyPost, bodyMarkdown: string, options?: EssayOptions): Promise<Omit<EssayContent, 'bodyMarkdown'>> {
   const settings = settingsService.getSync();
   try {
     const raw = await chatCompletion(
@@ -51,7 +55,7 @@ export async function generateEssayMeta(post: DailyPost, bodyMarkdown: string): 
         },
       ],
       settings.llm,
-      { serviceName: 'posts' },
+      { serviceName: 'posts', signal: options?.signal },
     );
     const match = raw.match(/\{[\s\S]*\}/);
     if (match) {
@@ -74,7 +78,7 @@ export async function generateEssayMeta(post: DailyPost, bodyMarkdown: string): 
   };
 }
 
-async function* generateStandardEssay(post: DailyPost, questions: Question[]): AsyncGenerator<string> {
+async function* generateStandardEssay(post: DailyPost, questions: Question[], options?: EssayOptions): AsyncGenerator<string> {
   const settings = settingsService.getSync();
   const sourceQs = questions.filter(q => post.sourceQuestionIds.includes(q.id));
   const contextBlock = sourceQs.length > 0
@@ -93,11 +97,11 @@ async function* generateStandardEssay(post: DailyPost, questions: Question[]): A
       },
     ],
     settings.llm,
-    { serviceName: 'posts' },
+    { serviceName: 'posts', signal: options?.signal },
   );
 }
 
-async function* generateVideoEssay(post: DailyPost): AsyncGenerator<string> {
+async function* generateVideoEssay(post: DailyPost, options?: EssayOptions): AsyncGenerator<string> {
   const settings = settingsService.getSync();
   const transcript = post.videoMeta?.transcript;
   const videoTitle = post.videoMeta?.channelTitle ? `${post.title} (${post.videoMeta.channelTitle})` : post.title;
@@ -122,11 +126,11 @@ async function* generateVideoEssay(post: DailyPost): AsyncGenerator<string> {
       },
     ],
     settings.llm,
-    { serviceName: 'video-summary' },
+    { serviceName: 'video-summary', signal: options?.signal },
   );
 }
 
-async function* generateNewsEssay(post: DailyPost): AsyncGenerator<string> {
+async function* generateNewsEssay(post: DailyPost, options?: EssayOptions): AsyncGenerator<string> {
   const settings = settingsService.getSync();
   const sources = post.newsMeta?.sources ?? [];
   const sourceText = sources.map(s => `[${s.index}] ${s.title}: ${s.url}`).join('\n');
@@ -143,11 +147,11 @@ async function* generateNewsEssay(post: DailyPost): AsyncGenerator<string> {
       },
     ],
     settings.llm,
-    { serviceName: 'news' },
+    { serviceName: 'news', signal: options?.signal },
   );
 }
 
-async function* generateTextArtEssay(post: DailyPost, questions: Question[]): AsyncGenerator<string> {
+async function* generateTextArtEssay(post: DailyPost, questions: Question[], options?: EssayOptions): AsyncGenerator<string> {
   const settings = settingsService.getSync();
   const sourceQs = questions.filter(q => post.sourceQuestionIds.includes(q.id));
   const contextBlock = sourceQs.length > 0
@@ -166,7 +170,7 @@ async function* generateTextArtEssay(post: DailyPost, questions: Question[]): As
       },
     ],
     settings.llm,
-    { serviceName: 'posts' },
+    { serviceName: 'posts', signal: options?.signal },
   );
 }
 
