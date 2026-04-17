@@ -721,13 +721,14 @@ async function runStepWithRetry(
   messages: PipelineMessage[],
   candidateCount: number,
   llmConfig: LLMConfig,
+  signal?: AbortSignal,
 ): Promise<{ decision: StepDecision; rawResponse: string }> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const raw = await chatCompletion(
         messages as Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
         llmConfig,
-        { serviceName: 'classification', maxTokens: 100 },
+        { serviceName: 'classification', maxTokens: 100, signal },
       );
       const decision = parseStepResponse(raw, candidateCount);
       return { decision, rawResponse: raw };
@@ -743,6 +744,7 @@ export async function classifyAndAnchorIncremental(
   question: Question,
   allQuestions: Question[],
   llmConfig: LLMConfig,
+  signal?: AbortSignal,
 ): Promise<void> {
   try {
     // 1. Build candidate lists
@@ -764,7 +766,7 @@ export async function classifyAndAnchorIncremental(
 
     let step1: { decision: StepDecision; rawResponse: string };
     try {
-      step1 = await runStepWithRetry(messages, branches.length, llmConfig);
+      step1 = await runStepWithRetry(messages, branches.length, llmConfig, signal);
     } catch {
       // Fallback to old classifyAndAnchor on failure
       await classifyAndAnchor(question, allQuestions, llmConfig);
@@ -787,7 +789,7 @@ export async function classifyAndAnchorIncremental(
 
       let step2: { decision: StepDecision; rawResponse: string };
       try {
-        step2 = await runStepWithRetry(messages, clusters.length, llmConfig);
+        step2 = await runStepWithRetry(messages, clusters.length, llmConfig, signal);
       } catch {
         await classifyAndAnchor(question, allQuestions, llmConfig);
         return;
@@ -807,7 +809,7 @@ export async function classifyAndAnchorIncremental(
 
         let step3: { decision: StepDecision; rawResponse: string };
         try {
-          step3 = await runStepWithRetry(messages, anchors.length, llmConfig);
+          step3 = await runStepWithRetry(messages, anchors.length, llmConfig, signal);
         } catch {
           await classifyAndAnchor(question, allQuestions, llmConfig);
           return;
