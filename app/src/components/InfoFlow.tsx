@@ -942,6 +942,7 @@ export function InlineInfoFlow({ items, onOpenConnection, showConnectionScores =
                 minHeight: item.kind === 'concept'
                   ? (item.post.presentationStyle === 'news' || item.post.presentationStyle === 'image-less' || item.post.presentationStyle === 'image' || !item.post.presentationStyle ? 'auto' : '320px')
                   : item.kind === 'milestone' ? '200px' : '280px',
+                animation: shouldAnimate ? `card-slide-in 0.3s ease ${Math.min(index, 5) * 0.05}s both` : undefined,
               }}
             >
               {item.kind === 'concept' ? (

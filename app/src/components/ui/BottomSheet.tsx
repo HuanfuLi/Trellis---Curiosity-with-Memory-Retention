@@ -23,7 +23,7 @@ export function BottomSheet({ open, onClose, title, children }: BottomSheetProps
         zIndex: 500,
         backgroundColor: open ? 'rgba(0, 0, 0, 0.45)' : 'rgba(0, 0, 0, 0)',
         pointerEvents: open ? 'auto' : 'none',
-        transition: 'background-color 0.25s',
+        transition: 'background-color 0.3s cubic-bezier(0.32, 0.72, 0, 1)',
       }}
     >
       <div

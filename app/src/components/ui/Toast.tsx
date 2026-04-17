@@ -5,6 +5,7 @@ interface ToastMessage {
   id: string;
   message: string;
   type: 'success' | 'error' | 'info';
+  exiting?: boolean;
 }
 
 const typeColors = {
@@ -29,7 +30,10 @@ export function ToastContainer() {
     const id = now.toString();
     setToasts((prev) => [...prev, { ...msg, id }]);
     setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
+      setToasts((prev) => prev.map((t) => t.id === id ? { ...t, exiting: true } : t));
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, 200);
     }, 3000);
   }, []);
 
@@ -69,13 +73,16 @@ export function ToastContainer() {
             fontSize: '0.875rem',
             fontWeight: 500,
             textAlign: 'center',
-            animation: 'toast-in 0.2s ease',
+            animation: t.exiting ? 'toast-out 0.2s ease forwards' : 'toast-in 0.2s ease',
           }}
         >
           {t.message}
         </div>
       ))}
-      <style>{`@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+      <style>{`
+        @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes toast-out { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(8px); } }
+      `}</style>
     </div>
   );
 }

@@ -143,7 +143,7 @@ export const ChatMessage = memo(function ChatMessage({
 
   if (type === 'user') {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', marginBottom: '16px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', marginBottom: '16px', animation: 'fade-in 0.2s ease' }}>
         {isEditing ? (
           <div style={{ maxWidth: '85%', width: '100%' }}>
             <textarea
@@ -264,7 +264,7 @@ export const ChatMessage = memo(function ChatMessage({
 
   // AI response — full width, no bubble
   return (
-    <div style={{ marginBottom: '16px' }}>
+    <div style={{ marginBottom: '16px', animation: 'fade-in 0.2s ease' }}>
       <div style={{ minWidth: 0 }}>
         <div
           onPointerDown={handlePointerDown}

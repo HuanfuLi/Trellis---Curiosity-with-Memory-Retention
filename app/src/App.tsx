@@ -238,6 +238,7 @@ function RootLayout() {
             paddingBottom: 'calc(80px + var(--safe-area-bottom))',
             overflow: 'auto',
             overscrollBehavior: 'contain',
+            animation: 'sub-screen-in 0.2s ease',
           }}
         >
           <HeaderScrollContext.Provider value={{ scrolled: headerScrolled }}>

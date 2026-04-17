@@ -441,6 +441,14 @@ body.keyboard-open #bottom-navigation {
   from { opacity: 1; }
   to   { opacity: 0; }
 }
+@keyframes flashcard-face-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes sub-screen-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 
 /* Immersive flow — slide up from bottom */
 @keyframes slide-up {
