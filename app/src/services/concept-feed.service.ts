@@ -756,7 +756,8 @@ export function buildPostOriginContext(post: DailyPost, questions: Question[]): 
 function applyStrategyBias(posts: DailyPost[]): DailyPost[] {
   try {
     const signals = trajectoryAnalyzerService.aggregateSignals();
-    const hints = defaultStrategy.computeHints(signals);
+    const checkInSignals = plannerService.getRecentSignals();
+    const hints = defaultStrategy.computeHints(signals, checkInSignals);
     if (hints.priorityConceptIds.length > 0) {
       posts.sort((a, b) => {
         const aMatch = hints.priorityConceptIds.some(id => a.sourceQuestionIds?.includes(id)) ? 1 : 0;
