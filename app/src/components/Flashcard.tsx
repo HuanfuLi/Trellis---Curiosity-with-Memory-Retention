@@ -31,95 +31,166 @@ export function Flashcard({ front, back, onRate, pinned, onTogglePin }: Flashcar
     setIsFlipped(false);
   };
 
+  const handleFlip = () => {
+    void hapticImpactLight();
+    setIsFlipped(true);
+  };
+
+  const faceStyle: React.CSSProperties = {
+    position: 'absolute',
+    inset: 0,
+    backfaceVisibility: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    padding: '20px',
+    paddingTop: '16px',
+    overflowY: 'auto',
+  };
+
   return (
-    <div key={front} style={{ maxWidth: '448px', margin: '0 auto', padding: '0 16px', animation: 'flashcard-next 0.3s ease', perspective: '800px' }}>
-      {/* Card face */}
+    <div key={front} style={{ maxWidth: '448px', margin: '0 auto', padding: '0 16px', animation: 'flashcard-next 0.3s ease' }}>
+      {/* 3D flip card — Quizlet-style full-card rotation */}
       <div
+        onClick={!isFlipped ? handleFlip : undefined}
         style={{
-          position: 'relative',
-          backgroundColor: 'var(--card)',
-          padding: '20px',
-          paddingTop: '16px',
+          perspective: '800px',
           marginBottom: '24px',
           minHeight: '280px',
           maxHeight: '60vh',
-          display: 'flex',
-          flexDirection: 'column',
-          borderRadius: 'var(--radius-xl)',
-          boxShadow: 'var(--shadow-2)',
-          transformStyle: 'preserve-3d',
+          cursor: !isFlipped ? 'pointer' : 'default',
+          position: 'relative',
         }}
       >
-        {/* Pin button — top-right corner */}
-        {onTogglePin && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onTogglePin(); }}
-            title={pinned ? t('flashcard.unpinTitle') : t('flashcard.pinTitle')}
+        <div
+          style={{
+            position: 'relative',
+            width: '100%',
+            height: '100%',
+            minHeight: '280px',
+            maxHeight: '60vh',
+            transformStyle: 'preserve-3d',
+            transition: 'transform 0.5s cubic-bezier(0.4, 0.0, 0.2, 1)',
+            transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+          }}
+        >
+          {/* Front face — Question */}
+          <div
             style={{
-              position: 'absolute',
-              top: '12px',
-              right: '12px',
-              width: '44px',
-              height: '44px',
-              borderRadius: '50%',
-              backgroundColor: pinned ? 'var(--primary-40)' : 'transparent',
-              color: pinned ? 'white' : 'var(--muted-foreground)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: `1.5px solid ${pinned ? 'var(--primary-40)' : 'var(--surface-variant)'}`,
-              cursor: 'pointer',
-              transition: 'all 0.15s',
+              ...faceStyle,
+              backgroundColor: 'var(--card)',
+              borderRadius: 'var(--radius-xl)',
+              boxShadow: 'var(--shadow-2)',
             }}
           >
-            <Pin size={15} fill={pinned ? 'currentColor' : 'none'} />
-          </button>
-        )}
-
-        <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '0 4px', display: 'flex', flexDirection: 'column' }}>
-          {!isFlipped ? (
-            <div style={{ margin: 'auto 0' }}>
-              <p
+            {onTogglePin && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onTogglePin(); }}
+                title={pinned ? t('flashcard.unpinTitle') : t('flashcard.pinTitle')}
                 style={{
-                  fontSize: '0.75rem',
-                  color: 'var(--muted-foreground)',
-                  marginBottom: '12px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                  textAlign: 'center',
+                  position: 'absolute',
+                  top: '12px',
+                  right: '12px',
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '50%',
+                  backgroundColor: pinned ? 'var(--primary-40)' : 'transparent',
+                  color: pinned ? 'white' : 'var(--muted-foreground)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: `1.5px solid ${pinned ? 'var(--primary-40)' : 'var(--surface-variant)'}`,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                  zIndex: 1,
                 }}
               >
+                <Pin size={15} fill={pinned ? 'currentColor' : 'none'} />
+              </button>
+            )}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 4px' }}>
+              <p style={{
+                fontSize: '0.75rem',
+                color: 'var(--muted-foreground)',
+                marginBottom: '12px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                textAlign: 'center',
+              }}>
                 {t('flashcard.question')}
               </p>
               <div className="md-prose" style={{ fontSize: '1.25rem', lineHeight: 1.6, textAlign: 'center' }}>
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{front}</ReactMarkdown>
               </div>
+              <p style={{
+                fontSize: '0.7rem',
+                color: 'var(--muted-foreground)',
+                textAlign: 'center',
+                marginTop: '20px',
+                opacity: 0.6,
+              }}>
+                {t('flashcard.tapToFlip')}
+              </p>
             </div>
-          ) : (
-            <div key="answer" style={{ margin: 'auto 0', animation: 'flashcard-flip-in 0.35s ease' }}>
-              <p
+          </div>
+
+          {/* Back face — Answer */}
+          <div
+            style={{
+              ...faceStyle,
+              backgroundColor: 'var(--card)',
+              borderRadius: 'var(--radius-xl)',
+              boxShadow: 'var(--shadow-2)',
+              transform: 'rotateY(180deg)',
+            }}
+          >
+            {onTogglePin && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onTogglePin(); }}
+                title={pinned ? t('flashcard.unpinTitle') : t('flashcard.pinTitle')}
                 style={{
-                  fontSize: '0.75rem',
-                  color: 'var(--muted-foreground)',
-                  marginBottom: '12px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                  textAlign: 'center',
+                  position: 'absolute',
+                  top: '12px',
+                  right: '12px',
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '50%',
+                  backgroundColor: pinned ? 'var(--primary-40)' : 'transparent',
+                  color: pinned ? 'white' : 'var(--muted-foreground)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: `1.5px solid ${pinned ? 'var(--primary-40)' : 'var(--surface-variant)'}`,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                  zIndex: 1,
                 }}
               >
+                <Pin size={15} fill={pinned ? 'currentColor' : 'none'} />
+              </button>
+            )}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 4px' }}>
+              <p style={{
+                fontSize: '0.75rem',
+                color: 'var(--muted-foreground)',
+                marginBottom: '12px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                textAlign: 'center',
+              }}>
                 {t('flashcard.answer')}
               </p>
               <div className="md-prose" style={{ fontSize: '1.05rem', lineHeight: 1.7 }}>
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{back}</ReactMarkdown>
               </div>
             </div>
-          )}
+          </div>
         </div>
       </div>
 
+      {/* Controls below the card */}
       {!isFlipped ? (
         <button
-          onClick={() => setIsFlipped(true)}
+          onClick={handleFlip}
           style={{
             width: '100%',
             padding: '16px',
@@ -137,15 +208,13 @@ export function Flashcard({ front, back, onRate, pinned, onTogglePin }: Flashcar
         </button>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <p
-            style={{
-              textAlign: 'center',
-              fontSize: '0.75rem',
-              color: 'var(--muted-foreground)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-            }}
-          >
+          <p style={{
+            textAlign: 'center',
+            fontSize: '0.75rem',
+            color: 'var(--muted-foreground)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+          }}>
             {t('flashcard.selfRatePrompt')}
           </p>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>

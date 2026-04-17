@@ -686,6 +686,7 @@
     "question": "Pregunta",
     "answer": "Respuesta",
     "showAnswer": "Mostrar respuesta",
+    "tapToFlip": "Toca para voltear",
     "selfRatePrompt": "¿Cómo lo sabías?",
     "pinTitle": "Anclar ficha (repasar cada día)",
     "unpinTitle": "Desanclar ficha",

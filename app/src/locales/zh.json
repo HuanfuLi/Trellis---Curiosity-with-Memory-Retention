@@ -686,6 +686,7 @@
     "question": "问题",
     "answer": "答案",
     "showAnswer": "显示答案",
+    "tapToFlip": "点击翻转",
     "selfRatePrompt": "你对这个内容掌握得如何？",
     "pinTitle": "置顶卡片（每天复习）",
     "unpinTitle": "取消置顶",

@@ -686,6 +686,7 @@
     "question": "Question",
     "answer": "Answer",
     "showAnswer": "Show Answer",
+    "tapToFlip": "Tap to flip",
     "selfRatePrompt": "How well did you know this?",
     "pinTitle": "Pin card (review every day)",
     "unpinTitle": "Unpin card",
