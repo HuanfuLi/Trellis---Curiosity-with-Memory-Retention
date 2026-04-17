@@ -748,11 +748,11 @@ Plans:
 **Goal:** Transform the CURIOSITY FEED island into an inline sticky ConceptProgressCard tracking active concept exploration (scroll 70%, dwell 30s, follow-up question), with daily localStorage persistence and trellis credit rewards on quota completion.
 **Requirements**: D-01 through D-22 (concept tracking, card-to-bar transformation, reading detection, celebration, i18n)
 **Depends on:** Phase 28
-**Plans:** 2 plans, 2 waves
+**Plans:** 2/2 plans complete
 
 Plans:
-- [ ] 30-01-PLAN.md — dailyReadService + CONCEPT_EXPLORED type + getAnchorIdForPost utility + Wave 0 tests + home.feed.* i18n keys (4 locales)
-- [ ] 30-02-PLAN.md — ConceptProgressCard UI (sticky/compact), HomeScreen wiring + celebration, PostDetailScreen 3 reading detectors, InfoFlow island removal
+- [x] 30-01-PLAN.md — dailyReadService + CONCEPT_EXPLORED type + getAnchorIdForPost utility + Wave 0 tests + home.feed.* i18n keys (4 locales)
+- [x] 30-02-PLAN.md — ConceptProgressCard UI (sticky/compact), HomeScreen wiring + celebration, PostDetailScreen 3 reading detectors, InfoFlow island removal
 
 ---
 
