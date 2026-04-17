@@ -270,7 +270,7 @@ export function useQuestions(): UseQuestionsReturn {
         // ── Second classification call (Phase 14) ──────────────────────────────
         // Fire ONLY when Q&A enters the mindmap (not flagged).
         if (question.flagged !== true) {
-          void classifyAndAnchorIncremental(question, questionService.getAll(), llmConfig).catch((err: unknown) => {
+          void classifyAndAnchorIncremental(question, questionService.getAll(), llmConfig, abortController.signal).catch((err: unknown) => {
             console.warn('[EchoLearn] classifyAndAnchorIncremental failed:', err instanceof Error ? err.message : err);
           });
         }

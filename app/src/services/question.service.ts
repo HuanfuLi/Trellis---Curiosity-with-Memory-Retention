@@ -159,7 +159,7 @@ function findRelated(keywords: string[], store: Question[], embedding?: number[]
 }
 
 export const questionService = {
-  async ask(content: string, sessionContext?: QuestionFilterContext, sessionHistory?: SessionMessage[]): Promise<ServiceResult<AskResult>> {
+  async ask(content: string, sessionContext?: QuestionFilterContext, sessionHistory?: SessionMessage[], signal?: AbortSignal): Promise<ServiceResult<AskResult>> {
     const settings = settingsService.getSync();
     const llmConfig = settings.llm;
 
@@ -260,7 +260,7 @@ export const questionService = {
       if (flagged.flagged !== true) {
         // Fire-and-forget: classification + anchor attachment runs asynchronously.
         // The Q&A is already saved; labels will be patched on once the call completes.
-        void classifyAndAnchorIncremental(flagged, loadStore({ includeFlagged: true }), llmConfig).catch((err: unknown) => {
+        void classifyAndAnchorIncremental(flagged, loadStore({ includeFlagged: true }), llmConfig, signal).catch((err: unknown) => {
           console.warn('[EchoLearn] classifyAndAnchorIncremental failed:', err instanceof Error ? err.message : err);
         });
       }
