@@ -45,11 +45,25 @@ function RootLayout() {
   const isTopLevelScreen = SCREEN_ROUTES.some(r => location.pathname === r);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
-  // Phase 28 D-07 — sub-screen Outlet scroll state published via context
-  // so Header can render a subtle shadow once content starts scrolling.
   const [headerScrolled, setHeaderScrolled] = useState(false);
-  // Guard against starting a new recording while one is already active
   const recordingActiveRef = useRef(false);
+
+  // Sub-screen exit animation: cache outlet content so it stays visible during fade-out
+  const [subScreenClosing, setSubScreenClosing] = useState(false);
+  const prevIsTopLevelRef = useRef(isTopLevelScreen);
+  const cachedOutletRef = useRef<React.ReactNode>(null);
+  const outlet = <Outlet />;
+  if (!isTopLevelScreen) cachedOutletRef.current = outlet;
+  const showSubScreen = !isTopLevelScreen || subScreenClosing;
+
+  useEffect(() => {
+    if (!prevIsTopLevelRef.current && isTopLevelScreen) {
+      setSubScreenClosing(true);
+      const timer = setTimeout(() => setSubScreenClosing(false), 200);
+      return () => clearTimeout(timer);
+    }
+    prevIsTopLevelRef.current = isTopLevelScreen;
+  }, [isTopLevelScreen]);
 
   useKeyboard();
 
@@ -218,16 +232,15 @@ function RootLayout() {
       </SwipeTabContainer>
 
       {/* Outlet for sub-screens (rendered on top of swipe container) */}
-      {!isTopLevelScreen && (
+      {showSubScreen && (
         <>
-        {/* Opaque backdrop — covers SwipeTabContainer so iOS rubber-band
-            bounce can never reveal the Home feed behind the overlay. */}
         <div style={{
           position: 'fixed',
           inset: '-200px 0',
           zIndex: 49,
           backgroundColor: 'var(--surface)',
           pointerEvents: 'none',
+          animation: subScreenClosing ? 'fade-out 0.2s ease forwards' : undefined,
         }} />
         <div
           onScroll={(e) => {
@@ -246,11 +259,12 @@ function RootLayout() {
             paddingBottom: 'calc(80px + var(--safe-area-bottom))',
             overflow: 'auto',
             overscrollBehavior: 'contain',
-            animation: 'sub-screen-in 0.2s ease',
+            animation: subScreenClosing ? 'sub-screen-out 0.2s ease forwards' : 'sub-screen-in 0.2s ease',
+            pointerEvents: subScreenClosing ? 'none' : 'auto',
           }}
         >
           <HeaderScrollContext.Provider value={{ scrolled: headerScrolled }}>
-            <Outlet />
+            {subScreenClosing ? cachedOutletRef.current : outlet}
           </HeaderScrollContext.Provider>
         </div>
         </>
