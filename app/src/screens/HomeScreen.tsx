@@ -22,7 +22,7 @@ import { trellisCreditsService } from '../services/trellis-credits.service';
 import { eventBus } from '../lib/event-bus';
 import { today, getGreeting } from '../lib/date';
 import { toast } from '../lib/toast';
-import { Header, HEADER_HEIGHT } from '../components/ui/Header';
+import { HEADER_HEIGHT } from '../components/ui/Header';
 
 
 export function HomeScreen() {
@@ -384,7 +384,7 @@ export function HomeScreen() {
         const card = container.querySelector('[data-concept-progress-card]');
         if (card) {
           const rect = card.getBoundingClientRect();
-          setCardHidden(rect.bottom <= HEADER_HEIGHT);
+          setCardHidden(rect.bottom <= 0);
         }
         ticking = false;
       });
@@ -411,23 +411,25 @@ export function HomeScreen() {
   return (
     <>
       <Confetti active={showConfetti} />
-      <Header title={getGreeting()} scrolled={showCompactBar} />
-      {/* Compact progress bar — fixed below Header, fades in when card scrolls away */}
+      {/* Compact progress bar — replaces Header when card scrolls away */}
       <div style={{
         position: 'fixed',
-        top: `calc(var(--safe-area-top) + ${HEADER_HEIGHT}px)`,
+        top: 'var(--safe-area-top)',
         left: 0,
         right: 0,
-        zIndex: 180,
+        height: `${HEADER_HEIGHT}px`,
+        zIndex: 190,
         backgroundColor: isComplete ? 'color-mix(in srgb, #E8A838 8%, var(--surface))' : 'var(--surface)',
         boxShadow: showCompactBar ? 'var(--shadow-1)' : 'none',
-        padding: '8px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        padding: '0 16px',
         opacity: showCompactBar ? 1 : 0,
         transform: showCompactBar ? 'translateY(0)' : 'translateY(-100%)',
         transition: 'opacity 300ms ease, transform 300ms ease, box-shadow 300ms ease',
         pointerEvents: showCompactBar ? 'auto' : 'none',
       }}>
-        <div style={{ maxWidth: '448px', margin: '0 auto' }}>
+        <div style={{ maxWidth: '448px', margin: '0 auto', width: '100%' }}>
           <CompactProgressBar explored={exploredCount} total={conceptQuota} isComplete={isComplete} />
         </div>
       </div>
@@ -442,10 +444,12 @@ export function HomeScreen() {
           touchAction: 'pan-y',
         }}
       >
-      {/* Phase 28 D-27 — paddingBottom migrated to var(--bottom-nav-safe) for
-           consistent bottom-nav clearance across all screens. paddingTop absorbs
-           HEADER_HEIGHT + 8px; safe-area-top is already applied by the wrapper. */}
-      <div style={{ paddingTop: `${HEADER_HEIGHT + 8}px`, paddingLeft: '16px', paddingRight: '16px', paddingBottom: 'var(--bottom-nav-safe)', maxWidth: '448px', margin: '0 auto' }}>
+      <div style={{ paddingTop: '16px', paddingLeft: '16px', paddingRight: '16px', paddingBottom: 'var(--bottom-nav-safe)', maxWidth: '448px', margin: '0 auto' }}>
+
+        {/* Inline greeting — scrolls away naturally */}
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--foreground)', marginBottom: '16px' }}>
+          {getGreeting()}
+        </h1>
 
         {/* Bento Grid */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
