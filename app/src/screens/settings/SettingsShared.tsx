@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from 'react';
 import { Eye, EyeOff, CheckCircle, XCircle } from 'lucide-react';
+import { HEADER_HEIGHT } from '../../components/ui/Header';
 
 export function SectionHeader({ icon, title }: { icon: React.ReactNode; title: string }) {
   return (
@@ -153,10 +154,10 @@ export function TestResult({ result }: { result: string | null }) {
 }
 
 export const SUB_SCREEN_STYLE: CSSProperties = {
-  paddingTop: '64px',
+  paddingTop: `${HEADER_HEIGHT + 8}px`,
   paddingLeft: '16px',
   paddingRight: '16px',
-  paddingBottom: 'var(--bottom-nav-safe)',
+  paddingBottom: 'calc(24px + var(--safe-area-bottom))',
   maxWidth: '448px',
   margin: '0 auto',
 };

@@ -57,7 +57,7 @@ export function QuestionDetailScreen() {
   const related = questions.filter((q) => question.relatedQuestionIds.includes(q.id));
 
   return (
-    <div style={{ paddingTop: `${HEADER_HEIGHT + 8}px`, paddingLeft: '16px', paddingRight: '16px', paddingBottom: 'var(--bottom-nav-safe)', maxWidth: '448px', margin: '0 auto' }}>
+    <div style={{ paddingTop: `${HEADER_HEIGHT + 8}px`, paddingLeft: '16px', paddingRight: '16px', paddingBottom: 'calc(24px + var(--safe-area-bottom))', maxWidth: '448px', margin: '0 auto' }}>
       <Header
         title={t('questionDetail.headerTitle')}
         backTo="/ask"

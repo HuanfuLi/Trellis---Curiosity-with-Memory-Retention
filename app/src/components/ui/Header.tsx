@@ -100,7 +100,7 @@ export function Header({ title, left, right, centered, backTo, style, scrolled: 
           </>
         ) : (
           <>
-            <h1 style={{ flex: 1, fontSize: '1.25rem', fontWeight: 700 }}>{title}</h1>
+            <h1 style={{ flex: 1, fontSize: '1.25rem', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</h1>
             {/* Phase 28 D-29 — 44×44 enforced at the slot level so consumer
                  back buttons inherit a minimum tap area regardless of their
                  own inline styles. */}

@@ -123,7 +123,8 @@ export function PortalCard({ data, onAccept, onDismiss, onNavigate }: PortalCard
           title={t(config.labelKey)}
           className="active-squish"
           style={{
-            width: '30px', height: '30px', borderRadius: '8px',
+            width: '44px', height: '44px', borderRadius: '12px',
+            border: 'none',
             backgroundColor: 'var(--primary-40)', color: 'white',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer',
@@ -136,7 +137,7 @@ export function PortalCard({ data, onAccept, onDismiss, onNavigate }: PortalCard
           title={t('portalCard.dismissTitle')}
           className="active-squish"
           style={{
-            width: '30px', height: '30px', borderRadius: '8px',
+            width: '44px', height: '44px', borderRadius: '12px',
             backgroundColor: 'var(--surface-variant)',
             color: 'var(--muted-foreground)', border: '1px solid var(--border)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',

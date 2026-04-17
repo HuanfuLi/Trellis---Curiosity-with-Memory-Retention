@@ -196,9 +196,11 @@ export function Flashcard({ front, back, onRate, pinned, onTogglePin }: Flashcar
             padding: '16px',
             marginBottom: '16px',
             borderRadius: 'var(--radius-pill)',
+            border: 'none',
             backgroundColor: 'var(--primary-40)',
             color: 'white',
             fontWeight: 500,
+            cursor: 'pointer',
             transition: 'transform 0.2s',
           }}
           onPointerEnter={(e) => (e.currentTarget.style.transform = 'scale(1.02)')}
@@ -226,10 +228,12 @@ export function Flashcard({ front, back, onRate, pinned, onTogglePin }: Flashcar
                     width: '56px',
                     height: '56px',
                     borderRadius: '50%',
+                    border: 'none',
                     backgroundColor: rating.color,
                     color: 'white',
                     fontWeight: 600,
                     fontSize: '1.125rem',
+                    cursor: 'pointer',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
                     transition: 'transform 0.2s',
                   }}

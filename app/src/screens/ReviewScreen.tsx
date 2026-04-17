@@ -379,7 +379,7 @@ export function ReviewScreen() {
     const pinnedCount = sorted.filter((c) => c.pinned).length;
 
     return (
-      <div style={{ paddingTop: '24px', paddingLeft: '16px', paddingRight: '16px', paddingBottom: 'var(--bottom-nav-safe)', maxWidth: '448px', margin: '0 auto' }}>
+      <div style={{ paddingTop: '24px', paddingLeft: '16px', paddingRight: '16px', paddingBottom: 'calc(24px + var(--safe-area-bottom))', maxWidth: '448px', margin: '0 auto' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
           <button
@@ -483,7 +483,7 @@ export function ReviewScreen() {
       ? (reviewed === 1 ? t('review.done.finishedOne', { count: reviewed }) : t('review.done.finishedOther', { count: reviewed }))
       : t('review.done.noneDue');
     return (
-      <div style={{ paddingTop: '24px', paddingLeft: '16px', paddingRight: '16px', paddingBottom: 'var(--bottom-nav-safe)', maxWidth: '448px', margin: '0 auto' }}>
+      <div style={{ paddingTop: '24px', paddingLeft: '16px', paddingRight: '16px', paddingBottom: 'calc(24px + var(--safe-area-bottom))', maxWidth: '448px', margin: '0 auto' }}>
         <Confetti active={showConfetti} />
         <button
           onClick={() => navigate(-1)}
@@ -566,9 +566,9 @@ export function ReviewScreen() {
 
   // ── Active review session ────────────────────────────────────────────────────
   return (
-    <div style={{ paddingTop: '24px', paddingBottom: 'var(--bottom-nav-safe)', maxWidth: '448px', margin: '0 auto' }}>
+    <div style={{ paddingTop: '24px', paddingLeft: '16px', paddingRight: '16px', paddingBottom: 'calc(24px + var(--safe-area-bottom))', maxWidth: '448px', margin: '0 auto' }}>
       {/* Header */}
-      <div style={{ padding: '0 16px', marginBottom: '24px' }}>
+      <div style={{ marginBottom: '24px' }}>
         {/* Move breadcrumb — shown when navigated from a suggested move */}
         {moveState && (
           <div style={{
@@ -604,17 +604,15 @@ export function ReviewScreen() {
       />
 
       {currentItem.placementReason && (
-        <div style={{ padding: '0 16px' }}>
-          <p style={{ fontSize: '0.8rem', lineHeight: 1.55, color: 'var(--muted-foreground)' }}>
-            {currentItem.placementReason}
-          </p>
-        </div>
+        <p style={{ fontSize: '0.8rem', lineHeight: 1.55, color: 'var(--muted-foreground)' }}>
+          {currentItem.placementReason}
+        </p>
       )}
 
       <ReviewMiniMap map={reviewMap} />
 
       {/* Skip */}
-      <div style={{ textAlign: 'center', marginTop: '16px', padding: '0 16px' }}>
+      <div style={{ textAlign: 'center', marginTop: '16px' }}>
         <button
           onClick={handleSkip}
           style={{ color: 'var(--muted-foreground)', background: 'none', fontSize: '0.875rem' }}

@@ -378,7 +378,7 @@ export function PostDetailScreen() {
 
   if (loadingPost) {
     return (
-      <div style={{ paddingTop: `calc(24px + ${HEADER_HEIGHT}px)`, paddingLeft: '16px', paddingRight: '16px', paddingBottom: 'var(--bottom-nav-safe)', maxWidth: '448px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <div style={{ paddingTop: `${HEADER_HEIGHT + 8}px`, paddingLeft: '16px', paddingRight: '16px', paddingBottom: 'calc(24px + var(--safe-area-bottom))', maxWidth: '448px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
         <Header
           title={t('posts.detail.headerTitle')}
           centered
@@ -396,7 +396,7 @@ export function PostDetailScreen() {
 
   if (!post) {
     return (
-      <div style={{ paddingTop: `calc(24px + ${HEADER_HEIGHT}px)`, paddingLeft: '16px', paddingRight: '16px', paddingBottom: 'var(--bottom-nav-safe)', maxWidth: '448px', margin: '0 auto' }}>
+      <div style={{ paddingTop: `${HEADER_HEIGHT + 8}px`, paddingLeft: '16px', paddingRight: '16px', paddingBottom: 'calc(24px + var(--safe-area-bottom))', maxWidth: '448px', margin: '0 auto' }}>
         <Header
           title={t('posts.detail.headerTitle')}
           centered
@@ -418,7 +418,7 @@ export function PostDetailScreen() {
   const meta = connectionMetaRef.current;
 
   return (
-    <div style={{ paddingTop: `calc(16px + ${HEADER_HEIGHT}px)`, paddingLeft: '16px', paddingRight: '16px', paddingBottom: 'var(--bottom-nav-safe)', maxWidth: '448px', margin: '0 auto' }}>
+    <div style={{ paddingTop: `${HEADER_HEIGHT + 8}px`, paddingLeft: '16px', paddingRight: '16px', paddingBottom: 'calc(24px + var(--safe-area-bottom))', maxWidth: '448px', margin: '0 auto' }}>
       <Header
         title={t('posts.detail.headerTitle')}
         centered

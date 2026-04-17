@@ -60,7 +60,7 @@ export function DetailMenu({ onDelete, deleteLabel }: DetailMenuProps) {
             boxShadow: 'var(--shadow-3)',
             border: '1px solid var(--border)',
             overflow: 'hidden',
-            zIndex: 200,
+            zIndex: 250,
           }}
         >
           {!confirming ? (
