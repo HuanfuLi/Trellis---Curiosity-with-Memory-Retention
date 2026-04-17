@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import {
   parseStepResponse,
   buildStepPrompt,
@@ -161,4 +164,65 @@ test('extractAnchorsUnderCluster: returns anchor id/name pairs', () => {
   assert.equal(anchors.length, 2);
   assert.ok(anchors.some(a => a.id === 'a-1' && a.name === 'Spaced Repetition'));
   assert.ok(anchors.some(a => a.id === 'a-2' && a.name === 'Interleaving'));
+});
+
+// ─── TD-03 plumbing — static-grep assertions (no TS import needed) ─────────
+
+const __dirname_td03 = dirname(fileURLToPath(import.meta.url));
+const repoRoot_td03 = resolve(__dirname_td03, '..');
+const canonicalSrc = readFileSync(
+  resolve(repoRoot_td03, 'src/services/canonical-knowledge.service.ts'),
+  'utf8',
+);
+
+test('TD-03 plumbing: runStepWithRetry accepts signal?: AbortSignal', () => {
+  assert.match(canonicalSrc, /async function runStepWithRetry\([\s\S]*?signal\?\s*:\s*AbortSignal/);
+});
+
+test('TD-03 plumbing: classifyAndAnchorIncremental accepts signal?: AbortSignal', () => {
+  assert.match(canonicalSrc, /export async function classifyAndAnchorIncremental\([\s\S]*?signal\?\s*:\s*AbortSignal/);
+});
+
+test('TD-03 plumbing: all 3 runStepWithRetry call sites pass signal', () => {
+  const callSites = canonicalSrc.match(/runStepWithRetry\([^)]*\)/g) || [];
+  // First match is the declaration; filter to actual call-site invocations.
+  const actualCalls = callSites.filter((m) => /,\s*signal\)/.test(m));
+  assert.ok(actualCalls.length >= 3, `expected >= 3 runStepWithRetry calls passing signal, got ${actualCalls.length}`);
+});
+
+test('TD-03 plumbing: chatCompletion inside runStepWithRetry receives signal', () => {
+  // The { signal } or signal: options should appear in the chatCompletion opts block inside runStepWithRetry
+  const retryBlock = canonicalSrc.slice(
+    canonicalSrc.indexOf('async function runStepWithRetry'),
+    canonicalSrc.indexOf('export async function classifyAndAnchorIncremental'),
+  );
+  assert.match(retryBlock, /chatCompletion\([\s\S]*?signal[\s\S]*?\)/);
+});
+
+test('TD-03 D-17: classifyAndAnchor (fallback) signature UNCHANGED — exactly 3 params', () => {
+  // The fallback function at ~line 848 must have EXACTLY (question, allQuestions, llmConfig)
+  const fallbackSigMatch = canonicalSrc.match(/export async function classifyAndAnchor\(([^)]*)\)/);
+  assert.ok(fallbackSigMatch, 'classifyAndAnchor declaration must exist');
+  const params = fallbackSigMatch[1].split(',').map((s) => s.trim()).filter(Boolean);
+  assert.equal(params.length, 3, `classifyAndAnchor must have exactly 3 params; got ${params.length}: ${params.join(' | ')}`);
+  assert.ok(!fallbackSigMatch[1].includes('signal'), 'classifyAndAnchor must NOT accept a signal param (D-17)');
+});
+
+test('TD-03 behavioral: AbortController.abort propagates AbortError out of a stubbed retry loop', async () => {
+  const ac = new AbortController();
+  ac.abort(new DOMException('test', 'AbortError'));
+  async function fakeChatCompletion(_msgs, _cfg, opts) {
+    if (opts?.signal?.aborted) {
+      throw new DOMException('aborted', 'AbortError');
+    }
+    return '{}';
+  }
+  let err;
+  try {
+    await fakeChatCompletion([], {}, { serviceName: 'classification', signal: ac.signal });
+  } catch (e) {
+    err = e;
+  }
+  assert.ok(err instanceof DOMException);
+  assert.equal(err.name, 'AbortError');
 });

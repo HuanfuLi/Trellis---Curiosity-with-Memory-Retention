@@ -74,3 +74,15 @@ test('aborting a chatStream-like async iterator halts accumulation', async () =>
   await new Promise((r) => setTimeout(r, 30));
   assert.equal(accumulated, saved, 'no growth after abort');
 });
+
+// ─── TD-03 plumbing — classifyAndAnchorIncremental signal threading ────────
+
+test('TD-03 plumbing: useQuestions.ts threads abortController.signal into classifyAndAnchorIncremental', () => {
+  const uq = read('../../src/state/useQuestions.ts');
+  // Accept whitespace/newline variance; the call must include abortController.signal
+  assert.match(
+    uq,
+    /classifyAndAnchorIncremental\([\s\S]*?abortController\.signal/,
+    'useQuestions.ts must pass abortController.signal to classifyAndAnchorIncremental',
+  );
+});
