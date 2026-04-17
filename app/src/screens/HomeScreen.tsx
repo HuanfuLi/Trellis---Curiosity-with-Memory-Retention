@@ -5,7 +5,7 @@ import { BookOpen, CheckSquare, Headphones, Sparkles } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { InlineInfoFlow, type InfoFlowItem } from '../components/InfoFlow';
-import { ConceptProgressCard } from '../components/ConceptProgressCard';
+import { ConceptProgressCard, CompactProgressBar } from '../components/ConceptProgressCard';
 import { Confetti } from '../components/Confetti';
 import { PullUpHint, PULL_THRESHOLD } from '../components/PullUpHint';
 import { infiniteScrollService } from '../services/infiniteScroll.service';
@@ -369,6 +369,31 @@ export function HomeScreen() {
     return unsub;
   }, []);
 
+  // Track when the inline card scrolls behind the Header
+  const [cardHidden, setCardHidden] = useState(false);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || conceptQuota === 0) return;
+
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const card = container.querySelector('[data-concept-progress-card]');
+        if (card) {
+          const rect = card.getBoundingClientRect();
+          setCardHidden(rect.bottom <= HEADER_HEIGHT);
+        }
+        ticking = false;
+      });
+    };
+
+    container.addEventListener('scroll', onScroll, { passive: true });
+    return () => container.removeEventListener('scroll', onScroll);
+  }, [conceptQuota]);
+
   // Celebration: gold bar + confetti + toast + credit on completion
   useEffect(() => {
     if (isComplete && conceptQuota > 0 && !creditAwardedRef.current) {
@@ -381,10 +406,31 @@ export function HomeScreen() {
     }
   }, [isComplete, conceptQuota, t]);
 
+  const showCompactBar = cardHidden && conceptQuota > 0;
+
   return (
     <>
       <Confetti active={showConfetti} />
-      <Header title={getGreeting()} />
+      <Header title={getGreeting()} scrolled={showCompactBar} />
+      {/* Compact progress bar — fixed below Header, fades in when card scrolls away */}
+      <div style={{
+        position: 'fixed',
+        top: `calc(var(--safe-area-top) + ${HEADER_HEIGHT}px)`,
+        left: 0,
+        right: 0,
+        zIndex: 180,
+        backgroundColor: isComplete ? 'color-mix(in srgb, #E8A838 8%, var(--surface))' : 'var(--surface)',
+        boxShadow: showCompactBar ? 'var(--shadow-1)' : 'none',
+        padding: '8px 16px',
+        opacity: showCompactBar ? 1 : 0,
+        transform: showCompactBar ? 'translateY(0)' : 'translateY(-100%)',
+        transition: 'opacity 300ms ease, transform 300ms ease, box-shadow 300ms ease',
+        pointerEvents: showCompactBar ? 'auto' : 'none',
+      }}>
+        <div style={{ maxWidth: '448px', margin: '0 auto' }}>
+          <CompactProgressBar explored={exploredCount} total={conceptQuota} isComplete={isComplete} />
+        </div>
+      </div>
       <div
         ref={containerRef}
         data-home-scroll
