@@ -675,4 +675,5 @@ export type AppEvent =
   | { type: 'CLASSIFICATION_COMPLETED'; payload: { anchorId: string; anchorName: string } }
   | { type: 'ANCHOR_DELETED'; payload: { anchorId: string } }
   | { type: 'HARVEST_COMPLETED'; payload: { count: number } }
-  | { type: 'NEWS_POSTS_READY'; payload: { posts: DailyPost[] } };
+  | { type: 'NEWS_POSTS_READY'; payload: { posts: DailyPost[] } }
+  | { type: 'CONCEPT_EXPLORED'; payload: { anchorId: string } };
