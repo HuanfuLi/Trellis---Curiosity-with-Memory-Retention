@@ -219,10 +219,18 @@ function RootLayout() {
 
       {/* Outlet for sub-screens (rendered on top of swipe container) */}
       {!isTopLevelScreen && (
+        <>
+        {/* Opaque backdrop — covers SwipeTabContainer so iOS rubber-band
+            bounce can never reveal the Home feed behind the overlay. */}
+        <div style={{
+          position: 'fixed',
+          inset: '-200px 0',
+          zIndex: 49,
+          backgroundColor: 'var(--surface)',
+          pointerEvents: 'none',
+        }} />
         <div
           onScroll={(e) => {
-            // Phase 28 D-07 — 4px threshold gives natural hysteresis and
-            // avoids flicker when the browser chrome expands/collapses.
             const nextScrolled = e.currentTarget.scrollTop > 4;
             if (nextScrolled !== headerScrolled) setHeaderScrolled(nextScrolled);
           }}
@@ -245,6 +253,7 @@ function RootLayout() {
             <Outlet />
           </HeaderScrollContext.Provider>
         </div>
+        </>
       )}
 
       <ScrollRestoration />

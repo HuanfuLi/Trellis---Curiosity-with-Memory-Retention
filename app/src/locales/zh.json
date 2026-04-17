@@ -759,6 +759,7 @@
     "cancel": "取消"
   },
   "questionDetail": {
+    "headerTitle": "问题详情",
     "moveBreadcrumb": "建议行动：{{title}}",
     "notFound": "未找到问题。",
     "deleteLabel": "此问题",

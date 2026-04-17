@@ -759,6 +759,7 @@
     "cancel": "キャンセル"
   },
   "questionDetail": {
+    "headerTitle": "質問の詳細",
     "moveBreadcrumb": "おすすめアクション：{{title}}",
     "notFound": "質問が見つかりません。",
     "deleteLabel": "この質問",

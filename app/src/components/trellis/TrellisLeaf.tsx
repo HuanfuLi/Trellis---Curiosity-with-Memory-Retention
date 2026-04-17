@@ -7,7 +7,7 @@ import { hapticImpactLight } from '../../lib/haptics.ts';
 // Exported at module scope so Wave 0 tests can import without DOM/render.
 
 /** Rotate keyframes for tap-to-shake animation (degrees). */
-export const SHAKE_KEYFRAMES: readonly [number, number, number, number, number] = [0, 4, -4, 2, 0];
+export const SHAKE_KEYFRAMES: readonly [number, number, number, number, number] = [0, 12, -10, 5, 0];
 
 /** Duration of the shake animation in milliseconds. */
 export const SHAKE_DURATION_MS = 300;

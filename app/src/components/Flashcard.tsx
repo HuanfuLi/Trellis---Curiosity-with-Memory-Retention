@@ -32,7 +32,7 @@ export function Flashcard({ front, back, onRate, pinned, onTogglePin }: Flashcar
   };
 
   return (
-    <div style={{ maxWidth: '448px', margin: '0 auto', padding: '0 16px' }}>
+    <div key={front} style={{ maxWidth: '448px', margin: '0 auto', padding: '0 16px', animation: 'flashcard-next 0.3s ease', perspective: '800px' }}>
       {/* Card face */}
       <div
         style={{
@@ -47,6 +47,7 @@ export function Flashcard({ front, back, onRate, pinned, onTogglePin }: Flashcar
           flexDirection: 'column',
           borderRadius: 'var(--radius-xl)',
           boxShadow: 'var(--shadow-2)',
+          transformStyle: 'preserve-3d',
         }}
       >
         {/* Pin button — top-right corner */}
@@ -95,7 +96,7 @@ export function Flashcard({ front, back, onRate, pinned, onTogglePin }: Flashcar
               </div>
             </div>
           ) : (
-            <div key="answer" style={{ margin: 'auto 0', animation: 'flashcard-face-in 0.25s ease' }}>
+            <div key="answer" style={{ margin: 'auto 0', animation: 'flashcard-flip-in 0.35s ease' }}>
               <p
                 style={{
                   fontSize: '0.75rem',

@@ -759,6 +759,7 @@
     "cancel": "Cancel"
   },
   "questionDetail": {
+    "headerTitle": "Question Detail",
     "moveBreadcrumb": "Suggested move: {{title}}",
     "notFound": "Question not found.",
     "deleteLabel": "this question",

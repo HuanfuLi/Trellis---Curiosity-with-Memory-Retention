@@ -6,6 +6,7 @@ import { Badge } from '../components/ui/Badge';
 import { Skeleton } from '../components/ui/Skeleton';
 import { Markdown } from '../components/Markdown';
 import { DetailMenu } from '../components/DetailMenu';
+import { Header, HEADER_HEIGHT } from '../components/ui/Header';
 import { useQuestions } from '../state/useQuestions';
 import { questionService } from '../services/question.service';
 import { formatDate } from '../lib/date';
@@ -56,7 +57,21 @@ export function QuestionDetailScreen() {
   const related = questions.filter((q) => question.relatedQuestionIds.includes(q.id));
 
   return (
-    <div style={{ paddingTop: '24px', paddingLeft: '16px', paddingRight: '16px', paddingBottom: 'var(--bottom-nav-safe)', maxWidth: '448px', margin: '0 auto' }}>
+    <div style={{ paddingTop: `${HEADER_HEIGHT + 8}px`, paddingLeft: '16px', paddingRight: '16px', paddingBottom: 'var(--bottom-nav-safe)', maxWidth: '448px', margin: '0 auto' }}>
+      <Header
+        title={t('questionDetail.headerTitle')}
+        backTo="/ask"
+        right={
+          <DetailMenu
+            deleteLabel={t('questionDetail.deleteLabel')}
+            onDelete={async () => {
+              await questionService.delete(question.id);
+              toast(t('questionDetail.deleted'), 'success');
+              navigate(-1);
+            }}
+          />
+        }
+      />
       {/* Move breadcrumb — shown when navigated from a suggested move */}
       {moveState && (
         <div style={{
@@ -67,23 +82,6 @@ export function QuestionDetailScreen() {
           {t('questionDetail.moveBreadcrumb', { title: moveState.move.title })}
         </div>
       )}
-      {/* Back + Menu */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-        <button
-          onClick={() => navigate(-1)}
-          style={{ background: 'none', border: 'none', padding: '12px', marginLeft: '-12px', color: 'var(--primary-40)', display: 'flex', alignItems: 'center' }}
-        >
-          <ArrowLeft size={20} />
-        </button>
-        <DetailMenu
-          deleteLabel={t('questionDetail.deleteLabel')}
-          onDelete={async () => {
-            await questionService.delete(question.id);
-            toast(t('questionDetail.deleted'), 'success');
-            navigate(-1);
-          }}
-        />
-      </div>
 
       {/* Meta */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--muted-foreground)', fontSize: '0.875rem', marginBottom: '16px' }}>

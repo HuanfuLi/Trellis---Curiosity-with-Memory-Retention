@@ -14,7 +14,7 @@ import test, { mock } from 'node:test';
 // identical between inline mirror and source (otherwise acceptance fails).
 
 // Mirror of TrellisLeaf.tsx exports — MUST stay in lockstep with source.
-const SHAKE_KEYFRAMES = [0, 4, -4, 2, 0];
+const SHAKE_KEYFRAMES = [0, 12, -10, 5, 0];
 const SHAKE_DURATION_MS = 300;
 
 const onLeafTap = ({ perfGuardActive, shakeControls, haptic }) => {
@@ -28,8 +28,8 @@ const onLeafTap = ({ perfGuardActive, shakeControls, haptic }) => {
 
 // ── Constant contract ──────────────────────────────────────────────────────
 
-test('SHAKE_KEYFRAMES is exactly [0, 4, -4, 2, 0]', () => {
-  assert.deepStrictEqual(SHAKE_KEYFRAMES, [0, 4, -4, 2, 0]);
+test('SHAKE_KEYFRAMES is exactly [0, 12, -10, 5, 0]', () => {
+  assert.deepStrictEqual(SHAKE_KEYFRAMES, [0, 12, -10, 5, 0]);
 });
 
 test('SHAKE_DURATION_MS is 300', () => {
@@ -58,7 +58,7 @@ test('onLeafTap passes SHAKE_KEYFRAMES rotate array to shakeControls.start', () 
   let captured;
   const shakeControls = { start: (arg) => { captured = arg; } };
   onLeafTap({ perfGuardActive: false, shakeControls, haptic: () => {} });
-  assert.deepStrictEqual(captured.rotate, [0, 4, -4, 2, 0]);
+  assert.deepStrictEqual(captured.rotate, [0, 12, -10, 5, 0]);
   assert.equal(captured.transition.duration, 0.3); // 300 / 1000
   assert.equal(captured.transition.ease, 'easeInOut');
 });
