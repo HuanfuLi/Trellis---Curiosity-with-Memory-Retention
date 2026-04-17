@@ -1,9 +1,27 @@
 ---
 phase: 22-swipe-navigation-between-first-level-screens
 verified: 2026-04-07T00:00:00Z
-status: human_needed
+status: passed
 score: 9/9 automated must-haves verified
-re_verification: false
+re_verification:
+  previous_status: human_needed
+  previous_score: 9/9
+  re_verified_on: 2026-04-16
+  gaps_closed:
+    - "Bottom nav real-time tracking (22-UAT-1)"
+    - "Rubber-band edge resistance (22-UAT-2)"
+    - "Snap-back on short swipe (22-UAT-3)"
+    - "PostCarousel swipe conflict suppression (22-UAT-6)"
+    - "MindElixir pan conflict suppression (22-UAT-7)"
+    - "Keyboard-open swipe suppression (22-UAT-8)"
+    - "GraphScreen visible on first swipe (22-UAT-9)"
+    - "Sub-screen swipe disabled (22-UAT-10)"
+    - "Scroll position preservation (22-UAT-11)"
+  gaps_remaining:
+    - "22-UAT-4 animated tab-tap — SKIP per D-23; reverted to instant transport 2026-04-15 (see 22-VERIFICATION.md addendum)"
+    - "22-UAT-5 non-adjacent tab-tap direct slide — SKIP per D-23; reverted same date"
+  regressions: []
+  log: .planning/phases/29-final-polishment/29-UAT-LOG.md
 human_verification:
   - test: "Swipe between all 5 screens — bottom nav highlight interpolates proportionally"
     expected: "Bottom nav icon/label colors animate smoothly as finger drags, not just on commit"

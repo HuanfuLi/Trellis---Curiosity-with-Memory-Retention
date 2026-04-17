@@ -1,9 +1,20 @@
 ---
 phase: 20-orchestration-strategy-diagnostic-dialogue
 verified: 2026-04-10T00:00:00Z
-status: human_needed
+status: passed
 score: 16/16 automated must-haves verified
-re_verification: false
+re_verification:
+  previous_status: human_needed
+  previous_score: 16/16
+  re_verified_on: 2026-04-16
+  gaps_closed:
+    - "Portal card layout and content type indicators confirmed (20-UAT-1) — restyled but functional"
+    - "Portal card indicator navigation routing confirmed (20-UAT-3)"
+    - "Portal card primary CTA navigateToMove routing confirmed (20-UAT-4)"
+  gaps_remaining:
+    - "20-UAT-2 diagnostic chat — SKIP; feature deprecated and discarded"
+  regressions: []
+  log: .planning/phases/29-final-polishment/29-UAT-LOG.md
 human_verification:
   - test: "Portal card layout and content type indicators display correctly"
     expected: "Cards show topic name, description, colored border, and 3 tappable indicators with counts"

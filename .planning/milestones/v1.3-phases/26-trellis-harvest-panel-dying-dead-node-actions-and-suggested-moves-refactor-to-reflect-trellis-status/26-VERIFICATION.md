@@ -1,11 +1,12 @@
 ---
 phase: 26-trellis-harvest-panel-dying-dead-node-actions-and-suggested-moves-refactor-to-reflect-trellis-status
 verified: 2026-04-15T10:00:00Z
-status: human_needed
+status: passed
 score: 15/15 must-haves verified
 re_verification:
   previous_status: human_needed
   previous_score: 15/15
+  re_verified_on: 2026-04-16
   gaps_closed:
     - "Bottom sheets removed — no regression on panel layout or harvest flow"
     - "Panel order corrected to Dying | Fruit | Dead"
@@ -14,8 +15,16 @@ re_verification:
     - "PrunedSection extracted to standalone component, mounted at PlannerScreen bottom"
     - "prunedFromTrellis flag used for prune/unprune/filter (distinct from off-topic flagged)"
     - "hashStr import fix confirmed present in trellis-state.service.ts"
+    - "Harvest animation fly-to-counter + confetti confirmed (26-UAT-1)"
+    - "Fruit column glow when count > 0 confirmed (26-UAT-2)"
+    - "Heal flow confirmed (26-UAT-3)"
+    - "Re-plant flow confirmed (26-UAT-4)"
+    - "Prune button stopPropagation confirmed (26-UAT-5)"
+    - "Suggested Moves priority ordering confirmed (26-UAT-6)"
+    - "AutoGen dedup confirmed (26-UAT-7)"
   gaps_remaining: []
   regressions: []
+  log: .planning/phases/29-final-polishment/29-UAT-LOG.md
 human_verification:
   - test: "Harvest animation — fly-to-counter + confetti (re-test after simplification)"
     expected: "Tapping the Fruit button directly triggers fly particles from the fruit button center toward the header counter span, then a confetti burst fires 1.2s later. The credit counter increments immediately."

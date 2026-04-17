@@ -1,9 +1,21 @@
 ---
 phase: 21-review-cap-fix-generate-on-enter-posts
 verified: 2026-04-10T00:00:00Z
-status: human_needed
+status: passed
 score: 13/14 automated must-haves verified
-re_verification: false
+re_verification:
+  previous_status: human_needed
+  previous_score: 13/14
+  re_verified_on: 2026-04-16
+  gaps_closed:
+    - "Feed load time <3s confirmed (21-UAT-1)"
+    - "On-enter streaming UX no layout shift confirmed (21-UAT-2)"
+    - "Cache-hit on re-visit instant-load confirmed (21-UAT-3)"
+    - "Video/news post streaming on-enter confirmed (21-UAT-5)"
+  gaps_remaining:
+    - "21-UAT-4 daily goal progress bar — SKIP per D-23 (REVIEW-03 descoped per feedback_daily_goal.md); already marked N/A in original verification"
+  regressions: []
+  log: .planning/phases/29-final-polishment/29-UAT-LOG.md
 human_verification:
   - test: "Feed loads in <3s with card-face-only posts (no essay bodies)"
     expected: "Home feed renders quickly showing titles, teaser hooks, and images -- no long LLM waits"
