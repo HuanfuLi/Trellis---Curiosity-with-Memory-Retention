@@ -594,6 +594,7 @@ function ConnectionCard({ conceptNounA, conceptNounB, bridgeInsight, cosineSimil
           fontWeight: 700,
           lineHeight: 1.35,
           color: 'var(--foreground)',
+          margin: 0,
         }}
       >
         {bridgeInsight}
@@ -612,10 +613,10 @@ function ConnectionCard({ conceptNounA, conceptNounB, bridgeInsight, cosineSimil
             justifyContent: 'center',
           }}
         >
-          <p style={{ fontSize: '0.6rem', fontWeight: 700, color: 'rgba(255,255,255,0.7)', marginBottom: '6px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          <p style={{ fontSize: '0.6rem', fontWeight: 700, color: 'rgba(255,255,255,0.7)', margin: '0 0 6px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
             {t('infoFlow.concept')}
           </p>
-          <p style={{ fontSize: '1rem', fontWeight: 800, color: '#ffffff', lineHeight: 1.25 }}>
+          <p style={{ fontSize: '1rem', fontWeight: 800, color: '#ffffff', lineHeight: 1.25, margin: 0 }}>
             {conceptNounA}
           </p>
         </div>
@@ -630,10 +631,10 @@ function ConnectionCard({ conceptNounA, conceptNounB, bridgeInsight, cosineSimil
             justifyContent: 'center',
           }}
         >
-          <p style={{ fontSize: '0.6rem', fontWeight: 700, color: 'rgba(255,255,255,0.7)', marginBottom: '6px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          <p style={{ fontSize: '0.6rem', fontWeight: 700, color: 'rgba(255,255,255,0.7)', margin: '0 0 6px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
             {t('infoFlow.concept')}
           </p>
-          <p style={{ fontSize: '1rem', fontWeight: 800, color: '#ffffff', lineHeight: 1.25 }}>
+          <p style={{ fontSize: '1rem', fontWeight: 800, color: '#ffffff', lineHeight: 1.25, margin: 0 }}>
             {conceptNounB}
           </p>
         </div>
