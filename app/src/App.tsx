@@ -20,6 +20,7 @@ import { SettingsDataScreen } from './screens/settings/SettingsDataScreen';
 import { GraphScreen } from './screens/GraphScreen';
 import { SwipeTabContainer } from './components/SwipeTabContainer';
 import { PostDetailScreen } from './screens/PostDetailScreen';
+import PostHistoryScreen from './screens/PostHistoryScreen';
 import { AnchorDetailScreen } from './screens/AnchorDetailScreen';
 import { ClusterDetailScreen } from './screens/ClusterDetailScreen';
 import { settingsService } from './services/settings.service';
@@ -48,22 +49,29 @@ function RootLayout() {
   const [headerScrolled, setHeaderScrolled] = useState(false);
   const recordingActiveRef = useRef(false);
 
-  // Sub-screen exit animation: cache outlet content so it stays visible during fade-out
+  // Sub-screen exit animation: cache outlet content so it stays visible during fade-out.
+  // Detection is synchronous (setState-during-render) to avoid a one-frame gap where
+  // the overlay unmounts before the exit animation starts.
   const [subScreenClosing, setSubScreenClosing] = useState(false);
   const prevIsTopLevelRef = useRef(isTopLevelScreen);
   const cachedOutletRef = useRef<React.ReactNode>(null);
   const outlet = <Outlet />;
   if (!isTopLevelScreen) cachedOutletRef.current = outlet;
+
+  if (!prevIsTopLevelRef.current && isTopLevelScreen && !subScreenClosing) {
+    setSubScreenClosing(true);
+    setHeaderScrolled(false);
+  }
+  prevIsTopLevelRef.current = isTopLevelScreen;
+
   const showSubScreen = !isTopLevelScreen || subScreenClosing;
 
   useEffect(() => {
-    if (!prevIsTopLevelRef.current && isTopLevelScreen) {
-      setSubScreenClosing(true);
+    if (subScreenClosing) {
       const timer = setTimeout(() => setSubScreenClosing(false), 200);
       return () => clearTimeout(timer);
     }
-    prevIsTopLevelRef.current = isTopLevelScreen;
-  }, [isTopLevelScreen]);
+  }, [subScreenClosing]);
 
   useKeyboard();
 
@@ -301,6 +309,7 @@ const router = createBrowserRouter([
       { path: 'cluster/:id', element: <PageTransition><ClusterDetailScreen /></PageTransition> },
       { path: 'graph', element: null },
       { path: 'planner', element: null },
+      { path: 'history', element: <PageTransition><PostHistoryScreen /></PageTransition> },
       { path: 'review', element: <PageTransition><ReviewScreen /></PageTransition> },
       { path: 'podcast', element: <PageTransition><PodcastScreen /></PageTransition> },
       { path: 'settings', element: null },
