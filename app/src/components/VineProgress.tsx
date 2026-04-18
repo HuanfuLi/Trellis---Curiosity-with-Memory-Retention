@@ -148,29 +148,6 @@ export function VineProgress({
 
   return (
     <div ref={containerRef} style={containerStyle}>
-      {mode === 'inline' && onHistoryTap && (
-        <button
-          onClick={onHistoryTap}
-          aria-label={t('home.history.iconLabel')}
-          role="button"
-          tabIndex={0}
-          style={{
-            position: 'absolute',
-            top: '8px',
-            right: '8px',
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: '4px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Clock size={18} color="var(--muted-foreground)" />
-        </button>
-      )}
-
       <div
         role="progressbar"
         aria-valuenow={explored}
@@ -178,7 +155,7 @@ export function VineProgress({
         aria-valuemax={total}
         aria-label={ariaLabel}
         onClick={toggleExpand}
-        style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+        style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
       >
         <svg
           viewBox={`0 0 ${svgWidth} ${svgHeight}`}
@@ -234,15 +211,36 @@ export function VineProgress({
           ))}
         </svg>
 
-        <ChevronDown
-          size={14}
-          color="var(--muted-foreground)"
-          style={{
-            transform: `rotate(${expanded ? 180 : 0}deg)`,
-            transition: 'transform 200ms ease-out',
-            flexShrink: 0,
-          }}
-        />
+        {/* Right-side icons: history + chevron */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+          {mode === 'inline' && onHistoryTap && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onHistoryTap(); }}
+              aria-label={t('home.history.iconLabel')}
+              role="button"
+              tabIndex={0}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Clock size={16} color="var(--muted-foreground)" />
+            </button>
+          )}
+          <ChevronDown
+            size={14}
+            color="var(--muted-foreground)"
+            style={{
+              transform: `rotate(${expanded ? 180 : 0}deg)`,
+              transition: 'transform 200ms ease-out',
+            }}
+          />
+        </div>
       </div>
 
       {/* Concept checklist — shows uncovered concepts only (D-09) */}
