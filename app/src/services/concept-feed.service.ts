@@ -686,18 +686,21 @@ function buildConceptBatch(questions: Question[]): string[] {
   const queuePosts = postQueueService.getQueue();
   const exploredIds = new Set(queuePosts.flatMap(p => p.sourceQuestionIds ?? []));
 
-  const dueAnchors = questions.filter(q =>
-    q.isAnchorNode && !exploredIds.has(q.id),
-  );
+  const anchors = questions.filter(q => q.isAnchorNode);
+  const dueAnchors = anchors.filter(a => !exploredIds.has(a.id));
 
   const conceptIds: string[] = [];
   for (const anchor of dueAnchors) {
-    const leaf = computeLeafState(anchor);
-    const isImportant =
-      (anchor.reviewSchedule?.easeFactor != null && anchor.reviewSchedule.easeFactor < 1.5) ||
-      leaf === 'falling' || leaf === 'fallen';
+    const children = questions.filter(q => q.parentId === anchor.id);
+    let isImportant = anchor.reviewSchedule?.easeFactor != null && anchor.reviewSchedule.easeFactor < 1.5;
+    if (!isImportant) {
+      try {
+        const leaf = computeLeafState(anchor, children);
+        isImportant = leaf === 'falling' || leaf === 'fallen';
+      } catch { /* non-critical — default to not important */ }
+    }
     conceptIds.push(anchor.id);
-    if (isImportant) conceptIds.push(anchor.id); // D-14: important gets 2 posts
+    if (isImportant) conceptIds.push(anchor.id);
   }
   return conceptIds;
 }
