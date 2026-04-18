@@ -12,6 +12,8 @@ import { getRateLimitStatus } from '../../services/ask-rate-limiter.service';
 import { imageGenerationService } from '../../services/imageGeneration.service';
 import { conceptFeedService } from '../../services/concept-feed.service';
 import { clearAllTables } from '../../services/db.service';
+import { dailyReadService } from '../../services/daily-read.service';
+import { postQueueService } from '../../services/post-queue.service';
 import { SectionHeader, SettingRow, MaterialSwitch, SelectInput, TextInput, SUB_SCREEN_STYLE } from './SettingsShared';
 
 export function SettingsDataScreen() {
@@ -207,6 +209,20 @@ export function SettingsDataScreen() {
             style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}
           >
             <Trash2 size={16} /> {t('settings.buttons.clearAllData')}
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              dailyReadService.reset();
+              postQueueService.resetForNewDay();
+              conceptFeedService.clearCache();
+              toast('Today\'s review/post status reset', 'success');
+              setTimeout(() => window.location.reload(), 600);
+            }}
+            style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}
+          >
+            <RotateCcw size={16} /> Reset Today
           </Button>
         </div>
       </Card>
