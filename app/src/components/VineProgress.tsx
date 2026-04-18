@@ -202,6 +202,8 @@ export function VineProgress({
     return () => document.removeEventListener('click', handleClickOutside, true);
   }, [expanded]);
 
+  const toggleExpand = useCallback(() => setExpanded(prev => !prev), []);
+
   const conceptTotal = concepts.length;
   const conceptExplored = concepts.filter(c => c.explored).length;
 
@@ -245,12 +247,9 @@ export function VineProgress({
     return { x, y, flip, size: leafSize, key: i };
   });
 
-  // Tendrils at every 3rd leaf position
   const tendrils = leaves.filter((_, i) => i % 3 === 1).map((l, i) => ({
     x: l.x, y: l.y, flip: i % 2 === 0, size: isInline ? 8 : 6, key: `t-${i}`,
   }));
-
-  const toggleExpand = useCallback(() => setExpanded(prev => !prev), []);
 
   const ariaLabel = vineComplete
     ? t('home.feed.vineComplete')
