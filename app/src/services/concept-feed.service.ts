@@ -12,6 +12,7 @@ import { webSearch } from './web-search.service';
 import { questionService } from './question.service';
 import { postQueueService } from './post-queue.service';
 import { postHistoryService } from './post-history.service';
+import { dailyReadService } from './daily-read.service';
 import { assignStyles, reassignFailures, type ApiAvailability } from './style-assignment';
 import { computeLeafState } from './trellis-state.service';
 
