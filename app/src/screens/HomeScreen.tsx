@@ -305,64 +305,46 @@ export function HomeScreen() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- containerRef and refs are stable after mount
 
-  // Build the Home curiosity feed from daily posts + LLM-generated connection cards.
+  // Build the Home curiosity feed from daily posts + connection cards (D-44: no fixed interleaving).
   const infoFlowItems = useMemo<InfoFlowItem[]>(() => {
-    const items: InfoFlowItem[] = [];
+    const items: InfoFlowItem[] = dailyPosts.map(post => ({ kind: 'concept' as const, post }));
+
+    // Collect unique connection card items
     const connectionCards = conceptFeedService.getConnectionCards();
     const byId = new Map<string, Question>(questions.map((q) => [q.id, q]));
     const addedConns = new Set<string>();
+    const connItems: InfoFlowItem[] = [];
 
-    dailyPosts.forEach((post, idx) => {
-      items.push({ kind: 'concept', post });
-
-      // After every 2nd concept post, inject a connection card if available.
-      if ((idx + 1) % 2 === 0) {
-        const card = connectionCards[Math.floor(idx / 2) % connectionCards.length];
-        if (card) {
-          const key = card.sourceId < card.targetId
-            ? `${card.sourceId}:${card.targetId}`
-            : `${card.targetId}:${card.sourceId}`;
-          const qA = byId.get(card.sourceId);
-          const qB = byId.get(card.targetId);
-          if (qA && qB && !addedConns.has(key)) {
-            addedConns.add(key);
-            items.push({
-              kind: 'connection',
-              questionA: qA,
-              questionB: qB,
-              conceptNounA: card.conceptNounA,
-              conceptNounB: card.conceptNounB,
-              bridgeInsight: card.bridgeInsight,
-              cosineSimilarity: card.score,
-              connectionPostId: card.connectionPostId,
-            });
-          }
-        }
-      }
-    });
-
-    // Inject remaining connection cards not yet shown
     for (const card of connectionCards) {
       const key = card.sourceId < card.targetId
         ? `${card.sourceId}:${card.targetId}`
         : `${card.targetId}:${card.sourceId}`;
-      if (!addedConns.has(key)) {
-        const qA = byId.get(card.sourceId);
-        const qB = byId.get(card.targetId);
-        if (qA && qB) {
-          addedConns.add(key);
-          items.push({
-            kind: 'connection',
-            questionA: qA,
-            questionB: qB,
-            conceptNounA: card.conceptNounA,
-            conceptNounB: card.conceptNounB,
-            bridgeInsight: card.bridgeInsight,
-            cosineSimilarity: card.score,
-            connectionPostId: card.connectionPostId,
-          });
-        }
+      if (addedConns.has(key)) continue;
+      const qA = byId.get(card.sourceId);
+      const qB = byId.get(card.targetId);
+      if (!qA || !qB) continue;
+      addedConns.add(key);
+      connItems.push({
+        kind: 'connection',
+        questionA: qA,
+        questionB: qB,
+        conceptNounA: card.conceptNounA,
+        conceptNounB: card.conceptNounB,
+        bridgeInsight: card.bridgeInsight,
+        cosineSimilarity: card.score,
+        connectionPostId: card.connectionPostId,
+      });
+    }
+
+    // Distribute connection cards evenly among concept posts
+    if (connItems.length > 0 && items.length > 0) {
+      const interval = Math.max(2, Math.floor(items.length / (connItems.length + 1)));
+      for (let ci = connItems.length - 1; ci >= 0; ci--) {
+        const insertAt = Math.min((ci + 1) * interval, items.length);
+        items.splice(insertAt, 0, connItems[ci]);
       }
+    } else {
+      items.push(...connItems);
     }
 
     return items;
