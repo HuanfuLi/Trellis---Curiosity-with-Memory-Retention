@@ -108,6 +108,7 @@ export function VineProgress({
   const availableWidth = svgWidth - potX - 12 - rightPad;
   const progress = conceptTotal > 0 ? conceptExplored / conceptTotal : 0;
   const stemLength = progress * availableWidth;
+  const vineComplete = conceptTotal > 0 && conceptExplored >= conceptTotal;
 
   const vineColor = vineComplete ? '#66BB6A' : 'var(--primary-40)';
   const stemColor = vineComplete ? '#E8A838' : '#4CAF50';
@@ -127,7 +128,6 @@ export function VineProgress({
 
   const toggleExpand = useCallback(() => setExpanded(prev => !prev), []);
 
-  const vineComplete = conceptTotal > 0 && conceptExplored >= conceptTotal;
   const ariaLabel = vineComplete
     ? t('home.feed.vineComplete')
     : t('home.feed.vineProgress', { explored: conceptExplored, total: conceptTotal });
