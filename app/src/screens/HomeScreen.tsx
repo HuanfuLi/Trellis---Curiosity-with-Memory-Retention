@@ -181,6 +181,9 @@ export function HomeScreen() {
     void conceptFeedService.getDailyPosts(questionsRef.current).then((posts) => {
       setDailyPosts(posts);
       setIsGenerating(false);
+      if (posts.length === 0 && questionsRef.current.length > 0) {
+        setGenerationError(true);
+      }
     }).catch((err) => {
       console.warn('[HomeScreen] feed retry failed:', err);
       setIsGenerating(false);

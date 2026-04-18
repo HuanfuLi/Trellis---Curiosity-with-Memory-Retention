@@ -760,6 +760,7 @@ async function generatePostBatch(
           const parsed = parseGeneratedPosts(raw, questions, date, [], indexOffset, textStyleAssignments.length);
           // Apply pre-assigned styles to generated posts
           for (let i = 0; i < parsed.posts.length && i < textStyleAssignments.length; i++) {
+            if (!parsed.posts[i]) continue;
             const assignment = textStyleAssignments[i];
             parsed.posts[i].presentationStyle = assignment.style;
             if (assignment.style === 'suggestion') {
