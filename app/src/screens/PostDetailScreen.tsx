@@ -23,6 +23,7 @@ import { inferImageStyle, buildImagePrompt } from '../services/postFormatting.se
 import { normalizePlainText } from '../lib/text-normalization';
 import { generatePostEssay, generateEssayMeta, patchPostEssayInCache, type EssayContent } from '../services/post-essay.service';
 import { eventBus } from '../lib/event-bus';
+import { postHistoryService } from '../services/post-history.service';
 
 interface ConnectionMeta {
   questionA: Question;
@@ -146,6 +147,13 @@ export function PostDetailScreen() {
       if (dwellTimerRef.current) clearTimeout(dwellTimerRef.current);
     };
   }, [resolvedAnchorId, emitExplored]);
+
+  // Record viewed post in history (idempotent — deduplicates by id)
+  useEffect(() => {
+    if (post) {
+      postHistoryService.addPost(post);
+    }
+  }, [post?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!id) return;
