@@ -718,18 +718,22 @@ export function buildPostOriginContext(post: DailyPost, questions: Question[]): 
 /**
  * Build the derived concept list for this generation cycle.
  * Per D-12: driven by today's due concepts from SM-2.
- * Per D-13: exclude already-explored concepts (via seen IDs in post queue).
+ * Per D-13: skip concepts with pending posts in queue (current cycle coverage).
  * Per D-14: important concepts get 2 posts per cycle, others get 1.
+ *
+ * Note: exploredIds filter removed — explored state is a read-tracking concern
+ * for VineProgress, not a generation concern. The daily generation cap (D-38)
+ * in refillQueue already limits total output. This allows the queue to cycle
+ * through all concepts repeatedly.
  */
 function buildConceptBatch(questions: Question[]): string[] {
   // D-13: skip concepts with pending posts in queue (current cycle coverage),
   // and skip concepts the user has already explored today (checkedoff).
   const queuePosts = postQueueService.getQueue();
   const pendingIds = new Set(queuePosts.flatMap(p => p.sourceQuestionIds ?? []));
-  const exploredIds = new Set(dailyReadService.getExploredAnchors());
 
   const anchors = questions.filter(q => q.isAnchorNode);
-  const dueAnchors = anchors.filter(a => !pendingIds.has(a.id) && !exploredIds.has(a.id));
+  const dueAnchors = anchors.filter(a => !pendingIds.has(a.id));
 
   const conceptIds: string[] = [];
   for (const anchor of dueAnchors) {
@@ -767,6 +771,9 @@ async function generatePostBatch(
   const videoAssignments = assignments.filter(a => a.style === 'video');
   const shortAssignments = assignments.filter(a => a.style === 'short');
   const newsAssignments = assignments.filter(a => a.style === 'news');
+
+  // Track seen YouTube videoIds to prevent duplicates within a batch (MAJOR 4 fix)
+  const seenVideoIds = new Set<string>();
 
   const posts: DailyPost[] = [];
   const existingPosts = loadCache()?.posts ?? [];
@@ -861,66 +868,72 @@ Return ONLY a JSON array of 4 strings, nothing else. Example: ["What is X?", "Ho
     }
   }
 
-  // Generate video posts from YouTube
+  // Generate video posts from YouTube (with dedup via seenVideoIds)
   for (const a of videoAssignments) {
     try {
       const concept = byId.get(a.conceptId);
       const conceptName = concept?.title ?? concept?.content?.slice(0, 50) ?? a.conceptId;
-      const searchResult = await youtubeService.searchVideos(conceptName, 1);
-      if (searchResult.success && searchResult.data && searchResult.data.length > 0) {
-        const video = searchResult.data[0];
-        posts.push({
-          id: `post-${date}-video-${a.conceptId}`,
-          date,
-          title: video.title || conceptName,
-          teaser: { hook: video.title || conceptName, preview: video.description?.slice(0, 170) || '' },
-          bodyMarkdown: '',
-          whyCare: '',
-          takeaway: '',
-          quickAskPrompts: [],
-          narrativeMode: 'mechanism-breakdown' as PostNarrativeMode,
-          contextLabel: 'Video',
-          sourceType: 'video',
-          sourceQuestionIds: [a.conceptId],
-          sourceQuestionTitles: [conceptName],
-          keywords: concept?.keywords?.slice(0, 4) ?? [],
-          generatedAt: Date.now(),
-          origin: 'ai',
-          presentationStyle: 'video',
-          videoMeta: { videoId: video.videoId, channelTitle: video.channelTitle, thumbnailUrl: video.thumbnailUrl },
-        });
+      const searchResult = await youtubeService.searchVideos(conceptName, 3);
+      if (searchResult.success && searchResult.data) {
+        const freshVideo = searchResult.data.find(v => !seenVideoIds.has(v.videoId));
+        if (freshVideo) {
+          seenVideoIds.add(freshVideo.videoId);
+          posts.push({
+            id: `post-${date}-video-${a.conceptId}`,
+            date,
+            title: freshVideo.title || conceptName,
+            teaser: { hook: freshVideo.title || conceptName, preview: freshVideo.description?.slice(0, 170) || '' },
+            bodyMarkdown: '',
+            whyCare: '',
+            takeaway: '',
+            quickAskPrompts: [],
+            narrativeMode: 'mechanism-breakdown' as PostNarrativeMode,
+            contextLabel: 'Video',
+            sourceType: 'video',
+            sourceQuestionIds: [a.conceptId],
+            sourceQuestionTitles: [conceptName],
+            keywords: concept?.keywords?.slice(0, 4) ?? [],
+            generatedAt: Date.now(),
+            origin: 'ai',
+            presentationStyle: 'video',
+            videoMeta: { videoId: freshVideo.videoId, channelTitle: freshVideo.channelTitle, thumbnailUrl: freshVideo.thumbnailUrl },
+          });
+        }
       }
     } catch { /* video fetch failed — already reassigned in pre-validation */ }
   }
 
-  // Generate short posts from YouTube (use shorts query modifier)
+  // Generate short posts from YouTube (use shorts query modifier, with dedup via seenVideoIds)
   for (const a of shortAssignments) {
     try {
       const concept = byId.get(a.conceptId);
       const conceptName = concept?.title ?? concept?.content?.slice(0, 50) ?? a.conceptId;
-      const searchResult = await youtubeService.searchVideos(conceptName + ' #shorts', 1);
-      if (searchResult.success && searchResult.data && searchResult.data.length > 0) {
-        const short = searchResult.data[0];
-        posts.push({
-          id: `post-${date}-short-${a.conceptId}`,
-          date,
-          title: short.title || conceptName,
-          teaser: { hook: short.title || conceptName, preview: short.description?.slice(0, 170) || '' },
-          bodyMarkdown: '',
-          whyCare: '',
-          takeaway: '',
-          quickAskPrompts: [],
-          narrativeMode: 'mechanism-breakdown' as PostNarrativeMode,
-          contextLabel: 'Short',
-          sourceType: 'short',
-          sourceQuestionIds: [a.conceptId],
-          sourceQuestionTitles: [conceptName],
-          keywords: concept?.keywords?.slice(0, 4) ?? [],
-          generatedAt: Date.now(),
-          origin: 'ai',
-          presentationStyle: 'short',
-          videoMeta: { videoId: short.videoId, title: short.title, channelTitle: short.channelTitle, thumbnailUrl: short.thumbnailUrl },
-        });
+      const searchResult = await youtubeService.searchVideos(conceptName + ' #shorts', 3);
+      if (searchResult.success && searchResult.data) {
+        const freshShort = searchResult.data.find(v => !seenVideoIds.has(v.videoId));
+        if (freshShort) {
+          seenVideoIds.add(freshShort.videoId);
+          posts.push({
+            id: `post-${date}-short-${a.conceptId}`,
+            date,
+            title: freshShort.title || conceptName,
+            teaser: { hook: freshShort.title || conceptName, preview: freshShort.description?.slice(0, 170) || '' },
+            bodyMarkdown: '',
+            whyCare: '',
+            takeaway: '',
+            quickAskPrompts: [],
+            narrativeMode: 'mechanism-breakdown' as PostNarrativeMode,
+            contextLabel: 'Short',
+            sourceType: 'short',
+            sourceQuestionIds: [a.conceptId],
+            sourceQuestionTitles: [conceptName],
+            keywords: concept?.keywords?.slice(0, 4) ?? [],
+            generatedAt: Date.now(),
+            origin: 'ai',
+            presentationStyle: 'short',
+            videoMeta: { videoId: freshShort.videoId, channelTitle: freshShort.channelTitle, thumbnailUrl: freshShort.thumbnailUrl },
+          });
+        }
       }
     } catch { /* short fetch failed */ }
   }
@@ -1212,12 +1225,18 @@ export const conceptFeedService = {
     }
 
     // Drain from queue
-    const posts = postQueueService.dequeue(count);
+    let posts = postQueueService.dequeue(count);
+
+    // If queue was empty, await refill then try again (BLOCKER 3 fix)
+    if (posts.length === 0 && postQueueService.needsRefill()) {
+      await refillQueue(questions);
+      posts = postQueueService.dequeue(count);
+    }
 
     // Persist to history (D-33)
     for (const p of posts) { try { postHistoryService.addPost(p); } catch { /* non-critical */ } }
 
-    // Trigger background refill if needed (D-11)
+    // Trigger background refill if queue is running low (D-11)
     if (postQueueService.needsRefill()) {
       refillQueue(questions).catch(console.error);
     }
