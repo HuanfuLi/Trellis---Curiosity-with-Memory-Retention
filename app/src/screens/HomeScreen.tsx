@@ -513,10 +513,10 @@ export function HomeScreen() {
           touchAction: 'pan-y',
         }}
       >
-      <div style={{ paddingTop: '16px', paddingLeft: '16px', paddingRight: '16px', paddingBottom: 'var(--bottom-nav-safe)', maxWidth: '448px', margin: '0 auto' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '16px', paddingLeft: '16px', paddingRight: '16px', paddingBottom: 'var(--bottom-nav-safe)', maxWidth: '448px', margin: '0 auto' }}>
 
         {/* Inline greeting — scrolls away naturally */}
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--foreground)', marginBottom: '16px' }}>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--foreground)' }}>
           {getGreeting()}
         </h1>
 
@@ -613,7 +613,7 @@ export function HomeScreen() {
 
         {/* Concept Progress Card — OUTSIDE grid so position:sticky works */}
         {conceptQuota > 0 && (
-          <div data-concept-progress-card style={{ marginTop: '16px', marginBottom: '16px' }}>
+          <div data-concept-progress-card>
             <VineProgress
               mode="inline"
               explored={exploredCount}
@@ -635,7 +635,6 @@ export function HomeScreen() {
             justifyContent: 'center',
             minHeight: '100px',
             textAlign: 'center',
-            marginTop: '16px',
             padding: '16px',
             background: 'var(--card)',
             borderRadius: 'var(--radius)',
@@ -656,7 +655,7 @@ export function HomeScreen() {
           <div style={{
             display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center',
-            height: '200px', gap: '16px', marginTop: '16px',
+            height: '200px', gap: '16px',
           }}>
             <svg width="64" height="64" viewBox="0 0 64 64" style={{
               stroke: 'var(--primary-40)', strokeWidth: 2, fill: 'none',
@@ -691,7 +690,7 @@ export function HomeScreen() {
           <div style={{
             display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center',
-            height: '200px', gap: '4px', marginTop: '16px',
+            height: '200px', gap: '4px',
           }}>
             <AlertCircle size={32} style={{ color: 'var(--muted-foreground)', marginBottom: '8px' }} />
             <span style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>
