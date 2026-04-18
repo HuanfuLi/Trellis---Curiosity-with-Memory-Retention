@@ -13,7 +13,9 @@ function loadPosts(): DailyPost[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((p: Record<string, unknown>) => p && typeof p.id === 'string');
+    return parsed.filter((p: Record<string, unknown>) =>
+      p && typeof p.id === 'string' && typeof p.generatedAt === 'number' && typeof p.title === 'string'
+    );
   } catch {
     return [];
   }
@@ -58,7 +60,7 @@ export const postHistoryService = {
   purgeExpired(): void {
     const settings = settingsService.getSync();
     const retentionDays = settings.feed?.postRetentionDays;
-    if (retentionDays === null || retentionDays === undefined) return; // keep all
+    if (retentionDays == null || retentionDays <= 0) return; // keep all
     const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
     const posts = loadPosts().filter(p => p.generatedAt > cutoff);
     savePosts(posts);

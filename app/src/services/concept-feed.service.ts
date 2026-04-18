@@ -658,8 +658,9 @@ Return ONLY the single line, nothing else.`;
       return { ...p, textArtContent: contentMap.get(p.id)! };
     }
     // Fallback: if LLM generation failed but post needs text-art, use preview as content
-    if (!p.textArtContent && p.teaser.preview) {
-      return { ...p, textArtContent: `💡 ${p.teaser.hook}\n\n📝 ${p.teaser.preview}` };
+    if (!p.textArtContent) {
+      const fallback = p.teaser.preview?.trim() || p.teaser.hook?.trim() || p.title;
+      return { ...p, textArtContent: fallback };
     }
     return p;
   });

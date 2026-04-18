@@ -5,6 +5,7 @@ import type { DailyPost } from '../types/index.ts';
 
 const STORAGE_KEY = 'echolearn_post_queue';
 const REFILL_THRESHOLD = 8;
+const MAX_QUEUE_SIZE = 32;
 
 interface QueueState {
   date: string;
@@ -56,11 +57,12 @@ export const postQueueService = {
     return [..._state.posts];
   },
 
-  /** Append posts to the end of the queue (deduplicates by id). */
+  /** Append posts to the end of the queue (deduplicates by id, caps at MAX_QUEUE_SIZE). */
   enqueue(posts: DailyPost[]): void {
     const existingIds = new Set(_state.posts.map(p => p.id));
     const fresh = posts.filter(p => !existingIds.has(p.id));
-    _state.posts.push(...fresh);
+    const capacity = MAX_QUEUE_SIZE - _state.posts.length;
+    _state.posts.push(...fresh.slice(0, Math.max(0, capacity)));
     save(_state);
   },
 

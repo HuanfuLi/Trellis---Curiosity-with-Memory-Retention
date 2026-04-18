@@ -461,8 +461,9 @@ export function HomeScreen() {
       dailyReadService.markCreditAwarded();
       trellisCreditsService.add(1);
       setShowConfetti(true);
-      setTimeout(() => setShowConfetti(false), 3500);
+      const timer = setTimeout(() => setShowConfetti(false), 3500);
       toast(t('home.feed.creditToast'), 'success');
+      return () => clearTimeout(timer);
     }
   }, [isComplete, conceptQuota, t]);
 
