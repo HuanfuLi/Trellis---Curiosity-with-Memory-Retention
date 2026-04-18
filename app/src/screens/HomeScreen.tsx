@@ -5,7 +5,7 @@ import { BookOpen, CheckSquare, Headphones, Sparkles } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { InlineInfoFlow, type InfoFlowItem } from '../components/InfoFlow';
-import { ConceptProgressCard, CompactProgressBar } from '../components/ConceptProgressCard';
+import { VineProgress } from '../components/VineProgress';
 import { Confetti } from '../components/Confetti';
 import { PullUpHint, PULL_THRESHOLD } from '../components/PullUpHint';
 import { infiniteScrollService } from '../services/infiniteScroll.service';
@@ -22,7 +22,7 @@ import { trellisCreditsService } from '../services/trellis-credits.service';
 import { eventBus } from '../lib/event-bus';
 import { today, getGreeting } from '../lib/date';
 import { toast } from '../lib/toast';
-import { HEADER_HEIGHT } from '../components/ui/Header';
+
 
 
 export function HomeScreen() {
@@ -358,6 +358,27 @@ export function HomeScreen() {
   const exploredCount = useMemo(() => exploredAnchors.filter(id => quotaAnchorIds.has(id)).length, [exploredAnchors, quotaAnchorIds]);
   const isComplete = conceptQuota > 0 && exploredCount >= conceptQuota;
 
+  // Build concepts list for VineProgress checklist
+  const conceptList = useMemo(() => {
+    const exploredSet = new Set(exploredAnchors);
+    return Array.from(quotaAnchorIds).map(anchorId => {
+      const q = questionsById.get(anchorId);
+      return {
+        id: anchorId,
+        name: q?.title ?? q?.content?.slice(0, 40) ?? anchorId,
+        explored: exploredSet.has(anchorId),
+      };
+    });
+  }, [quotaAnchorIds, exploredAnchors, questionsById]);
+
+  // Scroll to the first post matching a concept (D-04)
+  const handleConceptTap = useCallback((conceptId: string) => {
+    const postElement = document.querySelector(`[data-concept-id="${conceptId}"]`);
+    if (postElement) {
+      postElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, []);
+
   const [showConfetti, setShowConfetti] = useState(false);
   const creditAwardedRef = useRef(dailyReadService.isCreditAwarded());
 
@@ -440,7 +461,14 @@ export function HomeScreen() {
         }}
       >
         <div style={{ maxWidth: '448px', margin: '0 auto', width: '100%' }}>
-          <CompactProgressBar explored={exploredCount} total={conceptQuota} isComplete={isComplete} />
+          <VineProgress
+              mode="compact"
+              explored={exploredCount}
+              total={conceptQuota}
+              isComplete={isComplete}
+              concepts={conceptList}
+              onConceptTap={handleConceptTap}
+            />
         </div>
       </div>
       <div
@@ -554,7 +582,17 @@ export function HomeScreen() {
 
         {/* Concept Progress Card — OUTSIDE grid so position:sticky works */}
         {conceptQuota > 0 && (
-          <ConceptProgressCard explored={exploredCount} total={conceptQuota} isComplete={isComplete} />
+          <div data-concept-progress-card style={{ marginTop: '16px', marginBottom: '16px' }}>
+            <VineProgress
+              mode="inline"
+              explored={exploredCount}
+              total={conceptQuota}
+              isComplete={isComplete}
+              concepts={conceptList}
+              onConceptTap={handleConceptTap}
+              onHistoryTap={() => navigate('/history')}
+            />
+          </div>
         )}
 
         {/* Empty state when feed has posts but no concept posts (D-17) */}

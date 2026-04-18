@@ -913,6 +913,7 @@ export function InlineInfoFlow({ items, onOpenConnection, showConnectionScores =
             <div
               key={index}
               data-feed-id={itemId}
+              data-concept-id={item.kind === 'concept' ? (item.post.sourceQuestionIds?.[0] ?? '') : undefined}
               style={{
                 position: 'relative',
                 minHeight: item.kind === 'concept'
