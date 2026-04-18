@@ -91,7 +91,7 @@ export const dailyReadService = {
 // --- Anchor ID derivation (per D-01, D-12) ---
 
 /** Non-concept sourceTypes excluded from quota (D-12). */
-const EXCLUDED_SOURCE_TYPES = new Set(['starter', 'connection', 'video', 'short', 'news']);
+const EXCLUDED_SOURCE_TYPES = new Set(['starter', 'connection', 'video', 'short', 'news', 'suggestion']);
 
 /**
  * Derive the concept anchor ID for a DailyPost.
