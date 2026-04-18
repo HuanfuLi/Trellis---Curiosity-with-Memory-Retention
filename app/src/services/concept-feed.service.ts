@@ -715,15 +715,20 @@ export function buildPostOriginContext(post: DailyPost, questions: Question[]): 
 /**
  * Build the derived concept list for this generation cycle.
  * Per D-12: driven by today's due concepts from SM-2.
- * Per D-13: exclude already-explored concepts (via seen IDs in post queue).
+ * Per D-13: skip concepts with pending posts in queue (current cycle coverage).
  * Per D-14: important concepts get 2 posts per cycle, others get 1.
+ *
+ * Note: exploredIds filter removed — explored state is a read-tracking concern
+ * for VineProgress, not a generation concern. The daily generation cap (D-38)
+ * in refillQueue already limits total output. This allows the queue to cycle
+ * through all concepts repeatedly.
  */
 function buildConceptBatch(questions: Question[]): string[] {
   const queuePosts = postQueueService.getQueue();
-  const exploredIds = new Set(queuePosts.flatMap(p => p.sourceQuestionIds ?? []));
+  const pendingIds = new Set(queuePosts.flatMap(p => p.sourceQuestionIds ?? []));
 
   const anchors = questions.filter(q => q.isAnchorNode);
-  const dueAnchors = anchors.filter(a => !exploredIds.has(a.id));
+  const dueAnchors = anchors.filter(a => !pendingIds.has(a.id));
 
   const conceptIds: string[] = [];
   for (const anchor of dueAnchors) {
@@ -1180,12 +1185,18 @@ export const conceptFeedService = {
     }
 
     // Drain from queue
-    const posts = postQueueService.dequeue(count);
+    let posts = postQueueService.dequeue(count);
+
+    // If queue was empty, await refill then try again (BLOCKER 3 fix)
+    if (posts.length === 0 && postQueueService.needsRefill()) {
+      await refillQueue(questions);
+      posts = postQueueService.dequeue(count);
+    }
 
     // Persist to history (D-33)
     for (const p of posts) { try { postHistoryService.addPost(p); } catch { /* non-critical */ } }
 
-    // Trigger background refill if needed (D-11)
+    // Trigger background refill if queue is running low (D-11)
     if (postQueueService.needsRefill()) {
       refillQueue(questions).catch(console.error);
     }
