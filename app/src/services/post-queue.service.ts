@@ -11,6 +11,8 @@ interface QueueState {
   date: string;
   posts: DailyPost[];
   cycleNumber: number;
+  totalGenerated: number;
+  totalServed: number;
 }
 
 // Inline today() to avoid i18next dependency chain from lib/date.ts.
@@ -23,7 +25,7 @@ function today(): string {
 }
 
 function freshState(): QueueState {
-  return { date: today(), posts: [], cycleNumber: 0 };
+  return { date: today(), posts: [], cycleNumber: 0, totalGenerated: 0, totalServed: 0 };
 }
 
 function load(): QueueState {
@@ -62,13 +64,16 @@ export const postQueueService = {
     const existingIds = new Set(_state.posts.map(p => p.id));
     const fresh = posts.filter(p => !existingIds.has(p.id));
     const capacity = MAX_QUEUE_SIZE - _state.posts.length;
-    _state.posts.push(...fresh.slice(0, Math.max(0, capacity)));
+    const added = fresh.slice(0, Math.max(0, capacity));
+    _state.posts.push(...added);
+    _state.totalGenerated += added.length;
     save(_state);
   },
 
   /** Remove and return the first `count` posts from the queue (FIFO). */
   dequeue(count: number): DailyPost[] {
     const items = _state.posts.splice(0, count);
+    _state.totalServed += items.length;
     save(_state);
     return items;
   },
@@ -86,6 +91,16 @@ export const postQueueService = {
   /** Current generation cycle number for today. */
   getCycleNumber(): number {
     return _state.cycleNumber;
+  },
+
+  /** Total posts generated today (actual count, not estimated). */
+  getTotalGenerated(): number {
+    return _state.totalGenerated;
+  },
+
+  /** Total posts served (dequeued) today. */
+  getTotalServed(): number {
+    return _state.totalServed;
   },
 
   /** Increment the cycle counter (after a generation batch completes). */

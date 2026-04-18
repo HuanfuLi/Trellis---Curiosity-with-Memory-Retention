@@ -946,9 +946,7 @@ export async function refillQueue(questions: Question[]): Promise<void> {
     const dueConcepts = questions.filter(q => q.isAnchorNode);
     const feedSettings = (settings as Record<string, unknown>).feed as { dailyGenerationCapMultiplier?: number } | undefined;
     const maxPosts = (feedSettings?.dailyGenerationCapMultiplier ?? FEED_DEFAULTS.dailyGenerationCapMultiplier) * Math.max(dueConcepts.length, 1);
-    const cycleNumber = postQueueService.getCycleNumber();
-    const alreadyGenerated = cycleNumber * 8; // rough estimate
-    if (alreadyGenerated >= maxPosts) return;
+    if (postQueueService.getTotalGenerated() >= maxPosts) return;
 
     // Step 1: Build concept batch for this cycle
     const conceptIds = buildConceptBatch(questions);
@@ -1178,8 +1176,7 @@ export const conceptFeedService = {
     if (allExplored) {
       const settings = settingsService.getSync();
       const bonusCap = settings.feed?.bonusPostCap ?? FEED_DEFAULTS.bonusPostCap;
-      const bonusServed = postQueueService.getCycleNumber() * 4;
-      if (bonusServed >= bonusCap) return [];
+      if (postQueueService.getTotalServed() >= postQueueService.getTotalGenerated() + bonusCap) return [];
     }
 
     // Drain from queue
