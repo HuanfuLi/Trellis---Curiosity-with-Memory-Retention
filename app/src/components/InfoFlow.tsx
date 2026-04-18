@@ -283,13 +283,34 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen, videoP
             style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', overflow: 'hidden' }}
           >
             {videoPlaying === post.id ? (
-              <iframe
-                src={`https://www.youtube.com/embed/${post.videoMeta.videoId}?autoplay=1&playsinline=1&rel=0`}
-                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                title={normalizedTitle || t('infoFlow.postImageAlt')}
-              />
+              <>
+                <iframe
+                  src={`https://www.youtube.com/embed/${post.videoMeta.videoId}?autoplay=1&playsinline=1&rel=0`}
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none', pointerEvents: 'auto' }}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  title={normalizedTitle || t('infoFlow.postImageAlt')}
+                />
+                {/* Transparent overlay — prevents iframe from capturing scroll touches */}
+                <div
+                  style={{ position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'auto', background: 'transparent' }}
+                  onClick={(e) => { e.stopPropagation(); setVideoPlaying(null); }}
+                />
+                {/* Close button — visible affordance to stop */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); setVideoPlaying(null); }}
+                  style={{
+                    position: 'absolute', top: 8, right: 8, zIndex: 3,
+                    width: 32, height: 32, borderRadius: '50%',
+                    background: 'rgba(0,0,0,0.6)', border: 'none', color: 'white',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', padding: 0,
+                  }}
+                  aria-label="Stop video"
+                >
+                  <X size={18} />
+                </button>
+              </>
             ) : (
               <div
                 onClick={(e) => {
@@ -364,11 +385,30 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen, videoP
               }}>
                 <iframe
                   src={`https://www.youtube.com/embed/${post.videoMeta.videoId}?playsinline=1&autoplay=1&rel=0`}
-                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none', pointerEvents: 'auto' }}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
                   title={normalizedTitle || t('infoFlow.postImageAlt')}
                 />
+                {/* Transparent overlay — prevents iframe from capturing scroll touches */}
+                <div
+                  style={{ position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'auto', background: 'transparent' }}
+                  onClick={(e) => { e.stopPropagation(); setVideoPlaying(null); }}
+                />
+                {/* Close button — visible affordance to stop */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); setVideoPlaying(null); }}
+                  style={{
+                    position: 'absolute', top: 8, right: 8, zIndex: 3,
+                    width: 32, height: 32, borderRadius: '50%',
+                    background: 'rgba(0,0,0,0.6)', border: 'none', color: 'white',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', padding: 0,
+                  }}
+                  aria-label="Stop video"
+                >
+                  <X size={18} />
+                </button>
               </div>
             ) : (
               <div style={{
