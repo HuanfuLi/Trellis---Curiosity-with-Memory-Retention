@@ -56,9 +56,11 @@ export const postQueueService = {
     return [..._state.posts];
   },
 
-  /** Append posts to the end of the queue. */
+  /** Append posts to the end of the queue (deduplicates by id). */
   enqueue(posts: DailyPost[]): void {
-    _state.posts.push(...posts);
+    const existingIds = new Set(_state.posts.map(p => p.id));
+    const fresh = posts.filter(p => !existingIds.has(p.id));
+    _state.posts.push(...fresh);
     save(_state);
   },
 

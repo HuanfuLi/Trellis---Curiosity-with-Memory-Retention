@@ -84,6 +84,9 @@ export function HomeScreen() {
       if (!cancelled) {
         setDailyPosts(posts);
         setIsGenerating(false);
+        if (posts.length === 0 && questions.length > 0) {
+          setGenerationError(true);
+        }
       }
     }).catch((err) => {
       console.warn('[HomeScreen] feed generation failed:', err);
@@ -646,12 +649,16 @@ export function HomeScreen() {
             minHeight: '160px',
             textAlign: 'center',
             marginTop: '16px',
+            padding: '24px 16px',
+            background: 'var(--card)',
+            borderRadius: 'var(--radius)',
+            boxShadow: 'var(--shadow-1)',
           }}>
             <Sparkles size={32} color="var(--muted-foreground)" style={{ opacity: 0.5, marginBottom: '12px' }} />
             <p style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--foreground)', marginBottom: '4px' }}>
               {t('home.feed.emptyTitle')}
             </p>
-            <p style={{ fontSize: '0.875rem', fontWeight: 400, color: 'var(--muted-foreground)' }}>
+            <p style={{ fontSize: '0.875rem', fontWeight: 400, color: 'var(--muted-foreground)', lineHeight: 1.5, maxWidth: '280px' }}>
               {t('home.feed.emptyBody')}
             </p>
           </div>
