@@ -823,17 +823,22 @@ Scope:
 4. **G4 — Starter posts persist after first view (NEW):**
    Cold start shows `STARTER_POSTS` (Welcome / How knowledge grows / Explore feed) per `concept-feed.service.ts:53` + `:1021`. User taps one → reads → returns to /home → starter posts have **disappeared**. Root cause: starter posts are returned only when `questions.length === 0`; viewing one likely creates a question or otherwise mutates state so the empty-state path is no longer taken, but the starter posts were never persisted to `postHistoryService` or `loadCache()`. Fix: persist starter posts to the daily cache on first render so subsequent /home visits see them in cache, OR keep them in `infoFlowItems` until the user has at least 3 organic posts.
 
+5. **G5 — Clear All Data doesn't auto-reload on Android (NEW from 32.1-01 retest):**
+   `SettingsDataScreen.tsx:68` calls `window.location.reload()` 800ms after Clear All Data. On Capacitor Android the call is a silent no-op — user stays on `/settings/data` and must manually navigate to `/home` to see the wiped state. Fix: replace with `window.location.assign('/home')` (or `window.location.href = '/home'`) which both reloads and navigates to the home route in one go. Eliminates the confusing stay-on-settings behavior + makes the wiped state immediately visible.
+
 **Out of scope (logged separately):**
 - Test 5 enhancement (vertical scroll-away should also stop video playback) — defer to Phase 33+ polish
 - Test 11 iOS dropdown anchor variant — defer until iOS test device is available; Android verified pass (native centered modal)
+- G6: Cold-start loading flicker before starter posts appear — likely resolves once G4 caches starters; revisit after 32.1-04 lands
 
-**Plans:** 4 plans
+**Plans:** 5 plans
 
 Plans:
 - [ ] 32.1-01-PLAN.md — G3 starter-posts retest after Vite base fix (Wave 1, checkpoint:human-verify on operator APK deploy + retest; UAT-31-14)
 - [ ] 32.1-02-PLAN.md — G1 queue-cycling + cross-cycle YouTube dedup regression (Wave 2; UAT-31-2 + UAT-31-13)
 - [ ] 32.1-03-PLAN.md — G2 video touch overlay reduced to pointer-events:none so YouTube controls reach user (Wave 2; UAT-31-4)
 - [ ] 32.1-04-PLAN.md — G4 (NEW) starter posts persist to cache + decay at 3+ organic posts (Wave 2; STARTER-PERSIST)
+- [ ] 32.1-05-PLAN.md — G5 (NEW) Clear All Data uses window.location.assign('/home') instead of reload (Wave 2; CLEAR-RELOAD)
 
 ### Phase 33: Phase 29 regression + Phase 31 code hygiene
 
