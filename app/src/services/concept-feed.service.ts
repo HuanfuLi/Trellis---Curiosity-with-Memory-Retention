@@ -677,6 +677,33 @@ function buildConceptBatch(questions: Question[]): string[] {
   return conceptIds;
 }
 
+// YouTube query rotation (Bug 6, 2026-04-19). The original implementation called
+// `searchVideos(conceptName, 3)` every refill cycle for the same anchor — YouTube's
+// relevance ranking is deterministic per query, so cycles 1+ kept getting the same top
+// 3 videos. Combined with a maxResults of 3, fresh-anchor users hit the dedup wall
+// after 3 cycles. Rotating the query modifier reshuffles the result set; widening
+// `maxResults` to 15 gives more headroom even within a single modifier window.
+const VIDEO_QUERY_MODIFIERS = [
+  '',                       // bare concept
+  ' explained',
+  ' tutorial',
+  ' how it works',
+  ' deep dive',
+];
+const SHORT_QUERY_MODIFIERS = [
+  ' #shorts',
+  ' explained #shorts',
+  ' tutorial #shorts',
+  ' in 60 seconds #shorts',
+];
+const YOUTUBE_FETCH_POOL_SIZE = 15;
+
+function buildYoutubeQuery(conceptName: string, cycleNumber: number, isShort: boolean): string {
+  const modifiers = isShort ? SHORT_QUERY_MODIFIERS : VIDEO_QUERY_MODIFIERS;
+  const modifier = modifiers[Math.abs(cycleNumber) % modifiers.length];
+  return `${conceptName}${modifier}`.trim();
+}
+
 /**
  * Generate a batch of posts from pre-assigned style assignments.
  * Reuses the existing LLM generation prompt for text-style posts,
@@ -819,18 +846,29 @@ Return ONLY a JSON array of 4 strings, nothing else. Example: ["What is X?", "Ho
     }
   }
 
-  // Generate video posts from YouTube (with cross-cycle dedup via concept-feed-dedup helper)
+  // Cycle-stamp video/short/news IDs so each refill produces a fresh post-id.
+  // Without this, the deterministic `post-${date}-{type}-${conceptId}` pattern collides
+  // across refill cycles for the same anchor; enqueue dedup blocks within a queue snapshot
+  // but not against already-served IDs in seenPostIds, so the user saw "only 1 post per
+  // swipe" because dedup filtered repeated IDs at loadNextBatch (Bug A, 2026-04-19).
+  const cycleStamp = `c${postQueueService.getCycleNumber()}`;
+
+  // Generate video posts from YouTube (with cross-cycle dedup via concept-feed-dedup helper).
+  // Query modifier rotates per cycleNumber and pool widened to YOUTUBE_FETCH_POOL_SIZE so
+  // repeated cycles for the same anchor produce fresh result sets (Bug 6, 2026-04-19).
+  const cycleNumber = postQueueService.getCycleNumber();
   for (const a of videoAssignments) {
     try {
       const concept = byId.get(a.conceptId);
       const conceptName = concept?.title ?? concept?.content?.slice(0, 50) ?? a.conceptId;
-      const searchResult = await youtubeService.searchVideos(conceptName, 3);
+      const query = buildYoutubeQuery(conceptName, cycleNumber, false);
+      const searchResult = await youtubeService.searchVideos(query, YOUTUBE_FETCH_POOL_SIZE);
       if (searchResult.success && searchResult.data) {
         const freshVideo = searchResult.data.find(v => !hasSeenVideoId(v.videoId));
         if (freshVideo) {
           addSeenVideoId(freshVideo.videoId);
           posts.push({
-            id: `post-${date}-video-${a.conceptId}`,
+            id: `post-${date}-video-${a.conceptId}-${cycleStamp}`,
             date,
             title: freshVideo.title || conceptName,
             teaser: { hook: freshVideo.title || conceptName, preview: freshVideo.description?.slice(0, 170) || '' },
@@ -859,13 +897,14 @@ Return ONLY a JSON array of 4 strings, nothing else. Example: ["What is X?", "Ho
     try {
       const concept = byId.get(a.conceptId);
       const conceptName = concept?.title ?? concept?.content?.slice(0, 50) ?? a.conceptId;
-      const searchResult = await youtubeService.searchVideos(conceptName + ' #shorts', 3);
+      const query = buildYoutubeQuery(conceptName, cycleNumber, true);
+      const searchResult = await youtubeService.searchVideos(query, YOUTUBE_FETCH_POOL_SIZE);
       if (searchResult.success && searchResult.data) {
         const freshShort = searchResult.data.find(v => !hasSeenVideoId(v.videoId));
         if (freshShort) {
           addSeenVideoId(freshShort.videoId);
           posts.push({
-            id: `post-${date}-short-${a.conceptId}`,
+            id: `post-${date}-short-${a.conceptId}-${cycleStamp}`,
             date,
             title: freshShort.title || conceptName,
             teaser: { hook: freshShort.title || conceptName, preview: freshShort.description?.slice(0, 170) || '' },
@@ -898,7 +937,7 @@ Return ONLY a JSON array of 4 strings, nothing else. Example: ["What is X?", "Ho
       if (searchResult.success && searchResult.data?.results.length) {
         const result = searchResult.data.results[0];
         posts.push({
-          id: `post-${date}-news-${a.conceptId}`,
+          id: `post-${date}-news-${a.conceptId}-${cycleStamp}`,
           date,
           title: result.title || conceptName,
           teaser: { hook: result.title || conceptName, preview: result.content?.slice(0, 170) || '' },
@@ -984,11 +1023,14 @@ export async function refillQueue(questions: Question[]): Promise<void> {
       return q?.title ?? q?.content?.slice(0, 50) ?? id;
     };
 
+    // Pre-validation must use the SAME modifier as the actual fetch so a passing
+    // pre-check doesn't get falsified by the fetch's varied query.
+    const validationCycle = postQueueService.getCycleNumber();
     await Promise.all([
       ...videoAssigns.map(async (a) => {
         try {
           const conceptName = getConceptName(a.conceptId);
-          const query = a.style === 'short' ? conceptName + ' #shorts' : conceptName;
+          const query = buildYoutubeQuery(conceptName, validationCycle, a.style === 'short');
           const searchResult = await youtubeService.searchVideos(query, 1);
           if (!searchResult.success || !searchResult.data?.length) {
             failedIds.add(a.conceptId);
@@ -1362,6 +1404,30 @@ export const conceptFeedService = {
         .filter(p => !existingIds.has(p.id));
       newPosts = newPosts.slice(0, 6);
 
+      // Provenance enrichment for session posts (mirror of generatePostBatch's daily
+      // path at lines 751-762). The LLM frequently omits or mangles sourceQuestionIds
+      // here because the session-post prompt provides session Q&As as conversational
+      // context rather than as a strict ID-list it must echo. Without this, session
+      // posts ship with empty sourceQuestionTitles → no concept badges → operator-
+      // reported "some text-art posts have badges, some don't" inconsistency
+      // (2026-04-19, Bug 10). Attribute round-robin to the session's anchors so
+      // every session post has badges matching the daily-path contract.
+      const sessionAnchors: Array<{ id: string; title: string }> = [];
+      for (const [, group] of conceptGroups) {
+        if (group.anchor) {
+          const title = group.anchor.title?.trim() || group.anchor.content.slice(0, 40).trim();
+          if (title) sessionAnchors.push({ id: group.anchor.id, title });
+        }
+      }
+      for (let i = 0; i < newPosts.length; i++) {
+        const post = newPosts[i];
+        if (post.sourceQuestionIds.length > 0) continue; // LLM provided valid IDs — keep them
+        if (sessionAnchors.length === 0) continue; // No anchors to attribute to (all session Qs were orphan)
+        const anchor = sessionAnchors[i % sessionAnchors.length];
+        post.sourceQuestionIds = [anchor.id];
+        post.sourceQuestionTitles = [anchor.title];
+      }
+
       // Assign presentation styles via pre-style assignment and generate text-art
       const settings2 = settingsService.getSync();
       const availability: ApiAvailability = {
@@ -1373,10 +1439,17 @@ export const conceptFeedService = {
         newPosts.map(p => p.sourceQuestionIds[0] ?? p.id),
         availability,
       );
-      const styled = newPosts.map((post, i) => ({
-        ...post,
-        presentationStyle: sessionAssignments[i]?.style ?? ('text-art' as PresentationStyle),
-      }));
+      // Bug B (2026-04-19): assignStyles can return any of image|text-art|suggestion|news|video|short,
+      // but generateSessionPosts only emits LLM TEXT content — there's no YouTube/Tavily fetch here,
+      // so a 'short'/'video'/'news' assignment leaves the post with no videoMeta/newsMeta and the
+      // render layer can't draw anything. Restrict to text-style only; daily refillQueue handles
+      // video/news/short for the same anchor on its next cycle.
+      const TEXT_ONLY_STYLES = new Set<PresentationStyle>(['text-art', 'image', 'suggestion']);
+      const styled = newPosts.map((post, i) => {
+        const candidate = sessionAssignments[i]?.style;
+        const style: PresentationStyle = candidate && TEXT_ONLY_STYLES.has(candidate) ? candidate : 'text-art';
+        return { ...post, presentationStyle: style };
+      });
       const enriched = await generateTextArtContent(styled);
 
       // Do NOT save to daily cache — session posts go only to the pending queue

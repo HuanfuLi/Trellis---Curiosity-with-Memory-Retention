@@ -59,9 +59,14 @@ export function SuggestionCard({ topics }: SuggestionCardProps) {
   return (
     <div
       style={{
-        background: 'var(--card)',
+        // Match regular concept-post card styling so suggestion cards don't stand out
+        // with a weaker shadow / flat background (operator-reported 2026-04-19).
+        // Mirror of InfoFlow.tsx ConceptCard button styles (background + border + shadow).
+        background:
+          'linear-gradient(180deg, color-mix(in srgb, var(--primary-80) 20%, var(--surface-container-high)), var(--surface-container-high))',
+        border: '1.5px solid color-mix(in srgb, var(--primary-40) 22%, var(--border))',
         borderRadius: 'var(--radius-xl)',
-        boxShadow: 'var(--shadow-1)',
+        boxShadow: 'var(--shadow-2)',
         padding: '16px',
         minHeight: '280px',
         display: 'flex',

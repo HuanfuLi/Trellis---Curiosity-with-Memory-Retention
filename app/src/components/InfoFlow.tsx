@@ -137,16 +137,32 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen, videoP
   const normalizedHook = normalizePlainText(post.teaser.hook);
   const normalizedPreview = normalizePlainText(post.teaser.preview);
 
-  // Failed-image fallback — when an 'image'-style post resolves with no image
-  // (Nano Banana key missing/invalid, network error, sandbox quirk on Android),
-  // render the SAME visual layout as text-art instead of as a text-only card.
-  // Per the original Phase 30/31 design intent: "if image gen failed, turn it
-  // into text-art instead" — never expose plain text-only cards. Pre-validation
-  // in refillQueue only covers video/news; image gen failures arrive here at
-  // render time. Treating them as text-art at the visual layer is the cheapest
-  // alignment without a queue-rebuild architectural change.
-  const isFailedImage = imageResolved && !image && presentationStyle === 'image';
-  const effectivePresentationStyle = isFailedImage ? 'text-art' : presentationStyle;
+  // Defense-in-depth: never expose a text-only card. If NO visual block would render
+  // (because metadata is missing, the style is unrecognized, or the image gen failed),
+  // fall back to text-art. This catches:
+  //   - Failed image gen (no Nano Banana key, network/sandbox failure)             → 'image'
+  //   - Session posts assigned 'short'/'video'/'news' with no metadata (Bug B)     → empty card
+  //   - YouTube non-video items propagated as posts with undefined videoId (Bug C) → empty card
+  //   - Suggestion posts with no topics (LLM failed + no neighbor anchors)         → empty card
+  //   - Legacy 'image-less' or undefined presentationStyle from older caches       → empty card
+  // The previous fallback only caught the first case (`presentationStyle === 'image'`),
+  // which is why post-32.1 deploys still showed text-only cards on device.
+  const wouldRenderVisual =
+    (isVideoPost && !!post.videoMeta?.videoId) ||
+    (isShortPost && !!post.videoMeta?.videoId) ||
+    isNewsPost ||
+    !!image ||
+    presentationStyle === 'text-art';
+  const effectivePresentationStyle: typeof presentationStyle = !wouldRenderVisual ? 'text-art' : presentationStyle;
+  if (!wouldRenderVisual && import.meta.env.DEV) {
+    // Surface the regression in dev logs so future refactors notice immediately.
+    console.warn('[InfoFlow] Forced text-art fallback for post', post.id, {
+      sourceType: post.sourceType,
+      presentationStyle,
+      hasVideoMeta: !!post.videoMeta?.videoId,
+      hasImage: !!image,
+    });
+  }
 
   // News card (D-09) — newspaper style
   if (isNewsPost) {

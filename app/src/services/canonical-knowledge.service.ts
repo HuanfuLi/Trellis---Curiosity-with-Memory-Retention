@@ -497,6 +497,66 @@ export function buildStepPrompt(
   return `Select the best ${level} for this question, or create a new one if none fits.\n\nExisting ${level}s:\n${numbered}${namingHint}\n\nRespond with the index number (0-${candidates.length - 1}) to select an existing ${level}, or {"index":"NEW","name":"<${level} name>"} to create a new one.`;
 }
 
+/**
+ * Combined cluster + anchor naming prompt used when step 1 returns isNew (brand-new
+ * branch, so no existing clusters/anchors to choose from). One LLM call replaces the
+ * previous lazy `${branchName} fundamentals` + raw-question-text placeholders.
+ *
+ * Constraints baked in:
+ *  - cluster: 2-4 word recognized sub-domain, NOT generic ("fundamentals", "basics", etc.)
+ *  - anchor: 1-3 word concept noun phrase, NEVER a question
+ *  - cluster MUST be broader than anchor and they must NOT be identical
+ *    (mirrors the rule in classifyAndAnchor's legacy single-call prompt)
+ */
+export function buildNewBranchClusterAnchorPrompt(branchName: string): string {
+  return [
+    `You created a new branch: "${branchName}".`,
+    '',
+    'Now propose two names for this question:',
+    `1. cluster — a 2-4 word sub-domain WITHIN ${branchName} that this question fits. Should be a recognized topic, theory, or sub-field. Examples: "Learning Theory", "Behavioral Economics", "Fluid Mechanics", "Cryptography". Do NOT use generic words like "fundamentals", "basics", "introduction", "general", or "concepts".`,
+    '2. anchor — a 1-3 word concept noun phrase naming the SPECIFIC concept the question is about. Examples: "Spaced Repetition", "Loss Aversion", "Bernoulli Principle", "RSA Encryption". NEVER a question or sentence.',
+    '',
+    'cluster must be BROADER than anchor (cluster is the area of study, anchor is the specific concept inside it). They must NOT be identical.',
+    '',
+    'Respond ONLY with JSON: {"cluster":"<cluster name>","anchor":"<anchor name>"}',
+  ].join('\n');
+}
+
+/**
+ * Parse the combined cluster+anchor response. Tolerant of fenced code blocks and
+ * extra prose around the JSON, mirroring parseStepResponse's resilience.
+ */
+export function parseClusterAnchorResponse(raw: string): { cluster?: string; anchor?: string } {
+  const trimmed = raw.trim();
+
+  const tryParse = (s: string): { cluster?: string; anchor?: string } | null => {
+    try {
+      const parsed = JSON.parse(s) as { cluster?: unknown; anchor?: unknown };
+      const cluster = typeof parsed.cluster === 'string' ? parsed.cluster.trim() : '';
+      const anchor = typeof parsed.anchor === 'string' ? parsed.anchor.trim() : '';
+      if (!cluster || !anchor) return null;
+      // Reject lazy placeholders so we fall back to legacy classification rather than ship them.
+      const lazyPlaceholders = /^(fundamentals|basics|introduction|general|concepts|overview)$/i;
+      if (lazyPlaceholders.test(cluster) || lazyPlaceholders.test(anchor)) return null;
+      // Reject identical names (cluster must be broader than anchor).
+      if (cluster.toLowerCase() === anchor.toLowerCase()) return null;
+      return { cluster, anchor };
+    } catch {
+      return null;
+    }
+  };
+
+  const direct = tryParse(trimmed);
+  if (direct) return direct;
+
+  const jsonMatch = trimmed.match(/\{[\s\S]*?\}/);
+  if (jsonMatch) {
+    const embedded = tryParse(jsonMatch[0]);
+    if (embedded) return embedded;
+  }
+  return {};
+}
+
 export function extractUniqueBranches(allQuestions: Question[]): string[] {
   const seen = new Set<string>();
   for (const q of allQuestions) {
@@ -829,10 +889,39 @@ export async function classifyAndAnchorIncremental(
     messages.push({ role: 'assistant', content: step1.rawResponse });
 
     if (step1.decision.isNew) {
-      // Short-circuit (D-06): new branch means everything is new
+      // New branch — must also create a cluster and an anchor. Previously this short-circuited
+      // with `clusterName = "${branchName} fundamentals"` and `anchorName = question.title`,
+      // both of which are lazy placeholders (D-06 original implementation, 2026-04-19 complaint).
+      // Now: one combined LLM follow-up asks for both names in a single call. The KV cache
+      // reuses the system prompt + question + branch step, so the marginal cost is small.
       branchName = step1.decision.newName!;
-      clusterName = `${branchName} fundamentals`;
-      anchorName = question.title || question.content.slice(0, 40);
+
+      messages.push({
+        role: 'user',
+        content: buildNewBranchClusterAnchorPrompt(branchName),
+      });
+
+      let combinedRaw: string;
+      try {
+        combinedRaw = await chatCompletion(
+          messages as Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+          llmConfig,
+          { serviceName: 'classification', maxTokens: 120, signal },
+        );
+      } catch {
+        await classifyAndAnchor(question, allQuestions, llmConfig);
+        return;
+      }
+
+      const combined = parseClusterAnchorResponse(combinedRaw);
+      if (!combined.cluster || !combined.anchor) {
+        // Parse failed — fall back to the legacy single-call path so we don't ship the
+        // "fundamentals" placeholder we just removed.
+        await classifyAndAnchor(question, allQuestions, llmConfig);
+        return;
+      }
+      clusterName = combined.cluster;
+      anchorName = combined.anchor;
     } else {
       branchName = branches[step1.decision.selectedIndex!];
 
@@ -849,32 +938,35 @@ export async function classifyAndAnchorIncremental(
       }
       messages.push({ role: 'assistant', content: step2.rawResponse });
 
-      if (step2.decision.isNew) {
-        // Short-circuit: new cluster means anchor is also new
-        clusterName = step2.decision.newName!;
-        anchorName = question.title || question.content.slice(0, 40);
+      // Resolve the cluster name. The previous `step2.decision.isNew` branch
+      // short-circuited with `anchorName = question.title` (raw question text);
+      // we now always continue to step 3 so the anchor is LLM-named like every
+      // other create path. With 0 existing anchors under a brand-new cluster,
+      // step 3's prompt becomes "no existing anchors — create one".
+      clusterName = step2.decision.isNew
+        ? step2.decision.newName!
+        : clusters[step2.decision.selectedIndex!];
+
+      // 5. Step 3 — Anchor selection (always runs)
+      const anchors = step2.decision.isNew
+        ? []
+        : extractAnchorsUnderCluster(allQuestions, branchName, clusterName);
+      messages.push({ role: 'user', content: buildStepPrompt('anchor', anchors.map(a => a.name)) });
+
+      let step3: { decision: StepDecision; rawResponse: string };
+      try {
+        step3 = await runStepWithRetry(messages, anchors.length, llmConfig, signal);
+      } catch {
+        await classifyAndAnchor(question, allQuestions, llmConfig);
+        return;
+      }
+
+      if (step3.decision.isNew) {
+        anchorName = step3.decision.newName!;
+        anchorId = undefined;
       } else {
-        clusterName = clusters[step2.decision.selectedIndex!];
-
-        // 5. Step 3 — Anchor selection
-        const anchors = extractAnchorsUnderCluster(allQuestions, branchName, clusterName);
-        messages.push({ role: 'user', content: buildStepPrompt('anchor', anchors.map(a => a.name)) });
-
-        let step3: { decision: StepDecision; rawResponse: string };
-        try {
-          step3 = await runStepWithRetry(messages, anchors.length, llmConfig, signal);
-        } catch {
-          await classifyAndAnchor(question, allQuestions, llmConfig);
-          return;
-        }
-
-        if (step3.decision.isNew) {
-          anchorName = step3.decision.newName!;
-          anchorId = undefined;
-        } else {
-          anchorName = anchors[step3.decision.selectedIndex!].name;
-          anchorId = anchors[step3.decision.selectedIndex!].id;
-        }
+        anchorName = anchors[step3.decision.selectedIndex!].name;
+        anchorId = anchors[step3.decision.selectedIndex!].id;
       }
     }
 

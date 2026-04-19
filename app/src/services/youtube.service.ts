@@ -203,16 +203,25 @@ export const youtubeService = {
         }>;
       };
 
-      const results: YouTubeSearchResult[] = (data.items ?? []).map((item) => ({
-        videoId: item.id.videoId,
-        title: item.snippet.title,
-        description: item.snippet.description,
-        thumbnailUrl:
-          item.snippet.thumbnails.high?.url ??
-          item.snippet.thumbnails.default?.url ??
-          '',
-        channelTitle: item.snippet.channelTitle,
-      }));
+      // Defense-in-depth: even with &type=video in the URL, the YouTube API has been
+      // observed (rarely) to return items with non-video id shapes (channelId/playlistId)
+      // when the type filter is bypassed by upstream caching. Items without a truthy
+      // videoId would propagate as posts with `videoMeta.videoId: undefined`, rendering
+      // as empty 320px-tall cards (Bug C, 2026-04-19).
+      const results: YouTubeSearchResult[] = (data.items ?? [])
+        .filter((item): item is typeof item & { id: { videoId: string } } =>
+          typeof item.id?.videoId === 'string' && item.id.videoId.length > 0,
+        )
+        .map((item) => ({
+          videoId: item.id.videoId,
+          title: item.snippet.title,
+          description: item.snippet.description,
+          thumbnailUrl:
+            item.snippet.thumbnails.high?.url ??
+            item.snippet.thumbnails.default?.url ??
+            '',
+          channelTitle: item.snippet.channelTitle,
+        }));
 
       return { success: true, data: results };
     } catch (e) {

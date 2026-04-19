@@ -184,6 +184,12 @@ export function VineProgress({
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  // Measure the SVG's rendered width so the viewBox matches and the vine fills
+  // the full container. Without this, the fixed `viewBox="0 0 300 ..."` plus
+  // `preserveAspectRatio="xMidYMid meet"` left empty space on the right half of
+  // the card on phones wider than ~330px (operator-reported 2026-04-19).
+  const svgWrapperRef = useRef<HTMLDivElement>(null);
+  const [measuredWidth, setMeasuredWidth] = useState<number>(300);
 
   useEffect(() => {
     if (!expanded) return;
@@ -195,6 +201,20 @@ export function VineProgress({
     document.addEventListener('click', handleClickOutside, true);
     return () => document.removeEventListener('click', handleClickOutside, true);
   }, [expanded]);
+
+  useEffect(() => {
+    const el = svgWrapperRef.current;
+    if (!el) return;
+    const update = () => {
+      const w = el.clientWidth;
+      if (w > 0) setMeasuredWidth(w);
+    };
+    update();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const toggleExpand = useCallback(() => setExpanded(prev => !prev), []);
 
@@ -209,18 +229,23 @@ export function VineProgress({
   const potX = 18;
   const stemStart = potX + 14;
   const rightPad = 4;
-  const svgWidth = 300;
+  const svgWidth = measuredWidth;
   const availableWidth = svgWidth - stemStart - rightPad;
   const vineComplete = conceptTotal > 0 && conceptExplored >= conceptTotal;
 
-  const flowerPositions = concepts.map((_, i) => {
-    const segment = availableWidth / (concepts.length + 1);
-    return stemStart + segment * (i + 1);
-  });
+  // Vine spans the FULL available width regardless of concept count. Earlier
+  // implementation placed the last flower at N/(N+1) of width, so a 1-anchor user
+  // saw a half-card stem (operator-reported 2026-04-19). The fix anchors stemEndFull
+  // to the right edge and spreads flowers evenly across the vine length, with
+  // small padding at either end so they don't sit flush against the pot or the edge.
+  const stemEndFull = stemStart + availableWidth;
+  const flowerEdgePad = Math.min(16, availableWidth * 0.05);
+  const flowerSpan = Math.max(0, availableWidth - 2 * flowerEdgePad);
+  const flowerPositions = conceptTotal === 1
+    ? [stemStart + availableWidth / 2]
+    : concepts.map((_, i) => stemStart + flowerEdgePad + (i / (conceptTotal - 1)) * flowerSpan);
 
-  const lastFlowerX = flowerPositions[flowerPositions.length - 1] ?? stemStart;
-  const stemEndFull = lastFlowerX + 8;
-  const stemEndX = vineComplete ? stemEndFull : stemStart + (conceptExplored / conceptTotal) * (lastFlowerX - stemStart + 8);
+  const stemEndX = vineComplete ? stemEndFull : stemStart + (conceptExplored / conceptTotal) * availableWidth;
 
   const vineColor = vineComplete ? '#66BB6A' : '#4CAF50';
   const stemColor = vineComplete ? '#E8A838' : '#6A9F4D';
@@ -292,11 +317,12 @@ export function VineProgress({
         onClick={toggleExpand}
         style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
       >
+        <div ref={svgWrapperRef} style={{ flex: 1, minWidth: 0, lineHeight: 0 }}>
         <svg
           viewBox={`0 0 ${svgWidth} ${svgHeight}`}
           width="100%"
           height={svgHeight}
-          style={{ flex: 1 }}
+          style={{ display: 'block' }}
           aria-hidden="true"
           preserveAspectRatio="xMidYMid meet"
         >
@@ -342,6 +368,7 @@ export function VineProgress({
             return <VineBud key={concept.id} cx={fx} cy={fy} />;
           })}
         </svg>
+        </div>
 
         {/* Right-side icons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
