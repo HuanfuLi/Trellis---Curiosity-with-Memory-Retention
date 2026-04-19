@@ -478,15 +478,23 @@ export function buildStepPrompt(
   level: 'branch' | 'cluster' | 'anchor',
   candidates: Array<string | { id: string; name: string }>,
 ): string {
+  // Anchor-specific naming constraint. Without this, LLMs echo the user's full
+  // question phrasing (e.g. "Spaced repetition and why does it work") instead of
+  // extracting the concept noun ("Spaced Repetition"). The legacy classifyAndAnchor
+  // prompt already had this guidance; the incremental pipeline was missing it.
+  const namingHint = level === 'anchor'
+    ? '\n\nIMPORTANT: When creating a new anchor, the name MUST be a 1-3 word concept noun phrase — NEVER a sentence, question, or question paraphrase.\nGOOD: "Spaced Repetition", "Transformer Attention", "Loss Aversion", "Entropy".\nBAD: "Spaced repetition and why does it work" (this is a question, not a concept noun).'
+    : '';
+
   if (candidates.length === 0) {
-    return `Select or create a ${level}.\n\nNo existing ${level}s yet — create a new one.\n\nRespond with {"index":"NEW","name":"<${level} name>"}.`;
+    return `Select or create a ${level}.\n\nNo existing ${level}s yet — create a new one.${namingHint}\n\nRespond with {"index":"NEW","name":"<${level} name>"}.`;
   }
 
   const numbered = candidates
     .map((c, i) => `${i}. ${typeof c === 'string' ? c : c.name}`)
     .join('\n');
 
-  return `Select the best ${level} for this question, or create a new one if none fits.\n\nExisting ${level}s:\n${numbered}\n\nRespond with the index number (0-${candidates.length - 1}) to select an existing ${level}, or {"index":"NEW","name":"<${level} name>"} to create a new one.`;
+  return `Select the best ${level} for this question, or create a new one if none fits.\n\nExisting ${level}s:\n${numbered}${namingHint}\n\nRespond with the index number (0-${candidates.length - 1}) to select an existing ${level}, or {"index":"NEW","name":"<${level} name>"} to create a new one.`;
 }
 
 export function extractUniqueBranches(allQuestions: Question[]): string[] {
