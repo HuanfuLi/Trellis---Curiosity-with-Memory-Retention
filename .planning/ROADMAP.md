@@ -880,10 +880,18 @@ Scope:
 3. `git status` is clean (or WIP is intentionally carried with a commit explaining why).
 4. `29-VERIFICATION.md` is no longer stale w.r.t. TD-01.
 
-**Plans:** TBD (run `/gsd:plan-phase 33` to break down)
+**Plans:** 5 plans
+
+Plans:
+- [ ] 33-00-PLAN.md — WIP flush: commit 12 working-tree files from Phase 30-31 follow-up edits (Wave 0; WIP-FLUSH)
+- [ ] 33-01-PLAN.md — TD-05 orphan sweep: delete ConceptProgressCard.tsx + 4 orphan i18n keys atomically (Wave 1; TD-05)
+- [ ] 33-02-PLAN.md — TD-04 supersession: delete concept-feed-strategy.test.mjs + orphan plumbing assertion + update 29-VERIFICATION / 29-UAT-LOG (Wave 1; TD-04)
+- [ ] 33-03-PLAN.md — TD-06 LeafState rename: yellow -> dying, fallen -> dead atomic commit across 9 files (Wave 2; TD-06)
+- [ ] 33-04-PLAN.md — Closure: verify 4 ROADMAP success criteria + record SATISFIED-BY-760fa4f8 + flip VALIDATION nyquist_compliant (Wave 3; TSC-HYGIENE)
 
 ---
 
 _Created: 2026-03-26 | v1.1 Roadmap | 17 phases | 91 requirements mapped_
 _Updated: 2026-04-18 — Phase 31: added 3 gap closure plans (31-08..10) from UAT feedback_
 _Updated: 2026-04-18 — v1.4 audit: added Phase 32 (verification close-out) + Phase 33 (code hygiene) to close `.planning/v1.4-MILESTONE-AUDIT.md` gaps_
+_Updated: 2026-04-19 — Phase 33 plans created (33-00..04): WIP flush + TD-04/05/06 resolution + closure_
