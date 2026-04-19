@@ -22,6 +22,12 @@ result: issue
 reported: "I see repeated youtube videos in video posts"
 severity: major
 
+retest: pass
+retested: 2026-04-19
+retested_by: HuanfuLi
+fix_source: 32.1-02-SUMMARY.md
+retest_note: "After Phase 32.1-02 promoted seenVideoIds to module-scope (concept-feed-dedup.ts), pulling for more posts no longer surfaces duplicate YouTube videoIds across cycles. Cross-cycle dedup test (concept-feed-cross-cycle-dedup.test.mjs) validates the persistence contract."
+
 ### 3. Suggestion card with tappable topics
 expected: At least one suggestion card appears in feed with Sparkles icon, "Suggested topics" header, and 3 tappable topic buttons. Tapping a topic navigates to Ask screen with the topic pre-filled and auto-sent.
 result: issue
@@ -80,6 +86,12 @@ expected: At bottom of feed, pull up to load more. 4 new posts appear. Pull agai
 result: issue
 reported: "Only first few pulls work. A few pulls later, the queue sometimes only pop 1 post, and sometimes does not pop anything, only displaying 'No more posts for today', with no LLM calls in backend."
 severity: blocker
+
+retest: pass
+retested: 2026-04-19
+retested_by: HuanfuLi
+fix_source: 32.1-02-SUMMARY.md
+retest_note: "After Phase 32.1-02 lower-bounded the cap formula to Math.max(dueConcepts.length, 3) at concept-feed.service.ts:906, 1-due-concept users get maxPosts >= 15 (was 5). Queue no longer exhausts after one batch. Pull-for-more cycles 4 fresh posts per pull as designed. Cap-floor unit test in concept-feed-cross-cycle-dedup.test.mjs."
 
 ### 14. Starter posts for new users
 expected: On a fresh install (or after Clear All Data with no questions asked), feed shows 3 tutorial starter posts: "Welcome to EchoLearn", "How your knowledge grows", "Explore your daily feed".
