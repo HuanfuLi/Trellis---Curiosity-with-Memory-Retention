@@ -902,7 +902,12 @@ Return ONLY a JSON array of 4 strings, nothing else. Example: ["What is X?", "Ho
           date,
           title: result.title || conceptName,
           teaser: { hook: result.title || conceptName, preview: result.content?.slice(0, 170) || '' },
-          bodyMarkdown: result.content || '',
+          // bodyMarkdown deferred to on-enter streaming via generateNewsEssay (POST-06).
+          // Previously this was set to result.content (the raw Tavily snippet, ~200 chars
+          // truncated mid-sentence) which made PostDetailScreen skip the LLM stream entirely
+          // and render the snippet as the essay body. Operator caught this regression on
+          // 2026-04-19 — bodyMarkdown MUST stay empty so the on-enter streamer takes over.
+          bodyMarkdown: '',
           whyCare: '',
           takeaway: '',
           quickAskPrompts: [],
@@ -916,7 +921,9 @@ Return ONLY a JSON array of 4 strings, nothing else. Example: ["What is X?", "Ho
           origin: 'ai',
           presentationStyle: 'news',
           newsMeta: {
-            sources: [{ index: 0, title: result.title, url: result.url }],
+            // index 1 (matching news.service.ts) and snippet preserved so generateNewsEssay
+            // has actual article text in its prompt context — see commit 961347ec.
+            sources: [{ index: 1, title: result.title, url: result.url, snippet: result.content }],
             fetchedAt: Date.now(),
           },
         });
