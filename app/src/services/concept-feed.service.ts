@@ -13,6 +13,7 @@ import { dailyReadService } from './daily-read.service';
 import { assignStyles, reassignFailures, type ApiAvailability } from './style-assignment';
 import { computeLeafState } from './trellis-state.service';
 import { hasSeenVideoId, addSeenVideoId } from './concept-feed-dedup';
+import { STARTER_POST_IDS, filterDecayedStarters } from './starter-posts-decay';
 
 const STORAGE_KEY = 'echolearn_daily_posts';
 const CONNECTION_POSTS_KEY = 'echolearn_connection_posts';
@@ -994,16 +995,26 @@ export const conceptFeedService = {
     // Cache hit: return cached posts with background enrichment
     if (cached?.date === date && cached.fingerprint === fingerprint && cached.posts.length > 0) {
       const feedPosts = cached.posts.filter((p) => p.sourceType !== 'connection');
-      _backgroundGenerateTextArt(feedPosts);
+      // G4 / D-12: drop starter posts once the cache contains 3+ organic posts; also
+      // write the trimmed cache back so they don't reappear on the next call.
+      const decayed = filterDecayedStarters(feedPosts);
+      if (decayed.length < feedPosts.length) {
+        saveCache({ ...cached, posts: cached.posts.filter((p) => !STARTER_POST_IDS.has(p.id)) });
+      }
+      _backgroundGenerateTextArt(decayed);
       refillQueue(questions).catch(console.error);
-      return feedPosts;
+      return decayed;
     }
 
     // Fingerprint mismatch but same day: update fingerprint, return cached
     const hasPostsForToday = cached?.date === date && cached.posts.length > 0;
     if (hasPostsForToday && cached.fingerprint !== fingerprint) {
-      saveCache({ ...cached, fingerprint });
-      const feedPosts = cached.posts.filter((p) => p.sourceType !== 'connection');
+      // G4 / D-12: also strip starters from the persisted cache when decay condition met.
+      const trimmedPosts = filterDecayedStarters(cached.posts) === cached.posts
+        ? cached.posts
+        : cached.posts.filter((p) => !STARTER_POST_IDS.has(p.id));
+      saveCache({ ...cached, fingerprint, posts: trimmedPosts });
+      const feedPosts = trimmedPosts.filter((p) => p.sourceType !== 'connection');
       _backgroundGenerateTextArt(feedPosts);
       refillQueue(questions).catch(console.error);
       return feedPosts;
@@ -1026,8 +1037,17 @@ export const conceptFeedService = {
     // today's queue fills via refillQueue.
     refillQueue(questions).catch(console.error);
 
-    // D-43: first-ever load with no questions — show starter tutorial posts
-    if (questions.length === 0) return STARTER_POSTS;
+    // D-43 + G4 (STARTER-PERSIST per Phase 32.1-04 D-11): first-ever load with no
+    // questions — return starter tutorial posts AND persist them to the daily cache so
+    // subsequent /home visits hit the cache-hit branch above (line 995) instead of
+    // falling through here again. Without persistence, any state mutation (e.g., asking
+    // a question via the Welcome CTA) takes questions.length > 0 and the empty-state
+    // branch never fires again, making starters vanish on the next /home revisit
+    // (operator-confirmed regression — see 32.1-01-SUMMARY.md retest evidence).
+    if (questions.length === 0) {
+      saveCache({ date, fingerprint: 'starter', posts: STARTER_POSTS, connectionCards: [] });
+      return STARTER_POSTS;
+    }
     return [];
   },
 
@@ -1074,7 +1094,9 @@ export const conceptFeedService = {
   },
 
   getCachedDailyPosts(): DailyPost[] {
-    const feedPosts = (loadCache()?.posts ?? []).filter((p) => p.sourceType !== 'connection');
+    const allPosts = (loadCache()?.posts ?? []).filter((p) => p.sourceType !== 'connection');
+    // G4 / D-12: HomeScreen warm-start initializer also drops starters when 3+ organic exist.
+    const feedPosts = filterDecayedStarters(allPosts);
     _backgroundGenerateTextArt(feedPosts);
     return feedPosts;
   },
