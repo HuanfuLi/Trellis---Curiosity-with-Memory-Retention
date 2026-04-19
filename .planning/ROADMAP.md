@@ -831,11 +831,11 @@ Scope:
 - Test 11 iOS dropdown anchor variant — defer until iOS test device is available; Android verified pass (native centered modal)
 - G6: Cold-start loading flicker before starter posts appear — likely resolves once G4 caches starters; revisit after 32.1-04 lands
 
-**Plans:** 5 plans
+**Plans:** 3/5 plans executed
 
 Plans:
 - [x] 32.1-01-PLAN.md — G3 starter-posts retest after Vite base fix (Wave 1, checkpoint:human-verify on operator APK deploy + retest; UAT-31-14)
-- [ ] 32.1-02-PLAN.md — G1 queue-cycling + cross-cycle YouTube dedup regression (Wave 2; UAT-31-2 + UAT-31-13)
+- [x] 32.1-02-PLAN.md — G1 queue-cycling + cross-cycle YouTube dedup regression (Wave 2; UAT-31-2 + UAT-31-13)
 - [ ] 32.1-03-PLAN.md — G2 video touch overlay reduced to pointer-events:none so YouTube controls reach user (Wave 2; UAT-31-4)
 - [ ] 32.1-04-PLAN.md — G4 (NEW) starter posts persist to cache + decay at 3+ organic posts (Wave 2; STARTER-PERSIST)
 - [x] 32.1-05-PLAN.md — G5 (NEW) Clear All Data uses window.location.assign('/home') instead of reload (Wave 2; CLEAR-RELOAD) — commit `3f4f35c3`, see `phases/32.1-v1-4-uat-retest-gap-closure/32.1-05-SUMMARY.md`
