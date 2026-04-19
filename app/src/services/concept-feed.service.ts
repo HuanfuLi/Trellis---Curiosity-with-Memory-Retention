@@ -12,6 +12,7 @@ import { postHistoryService } from './post-history.service';
 import { dailyReadService } from './daily-read.service';
 import { assignStyles, reassignFailures, type ApiAvailability } from './style-assignment';
 import { computeLeafState } from './trellis-state.service';
+import { hasSeenVideoId, addSeenVideoId } from './concept-feed-dedup';
 
 const STORAGE_KEY = 'echolearn_daily_posts';
 const CONNECTION_POSTS_KEY = 'echolearn_connection_posts';
@@ -681,8 +682,11 @@ async function generatePostBatch(
   const shortAssignments = assignments.filter(a => a.style === 'short');
   const newsAssignments = assignments.filter(a => a.style === 'news');
 
-  // Track seen YouTube videoIds to prevent duplicates within a batch (MAJOR 4 fix)
-  const seenVideoIds = new Set<string>();
+  // Cross-cycle YouTube videoId dedup is now handled by the module-scope helper
+  // in concept-feed-dedup.ts (Phase 32.1-02 / UAT-31-2 fix). Phase 31-08's local
+  // Set lived only for one generatePostBatch call, so duplicates leaked across
+  // refillQueue cycles. The module-scope helpers persist for the session and
+  // auto-clear on day boundary.
 
   const posts: DailyPost[] = [];
   const existingPosts = loadCache()?.posts ?? [];
@@ -777,16 +781,16 @@ Return ONLY a JSON array of 4 strings, nothing else. Example: ["What is X?", "Ho
     }
   }
 
-  // Generate video posts from YouTube (with dedup via seenVideoIds)
+  // Generate video posts from YouTube (with cross-cycle dedup via concept-feed-dedup helper)
   for (const a of videoAssignments) {
     try {
       const concept = byId.get(a.conceptId);
       const conceptName = concept?.title ?? concept?.content?.slice(0, 50) ?? a.conceptId;
       const searchResult = await youtubeService.searchVideos(conceptName, 3);
       if (searchResult.success && searchResult.data) {
-        const freshVideo = searchResult.data.find(v => !seenVideoIds.has(v.videoId));
+        const freshVideo = searchResult.data.find(v => !hasSeenVideoId(v.videoId));
         if (freshVideo) {
-          seenVideoIds.add(freshVideo.videoId);
+          addSeenVideoId(freshVideo.videoId);
           posts.push({
             id: `post-${date}-video-${a.conceptId}`,
             date,
@@ -812,16 +816,16 @@ Return ONLY a JSON array of 4 strings, nothing else. Example: ["What is X?", "Ho
     } catch { /* video fetch failed — already reassigned in pre-validation */ }
   }
 
-  // Generate short posts from YouTube (use shorts query modifier, with dedup via seenVideoIds)
+  // Generate short posts from YouTube (use shorts query modifier, cross-cycle dedup via helper)
   for (const a of shortAssignments) {
     try {
       const concept = byId.get(a.conceptId);
       const conceptName = concept?.title ?? concept?.content?.slice(0, 50) ?? a.conceptId;
       const searchResult = await youtubeService.searchVideos(conceptName + ' #shorts', 3);
       if (searchResult.success && searchResult.data) {
-        const freshShort = searchResult.data.find(v => !seenVideoIds.has(v.videoId));
+        const freshShort = searchResult.data.find(v => !hasSeenVideoId(v.videoId));
         if (freshShort) {
-          seenVideoIds.add(freshShort.videoId);
+          addSeenVideoId(freshShort.videoId);
           posts.push({
             id: `post-${date}-short-${a.conceptId}`,
             date,
@@ -901,9 +905,14 @@ export async function refillQueue(questions: Question[]): Promise<void> {
 
   try {
     const settings = settingsService.getSync();
-    // D-38: check daily generation cap
+    // D-38: check daily generation cap.
+    // G1 / UAT-31-13 fix (Phase 32.1-02): floor dueConcepts.length at 3 so users
+    // with only 1 due concept don't exhaust the queue after one batch
+    // (multiplier=5 × 1 = 5 saturated immediately, refillQueue early-returned forever).
+    // Floor is a *minimum*, not a ceiling — users with many due concepts still get
+    // unlimited multiplier × N.
     const dueConcepts = questions.filter(q => q.isAnchorNode);
-    const maxPosts = (settings.feed?.dailyGenerationCapMultiplier ?? FEED_DEFAULTS.dailyGenerationCapMultiplier) * Math.max(dueConcepts.length, 1);
+    const maxPosts = (settings.feed?.dailyGenerationCapMultiplier ?? FEED_DEFAULTS.dailyGenerationCapMultiplier) * Math.max(dueConcepts.length, 3);
     if (postQueueService.getTotalGenerated() >= maxPosts) return;
 
     // Step 1: Build concept batch for this cycle
