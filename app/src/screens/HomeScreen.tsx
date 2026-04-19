@@ -495,9 +495,6 @@ export function HomeScreen() {
       >
         <VineProgress
           mode="compact"
-          explored={exploredCount}
-          total={conceptQuota}
-          isComplete={isComplete}
           concepts={conceptList}
           onConceptTap={handleConceptTap}
         />
@@ -616,9 +613,6 @@ export function HomeScreen() {
           <div data-concept-progress-card>
             <VineProgress
               mode="inline"
-              explored={exploredCount}
-              total={conceptQuota}
-              isComplete={isComplete}
               concepts={conceptList}
               onConceptTap={handleConceptTap}
               onHistoryTap={() => navigate('/history')}

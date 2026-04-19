@@ -133,7 +133,7 @@ export function TrellisCanvas({ layout, ambientEnabled, focusedAnchorId }: Trell
         {nodes.filter((_, i) => i % 3 === 1).map((n) => {
           const vx = n.vineAttach.x;
           const vy = n.vineAttach.y;
-          const side = n.side === 'left' ? -1 : 1;
+          const side = n.side;
           return (
             <path
               key={`tendril-${n.anchor.id}`}

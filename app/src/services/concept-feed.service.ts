@@ -4,9 +4,7 @@ import { today } from '../lib/date.ts';
 import { eventBus } from '../lib/event-bus.ts';
 import { settingsService, FEED_DEFAULTS } from './settings.service.ts';
 import { plannerService } from './planner.service.ts';
-import { graphService } from './graph.service.ts';
 import { youtubeService } from './youtube.service';
-import { newsService } from './news.service';
 import { webSearch } from './web-search.service';
 import { questionService } from './question.service';
 import { postQueueService } from './post-queue.service';
@@ -472,65 +470,6 @@ function extractPosts(parsed: Array<Record<string, unknown>>, questions: Questio
     .filter((post): post is DailyPost => post !== null);
 }
 
-async function generateDailyPostsWithLLM(questions: Question[], date: string): Promise<ParsedGeneration> {
-  const settings = settingsService.getSync();
-  if (!settings.preferences.aiConsentGiven || !settings.llm.isConfigured) return { posts: [], connectionCards: [] };
-
-  const context = buildDailyKnowledgeContext(questions.slice(0, CONTEXT_LIMIT));
-  if (context.recent.length === 0 && context.resurfaced.length === 0 && context.related.length === 0) return { posts: [], connectionCards: [] };
-
-  const candidates = graphService.getSemanticCandidates(settings.embeddingDebug.similarityThreshold);
-
-  // Enrich with web context (NEWS-01) — best-effort, non-blocking per concept
-  let webContext = '';
-  try {
-    const primaryConcept = context.recent[0]?.title || context.recent[0]?.content?.slice(0, 50);
-    if (primaryConcept) {
-      const searchResult = await webSearch(primaryConcept + ' latest research findings', { maxResults: 3 });
-      if (searchResult.success && searchResult.data?.results.length) {
-        webContext = '\n\nRecent web context (use to enrich posts with current information):\n' +
-          searchResult.data.results
-            .map((r) => `- ${r.title}: ${r.content.slice(0, 200)}`)
-            .join('\n');
-      }
-    }
-  } catch { /* web enrichment is best-effort */ }
-
-  const raw = await chatCompletion(
-    [
-      {
-        role: 'system',
-        content: [
-          'You are an editorial learning writer.',
-          'Write rich, intriguing, accurate educational posts from the supplied user knowledge.',
-          'Do not write flashcards, tiny summaries, or listicles without a narrative spine.',
-          'Return only valid JSON.',
-        ].join('\n'),
-      },
-      { role: 'user', content: buildGenerationPrompt(date, context, candidates) + webContext },
-    ],
-    settings.llm,
-    { serviceName: 'posts' },
-  );
-
-  return parseGeneratedPosts(raw, questions, date, candidates);
-}
-
-// ─── Video post helpers ──────────────────────────────────────────────────────
-
-/**
- * Fire-and-forget video generation so the feed is never blocked on YouTube API
- * or LLM transcript summarization. Results are written to the youtube cache;
- * they will appear on the next feed access (pull-to-refresh or navigation).
- */
-let _videoBgRunning = false;
-function _backgroundGenerateVideos(): void {
-  if (_videoBgRunning) return;
-  if (youtubeService.getCachedVideoPosts().length > 0) return; // already cached for today
-  _videoBgRunning = true;
-  youtubeService.generateVideoPosts(5).catch(() => {}).finally(() => { _videoBgRunning = false; });
-}
-
 /** Background text-art content generation for cache-hit paths. */
 let _textArtBgRunning = false;
 function _backgroundGenerateTextArt(posts: DailyPost[]): void {
@@ -590,16 +529,6 @@ function spreadByStyle(posts: DailyPost[]): void {
     }
   }
   for (let i = 0; i < result.length; i++) posts[i] = result[i];
-}
-
-/** Fisher-Yates shuffle — returns a new shuffled copy. */
-function shuffleArray<T>(array: T[]): T[] {
-  const arr = [...array];
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
 }
 
 // assignPresentationStyles removed in Phase 31 — replaced by pre-style assignment via style-assignment.ts (D-18)
@@ -671,26 +600,6 @@ Return ONLY the single line, nothing else.`;
 
 // ─── News post helpers ──────────────────────────────────────────────────────
 
-const MAX_NEWS_PER_DAY = 3;
-
-/**
- * Fire-and-forget news generation so the feed is never blocked on Tavily API
- * or LLM summarization. Results are written to the news cache;
- * they will appear on the next feed access (pull-to-refresh or navigation).
- */
-let _newsBgRunning = false;
-function _backgroundGenerateNews(): void {
-  if (_newsBgRunning) return;
-  if (newsService.getCachedNewsPosts().length > 0) return; // already generated today
-  _newsBgRunning = true;
-  newsService.generateNewsPosts(MAX_NEWS_PER_DAY)
-    .catch(() => {})
-    .finally(() => { _newsBgRunning = false; });
-}
-
-
-
-
 function toPostSnapshot(post: DailyPost): PostSnapshot {
   const { generatedAt, origin, ...snapshot } = post;
   return snapshot;
@@ -742,7 +651,7 @@ function buildConceptBatch(questions: Question[]): string[] {
     if (!isImportant) {
       try {
         const leaf = computeLeafState(anchor, children);
-        isImportant = leaf === 'dying' || leaf === 'falling' || leaf === 'fallen';
+        isImportant = leaf === 'yellow' || leaf === 'falling' || leaf === 'fallen';
       } catch { /* non-critical — default to not important */ }
     }
     conceptIds.push(anchor.id);

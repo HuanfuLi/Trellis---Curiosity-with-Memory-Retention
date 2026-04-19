@@ -4,9 +4,6 @@ import { ChevronDown, Clock } from 'lucide-react';
 
 interface VineProgressProps {
   mode: 'inline' | 'compact';
-  explored: number;
-  total: number;
-  isComplete: boolean;
   concepts: Array<{ id: string; name: string; explored: boolean }>;
   onConceptTap?: (conceptId: string) => void;
   onHistoryTap?: () => void;
@@ -180,9 +177,6 @@ function TaperingPath({ d, baseWidth, tipWidth, color, opacity, segments }: {
 
 export function VineProgress({
   mode,
-  explored,
-  total,
-  isComplete,
   concepts,
   onConceptTap,
   onHistoryTap,

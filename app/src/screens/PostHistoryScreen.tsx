@@ -85,7 +85,6 @@ function HistoryPostCard({ post, index }: { post: DailyPost; index: number }) {
 
 export default function PostHistoryScreen() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const [groups, setGroups] = useState<Map<string, DailyPost[]>>(new Map());
   const [error, setError] = useState(false);
 
