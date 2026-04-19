@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { useContext, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { HeaderScrollContext } from '../../lib/header-scroll-context';
@@ -34,11 +35,22 @@ interface HeaderProps {
  * Each screen using this component should add `paddingTop: HEADER_HEIGHT` (or more)
  * to its scrollable content so it doesn't sit behind the header.
  *
- * WARNING: position:fixed children re-parent to a transformed ancestor (CSS spec).
- * Do NOT add `transform`/`filter`/`perspective` to any ancestor of this Header;
- * doing so makes `top: var(--safe-area-top)` resolve relative to the ancestor
- * instead of the viewport and causes a flicker on mount. Use opacity for entry/exit
- * animations on wrapper elements.
+ * Architecture: Header DOM is portaled to document.body via createPortal. This
+ * decouples Header positioning from any ancestor's CSS — scroll containers,
+ * transforms, filters, animations, containing-block creators in the React parent
+ * tree have ZERO effect on Header. position:fixed always anchors to the viewport.
+ *
+ * Why portal (and not just position:fixed in-tree): position:fixed elements re-parent
+ * to a transformed/filtered/will-change'd/contained/perspective'd ancestor (CSS spec),
+ * AND on Android Chromium WebView even an `overflow: auto` ancestor can capture
+ * fixed children as scroll-content. This bug class has recurred multiple times
+ * (commits 8df7980c, a7203a65, 2dcef5d7, 73d657a0) — every time someone adds a new
+ * scrollable wrapper or transform-based animation, Header positioning breaks again.
+ * Portaling Header to document.body makes it structurally impossible: there is no
+ * ancestor between Header and the viewport that can interfere.
+ *
+ * React context still propagates through portals — HeaderScrollContext continues
+ * to work across the portal boundary.
  */
 export function Header({ title, left, right, centered, backTo, style, scrolled: scrolledProp }: HeaderProps) {
   const navigate = useNavigate();
@@ -131,7 +143,7 @@ export function Header({ title, left, right, centered, backTo, style, scrolled: 
     </button>
   ) : undefined);
   const effectiveCentered = centered ?? !!backTo;
-  return (
+  const headerNode = (
     <div
       ref={headerRef}
       style={{
@@ -203,4 +215,9 @@ export function Header({ title, left, right, centered, backTo, style, scrolled: 
       </div>
     </div>
   );
+
+  // Portal to document.body so position:fixed always anchors to the viewport
+  // regardless of any ancestor's transform / overflow / will-change / contain.
+  // See class-doc above for the full rationale.
+  return createPortal(headerNode, document.body);
 }
