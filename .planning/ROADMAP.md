@@ -802,6 +802,33 @@ Scope:
 
 **Plans:** TBD (run `/gsd:plan-phase 32` to break down)
 
+### Phase 32.1: v1.4 UAT retest gap closure (INSERTED)
+
+**Goal:** Resolve the four code-side regressions surfaced by the Phase 32 device retest on Android (HuanfuLi, 2026-04-19) — three are confirmed Phase 31 follow-ups, one is a new starter-post persistence bug discovered mid-retest. Phase 31 plans 31-08/09/10 partially fixed the original 31 UAT failures; this phase closes the remaining gaps so v1.4 milestone can ship.
+**Requirements:** None net-new — closes UAT-31-2, UAT-31-4, UAT-31-13, UAT-31-14 retest + new STARTER-PERSIST gap
+**Depends on:** Phase 32 (32-01 retest evidence baseline)
+**Gap closure:** Closes gaps from `.planning/phases/32-v1-4-verification-close-out-and-uat-retest/32-01-SUMMARY.md` retest evidence + ad-hoc bug report
+
+Scope:
+
+1. **G1 — Queue cycling + video dedup regression (UAT-31-2 + UAT-31-13):**
+   Phase 31-08's `seenVideoIds` Set isn't preventing duplicate YouTube videoIds across pull-up cycles, AND the queue exhausts to "No more posts today" before the user has read any. Likely shared root cause in `refillQueue` / `buildConceptBatch` / `postQueueService.dequeue` flow. Diagnose via on-device repro + `concept-feed.service.ts:680-975` trace, fix the dedup Set persistence and the premature exhaustion gate.
+
+2. **G2 — Video touch overlay swallows YouTube controls (UAT-31-4):**
+   Phase 31-09's transparent touch overlay on inline video posts intercepts taps that should reach the YouTube iframe controls. Result: video plays on first tap; subsequent taps re-trigger play (restart) instead of pause/scrub. Reduce overlay scope to gesture-detection only (e.g., pointer-events: none on the iframe region, or scoped to the close-button region only).
+
+3. **G3 — Starter posts retest after Vite base fix (UAT-31-14):**
+   Commit `8d8fa5fc` (Vite `base: '/'`) unblocks the white-screen regression — once it's deployed (npm run build + cap sync android + reinstall), retest Settings → Data → Clear All Data → reload. Expected: 3 starter posts (Welcome / How knowledge grows / Explore feed) per 31-10's empty-state guard. Likely no-code: just retest + record. If starter posts still missing, additional fix needed in `getDailyPosts` empty-state path.
+
+4. **G4 — Starter posts persist after first view (NEW):**
+   Cold start shows `STARTER_POSTS` (Welcome / How knowledge grows / Explore feed) per `concept-feed.service.ts:53` + `:1021`. User taps one → reads → returns to /home → starter posts have **disappeared**. Root cause: starter posts are returned only when `questions.length === 0`; viewing one likely creates a question or otherwise mutates state so the empty-state path is no longer taken, but the starter posts were never persisted to `postHistoryService` or `loadCache()`. Fix: persist starter posts to the daily cache on first render so subsequent /home visits see them in cache, OR keep them in `infoFlowItems` until the user has at least 3 organic posts.
+
+**Out of scope (logged separately):**
+- Test 5 enhancement (vertical scroll-away should also stop video playback) — defer to Phase 33+ polish
+- Test 11 iOS dropdown anchor variant — defer until iOS test device is available; Android verified pass (native centered modal)
+
+**Plans:** TBD (run `/gsd:plan-phase 32.1` to break down)
+
 ### Phase 33: Phase 29 regression + Phase 31 code hygiene
 
 **Goal:** Resolve the three code regressions surfaced by v1.4 integration check (TD-04/TD-05/TD-06), clear the 5 new tsc errors introduced by Phase 31, and triage the uncommitted WIP in the working tree so the milestone repo state matches the verification record.

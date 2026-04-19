@@ -438,3 +438,4 @@ Completed Phase 27 Plan 04 (27-04-PLAN.md) — Locale switcher + mid-stream abor
 - Phase 27 added: Add i18n/L10n support
 - Phase 28 added: UI/UX polish from audit findings
 - Phase 30 added: Redesign curiosity feed as scroll progress bar with daily reading quota credits
+- Phase 32.1 inserted after Phase 32: v1.4 UAT retest gap closure — queue cycling (G1), video touch overlay (G2), starter posts retest (G3), starter post persistence (G4) (URGENT)
