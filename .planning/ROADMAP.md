@@ -773,7 +773,79 @@ Plans:
 - [x] 31-09-PLAN.md — Gap closure: unified video state + touch overlay + close button (Wave 6)
 - [x] 31-10-PLAN.md — Gap closure: LLM suggestion topics + fresh install empty state + checklist backdrop (Wave 6)
 
+### Phase 32: v1.4 verification close-out & UAT retest
+
+**Goal:** Close v1.4 verification debt surfaced by `.planning/v1.4-MILESTONE-AUDIT.md` — retroactively verify phases 30 and 31, rerun Phase 31 UAT against the 31-08/09/10 fixes, fix the lone remaining cosmetic (dropdown anchor), and flip VALIDATION doc drift on phases 28/29/30 so Nyquist tracking reflects reality.
+**Requirements:** None net-new — closes PHASE-30-VERIFICATION, PHASE-31-VERIFICATION, UAT-31-RETEST, UAT-31-11 from v1.4 audit
+**Depends on:** Phase 31
+**Gap closure:** Closes gaps from `.planning/v1.4-MILESTONE-AUDIT.md`
+
+Scope:
+
+1. **Phase 31 UAT device retest:**
+   - Rerun the 8 failed items in `.planning/phases/31-*/31-UAT.md` on device after gap-closure plans 31-08/09/10 landed. Append `retest:` rows per item.
+   - Verify blockers (test 5 video swipe-away, test 7 concept cycling, test 13 pull-for-more) are cleared and majors (test 2 YouTube dedup, test 3 suggestion topics, test 4 video touch, test 14 starter content) no longer reproduce.
+   - Flip `status: issue/blocker` → `pass` on retest rows.
+
+2. **UAT-31-11 cosmetic fix:** Settings > Data & Privacy post-retention dropdown anchors awkwardly (never addressed in 31-08/09/10). Reposition dropdown or constrain its width so it aligns to its row.
+
+3. **Write 30-VERIFICATION.md:** Audit each of the 22 Phase 30 decisions (D-01..D-22) against current code. 13 are claimed in SUMMARY frontmatter (D-04, D-07..D-11, D-13..D-18, D-20); 9 (D-01, D-02, D-03, D-05, D-06, D-12, D-19, D-21, D-22) need verification or documentation as no-ops.
+
+4. **Write 31-VERIFICATION.md:** Audit each of the 47 Phase 31 decisions (D-01..D-47) against current code + UAT retest results. 28 are claimed in SUMMARY; 19 (D-08, D-11, D-14..D-27, D-44..D-46) need verification or documentation as no-ops. Fold in the gap-closure plans (31-08/09/10) results.
+
+5. **Flip VALIDATION statuses:**
+   - `28-VALIDATION.md`: `status: draft` → `validated`, `nyquist_compliant: false` → `true` (28-VERIFICATION already passed 30/30; just doc drift)
+   - `29-VALIDATION.md`: `status: draft` → `validated`, `nyquist_compliant: false` → `true` (29-VERIFICATION already passed 10/10)
+   - `30-VALIDATION.md`: `status: draft` → `validated` only after 30-VERIFICATION writes up clean
+
+6. **Optional (if device present):** Walk the 6 human-UAT items in 28-VERIFICATION.md (haptic, slide-down, scroll shadow, resize re-snap, trellis pulse, locale switch) and record results. Low-priority — keep separate if retest is unavailable.
+
+**Plans:** TBD (run `/gsd:plan-phase 32` to break down)
+
+### Phase 33: Phase 29 regression + Phase 31 code hygiene
+
+**Goal:** Resolve the three code regressions surfaced by v1.4 integration check (TD-04/TD-05/TD-06), clear the 5 new tsc errors introduced by Phase 31, and triage the uncommitted WIP in the working tree so the milestone repo state matches the verification record.
+**Requirements:** None net-new — closes TD-04, TD-05, TD-06 + tsc hygiene from v1.4 audit
+**Depends on:** Phase 32 (verification baseline should be set before mutating code the verifier just audited)
+**Gap closure:** Closes gaps from `.planning/v1.4-MILESTONE-AUDIT.md`
+
+Scope:
+
+1. **TD-04 resolution (Phase 29 TD-01 regressed):**
+   - `applyStrategyBias` + `computeHints` were removed from `app/src/services/concept-feed.service.ts` by the Phase 31 feed rewrite. Only `plannerAutoGen.service.ts:115-116` still has the wiring. 6 live test failures — 5 in `app/tests/services/concept-feed-strategy.test.mjs`, 1 TD-01 plumbing assertion in `app/tests/services/orchestration-strategy.test.mjs`.
+   - Decide one of two resolutions:
+     - **(a) Restore the bias call** in `concept-feed.service.ts` so the Phase 29 contract holds. Honor `computeHints(signals, checkInSignals)` signature with real `plannerService.getRecentSignals()` input.
+     - **(b) Supersede the contract.** Phase 31's generation-time prioritization (D-14 weak-concept-first, 2 posts per important concept) subsumes runtime sort bias. Delete `concept-feed-strategy.test.mjs` + the orphaned TD-01 plumbing assertion and update `29-VERIFICATION.md` + `29-UAT-LOG.md` to mark TD-01 SUPERSEDED-BY-PHASE-31 with a pointer to the D-14 generation logic.
+
+2. **TD-05 orphan sweep:**
+   - Delete `app/src/components/ConceptProgressCard.tsx` (exports `ConceptProgressCard` + `CompactProgressBar` — replaced by `VineProgress.tsx`).
+   - Delete `app/src/services/post-store.service.ts` (exports `postStoreService` with 0 consumers).
+   - Delete or wire `ImmersiveInfoFlow` export in `app/src/components/InfoFlow.tsx:734` (0 consumers; also missing D-29 video-stop-on-swipe wiring).
+   - Remove any now-dead i18n keys (home.progress.*, home.compact.*) in all 4 locale bundles if they were orphaned by Phase 31's vine rewrite.
+
+3. **TD-06 dead branch:**
+   - `app/src/services/concept-feed.service.ts:745` compares `leaf === 'dying'`, but `'dying'` is not a `LeafState` member (`app/src/services/trellis-state.service.ts:9`). tsc flags TS2367.
+   - Replace with the correct `LeafState` literal (likely `'yellow'` or `'falling'`) or drop if subsumed by the `easeFactor < 1.5` check.
+
+4. **5 new Phase 31 tsc errors:**
+   - 3 unused `VineProgress` props — either wire them into the component or drop from the prop interface.
+   - 4 unused helpers in `concept-feed.service.ts` — `assignPresentationStyles`, `interleaveNewsPosts`, or equivalents made obsolete by D-17/D-21/D-44.
+
+5. **Working-tree WIP triage:**
+   - 9 modified files: `ScrollToTopFAB.tsx`, 4 locale bundles, `PlannerScreen.tsx`, `SettingsScreen.tsx`, `SettingsDataScreen.tsx`, `SettingsFeaturesScreen.tsx`, `daily-read.service.ts`, `post-history.service.ts`, `concept-quota.test.mjs`.
+   - 3 untracked test files: `concept-batch-filter.test.mjs`, `daily-generation-cap.test.mjs`, `starter-posts.test.mjs`.
+   - Either commit (if aligned with v1.4) or discard (if stale experimentation). Do not carry into v1.5.
+
+**Success criteria:**
+1. `npm test` shows only pre-existing Node-25 trellis failures — zero v1.4-specific failures.
+2. `npx tsc -b --noEmit` shows only the 4 pre-existing errors documented in 29-03-SUMMARY.
+3. `git status` is clean (or WIP is intentionally carried with a commit explaining why).
+4. `29-VERIFICATION.md` is no longer stale w.r.t. TD-01.
+
+**Plans:** TBD (run `/gsd:plan-phase 33` to break down)
+
 ---
 
 _Created: 2026-03-26 | v1.1 Roadmap | 17 phases | 91 requirements mapped_
-_Updated: 2026-04-18 — Phase 31: added 3 gap closure plans (31-08..10) from UAT feedback
+_Updated: 2026-04-18 — Phase 31: added 3 gap closure plans (31-08..10) from UAT feedback_
+_Updated: 2026-04-18 — v1.4 audit: added Phase 32 (verification close-out) + Phase 33 (code hygiene) to close `.planning/v1.4-MILESTONE-AUDIT.md` gaps_
