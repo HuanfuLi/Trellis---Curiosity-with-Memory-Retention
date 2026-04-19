@@ -1001,8 +1001,11 @@ export function InlineInfoFlow({ items, onOpenConnection, showConnectionScores =
               data-concept-id={item.kind === 'concept' ? (item.post.sourceQuestionIds?.[0] ?? '') : undefined}
               style={{
                 position: 'relative',
+                // Allow-list: only media-driven styles need a fixed minHeight (iframe aspect ratio).
+                // Text-flavored styles size to content. New presentationStyles default to 'auto'
+                // — opt-in here if they need a fixed frame. Prior deny-list silently broke text-art.
                 minHeight: item.kind === 'concept'
-                  ? (item.post.presentationStyle === 'news' || item.post.presentationStyle === 'image-less' || item.post.presentationStyle === 'image' || item.post.presentationStyle === 'suggestion' || !item.post.presentationStyle ? 'auto' : '320px')
+                  ? (item.post.presentationStyle === 'video' || item.post.presentationStyle === 'short' ? '320px' : 'auto')
                   : item.kind === 'milestone' ? '200px' : 'auto',
                 animation: shouldAnimate ? `card-slide-in 0.3s ease ${Math.min(index, 5) * 0.05}s both` : undefined,
               }}
