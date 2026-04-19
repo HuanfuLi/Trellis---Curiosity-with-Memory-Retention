@@ -627,24 +627,39 @@ export function buildPostOriginContext(post: DailyPost, questions: Question[]): 
 // ─── Queue-based generation pipeline (Phase 31, D-17/D-18/D-21/D-44) ────────
 
 /**
- * Build the derived concept list for this generation cycle.
- * Per D-12: driven by today's due concepts from SM-2.
- * Per D-13: skip concepts with pending posts in queue (current cycle coverage).
- * Per D-14: important concepts get 2 posts per cycle, others get 1.
+ * Build the DERIVED LIST for this generation cycle (CLAUDE.md → "Concept Feed
+ * Generation Pipeline" → list 2 of 3).
  *
- * Note: exploredIds filter removed — explored state is a read-tracking concern
- * for VineProgress, not a generation concern. The daily generation cap (D-38)
- * in refillQueue already limits total output. This allows the queue to cycle
- * through all concepts repeatedly.
+ * Inputs:
+ *   - questions: source-of-truth questions (incl. anchors)
+ *   - dailyReadService.getExploredAnchors(): concepts the user already read a post
+ *     for today. Per design these are REMOVED from the derived list so the next
+ *     loop doesn't re-suggest the same concept the user already explored.
+ *
+ * Output: weighted multi-entry list of conceptIds. Each anchor appears
+ * BASE_ENTRIES_PER_CONCEPT times by default (and 2× that if "important" — overdue
+ * or low-ease per SM-2). assignStyles will then sample STYLE_WEIGHTS to assign a
+ * varied style to each entry, giving the user multiple post angles per concept.
+ *
+ * What changed (vs prior single-entry-per-concept implementation):
+ *   - Multi-entry (weighted) — addresses operator complaint that swipe pops 1 post
+ *     instead of the designed 4. The derived list is now large enough to keep the
+ *     8-deep queue refilled across multiple swipes.
+ *   - Filter out exploredAnchors — per design "If user read a post of a concept,
+ *     the concept is removed from the derived list so the next loop does not
+ *     generate post for that concept again." (Previously this filter was wrongly
+ *     removed; vine-progress consumed exploredAnchors for rendering only.)
+ *   - Pending-in-queue filter removed — multi-entry generation needs to be free
+ *     to add more posts for a concept that already has some pending. Dedup at
+ *     queue.enqueue level (post.id-based) prevents duplicate POSTS.
  */
+const BASE_ENTRIES_PER_CONCEPT = 4;
+
 function buildConceptBatch(questions: Question[]): string[] {
-  // D-13: skip concepts with pending posts in queue (current cycle coverage),
-  // and skip concepts the user has already explored today (checkedoff).
-  const queuePosts = postQueueService.getQueue();
-  const pendingIds = new Set(queuePosts.flatMap(p => p.sourceQuestionIds ?? []));
+  const exploredIds = new Set(dailyReadService.getExploredAnchors());
 
   const anchors = questions.filter(q => q.isAnchorNode);
-  const dueAnchors = anchors.filter(a => !pendingIds.has(a.id));
+  const dueAnchors = anchors.filter(a => !exploredIds.has(a.id));
 
   const conceptIds: string[] = [];
   for (const anchor of dueAnchors) {
@@ -656,8 +671,8 @@ function buildConceptBatch(questions: Question[]): string[] {
         isImportant = leaf === 'yellow' || leaf === 'falling' || leaf === 'fallen';
       } catch { /* non-critical — default to not important */ }
     }
-    conceptIds.push(anchor.id);
-    if (isImportant) conceptIds.push(anchor.id);
+    const count = isImportant ? BASE_ENTRIES_PER_CONCEPT * 2 : BASE_ENTRIES_PER_CONCEPT;
+    for (let i = 0; i < count; i++) conceptIds.push(anchor.id);
   }
   return conceptIds;
 }

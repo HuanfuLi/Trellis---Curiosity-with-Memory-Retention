@@ -21,6 +21,74 @@ EchoLearn is an AI-powered personalized learning platform (React 19 + TypeScript
 
 ---
 
+## Concept Feed Generation Pipeline (load-bearing — read before touching `concept-feed.service.ts` or `post-queue.service.ts`)
+
+The home feed is driven by THREE LISTS in a strict pipeline. **Do not invent a fourth, do not collapse two into one, do not bypass any step.** This architecture has been re-explained to agents 5+ times — it must not be drifted from.
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  1. DAILY CONCEPT LIST  (source of truth — same as flashcards/podcasts) │
+│     Anchor nodes (q.isAnchorNode === true) filtered by SM-2 due dates.  │
+│     Updated when: new question creates a new anchor (via classification).│
+│     Same source consumed by flashcard service + podcast service.        │
+└─────────────────────────────────────────────────────────────────────────┘
+                              │ derived from
+                              ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  2. DERIVED LIST  (post-style + count assignments, weighted)            │
+│     For each concept in (1): assign post style (image / text-art /      │
+│     video / short / news / suggestion) AND multiplicity (more entries   │
+│     for important/overdue concepts).                                    │
+│     Update mode: APPEND-ONLY when new questions arrive. Don't rebuild   │
+│     from scratch — that loses cycle position.                           │
+│     Removal trigger: when user READS a post of a concept                │
+│     (CONCEPT_EXPLORED event), REMOVE that concept's remaining entries   │
+│     from the derived list so the next loop doesn't re-suggest it.       │
+└─────────────────────────────────────────────────────────────────────────┘
+                              │ feeds
+                              ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  3. QUEUE  (length 8, cyclic walker over the derived list)              │
+│     Walks through the derived list to fill 8 posts. Maintains a CYCLE   │
+│     POSITION (index into derived list).                                 │
+│     User swipes for more → pops 4 posts → walker advances → generates   │
+│     more posts to refill toward 8.                                      │
+│     End of derived list reached → wraps to start (cyclic).              │
+│     If derived list is empty (all concepts read) → "No more posts"      │
+│     toast is appropriate.                                               │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Numeric defaults
+
+- Queue length: **8**
+- Posts served per swipe-for-more: **4** (NOT 1 — operator confirmed the desired UX)
+- Style weights: see `app/src/services/style-assignment.ts:9-16` (`STYLE_WEIGHTS`)
+- Daily generation cap: `dailyGenerationCapMultiplier × max(dueConcepts.length, 3)` per `concept-feed.service.ts:937-938` (D-38, with the floor-3 fix from Phase 32.1-02)
+
+### Files
+
+- `app/src/services/concept-feed.service.ts` — `buildConceptBatch` (currently produces a thin version of the derived list), `refillQueue` (wraps the queue), `generateMorePosts` (serves from queue)
+- `app/src/services/post-queue.service.ts` — `_state.posts` is the queue; cycle position is currently NOT tracked (gap vs. design)
+- `app/src/services/style-assignment.ts` — `assignStyles` weights
+- `app/src/services/dailyRead.service.ts` — `getExploredAnchors` (consumed by VineProgress; should also drive derived-list removal)
+- `app/src/hooks/useInfiniteScroll.ts` + `app/src/services/infiniteScroll.service.ts` — swipe-for-more entry point
+
+### Known divergences from design (gaps to close, not to drift further)
+
+- Derived list is currently rebuilt every refill (not append-only with cycle position).
+- Each concept gets at most 2 entries (1 + isImportant), not weighted by style mix.
+- Removal on read is NOT wired — `dailyReadService.getExploredAnchors()` only filters rendering, doesn't remove concepts from the derived list before generation.
+- Queue serves variable count (whatever's available) instead of strictly 4 per swipe.
+
+These gaps are why operator sees "swipe pops 1 post, then No more posts" on a fresh-install device with one anchor.
+
+### When in doubt
+
+The derived list is **append-only** (grows on new question, shrinks on read). The queue is **cyclic** over that list. The queue serves **4 per swipe**. Don't re-architect this — implement what the design says.
+
+---
+
 ## i18n Workflow (Phase 27+)
 
 EchoLearn supports 4 locales: **English** (canonical/source), **Simplified Chinese**, **Spanish**, **Japanese**.

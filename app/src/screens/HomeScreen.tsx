@@ -141,7 +141,9 @@ export function HomeScreen() {
     isLoadingMoreRef.current = true;
     setIsLoadingMore(true);
     try {
-      const newPosts = await infiniteScrollService.loadNextBatch(questionsRef.current, 6);
+      // Pop 4 per swipe — see CLAUDE.md "Concept Feed Generation Pipeline" (queue serves
+      // 4 per swipe by design). Was 6; that was an undocumented divergence.
+      const newPosts = await infiniteScrollService.loadNextBatch(questionsRef.current, 4);
       if (newPosts.length > 0) {
         // Pre-generate images for all new posts before showing them
         const { inferImageStyle, buildImagePrompt } = await import('../services/postFormatting.service');
