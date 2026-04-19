@@ -40,6 +40,12 @@ result: issue
 reported: "Yes it plays inline, but touch seems conflicting and not accurately responding. User cannot stop video, and when user touch video it feels page is slightly scrolled down"
 severity: major
 
+retest: pass
+retested: 2026-04-19
+retested_by: HuanfuLi
+fix_source: 32.1-03-SUMMARY.md
+retest_note: "Pattern (a) applied: pointer-events:none on the overlay div in InfoFlow.tsx so YouTube iframe controls receive taps directly. Overlay preserved for structure with aria-hidden=true; close button retains pointer-events:auto. CONTINGENCY: pending operator on-device confirmation that (1) tapping a playing video reaches YouTube native controls (pause/scrub/fullscreen), and (2) close button still stops playback. If contingency fails, escalate to D-07 fallback (single-fire tap detector pattern (b))."
+
 ### 5. Video stops on swipe-away
 expected: While a video is playing inline, swipe to another tab (e.g., Planner). Video stops. Swipe back — video is stopped (not auto-resumed).
 result: issue
