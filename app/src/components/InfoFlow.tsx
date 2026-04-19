@@ -291,10 +291,12 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen, videoP
                   allowFullScreen
                   title={normalizedTitle || t('infoFlow.postImageAlt')}
                 />
-                {/* Transparent overlay — prevents iframe from capturing scroll touches */}
+                {/* Transparent overlay — pointer-events:none lets YouTube controls receive taps (G2 / UAT-31-4 fix).
+                    Swipe-stop is wired separately via SwipeTabContext at line ~936; D-07 accepts that
+                    tap-on-playing may not stop playback — close button below is the explicit stop affordance. */}
                 <div
-                  style={{ position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'auto', background: 'transparent' }}
-                  onClick={(e) => { e.stopPropagation(); setVideoPlaying(null); }}
+                  style={{ position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none', background: 'transparent' }}
+                  aria-hidden="true"
                 />
                 {/* Close button — visible affordance to stop */}
                 <button
@@ -390,10 +392,12 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen, videoP
                   allowFullScreen
                   title={normalizedTitle || t('infoFlow.postImageAlt')}
                 />
-                {/* Transparent overlay — prevents iframe from capturing scroll touches */}
+                {/* Transparent overlay — pointer-events:none lets YouTube controls receive taps (G2 / UAT-31-4 fix).
+                    Swipe-stop is wired separately via SwipeTabContext at line ~936; D-07 accepts that
+                    tap-on-playing may not stop playback — close button below is the explicit stop affordance. */}
                 <div
-                  style={{ position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'auto', background: 'transparent' }}
-                  onClick={(e) => { e.stopPropagation(); setVideoPlaying(null); }}
+                  style={{ position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none', background: 'transparent' }}
+                  aria-hidden="true"
                 />
                 {/* Close button — visible affordance to stop */}
                 <button
