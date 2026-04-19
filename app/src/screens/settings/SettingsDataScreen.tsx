@@ -65,7 +65,7 @@ export function SettingsDataScreen() {
     // Clear SQLite tables (Android native) — fire-and-forget before reload
     void clearAllTables().finally(() => {
       toast(t('settings.toast.dataCleared'), 'success');
-      setTimeout(() => window.location.reload(), 800);
+      setTimeout(() => window.location.assign('/home'), 800);
     });
   };
 
