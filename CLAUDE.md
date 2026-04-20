@@ -111,6 +111,38 @@ The `Header` component (`app/src/components/ui/Header.tsx`) auto-portals based o
 
 ---
 
+## ChatInput flex shrink (Phase 33 UAT-4 — load-bearing)
+
+`app/src/components/ChatInput.tsx`: the `<input type="text">` MUST keep `minWidth: 0` alongside its `flex: 1` inline style. This is the canonical flex-shrink remedy — without it, `flex-basis: auto` refuses to shrink the input below intrinsic content width on Android WebView, and the `flexShrink: 0` Send button overflows off-screen, leaving only a sliver visible.
+
+### Why this exists
+
+Recurring device-only regression. Prior incidents:
+- `d45c228c` switched ChatInput from `position: fixed` to a flex column but didn't add the guard — bug latent.
+- `47d81049` bumped mic/globe buttons 34→44px (+20px total), tipping the flex overflow.
+
+### Rules
+
+1. **Never remove `minWidth: 0`** from the ChatInput input. `tests/components/ChatInput.flex-shrink.test.mjs` enforces this with a source-reading assertion — any PR that drops it fails CI.
+2. **Don't grow ChatInput buttons past their current 44px** without re-checking the overflow math. Even with the guard, an extreme button-width bump could re-introduce layout surprises.
+
+---
+
+## SwipeTabContainer resize + keyboard handling (Phase 33 UAT-4 — load-bearing)
+
+`app/src/components/SwipeTabContainer.tsx` owns the 5-wide horizontal strip's `translateX` (`stripX`). Two invariants are load-bearing:
+
+1. **`resync()` gates on width change.** The handler reads `getScreenWidth()`, compares to `screenWidthRef.current`, and **returns early if unchanged**. Height-only resize events (keyboard open/close) must be no-ops. Android WebView fires `visualViewport.resize` events repeatedly during keyboard animations and `window.innerWidth` can transiently report pixel-ratio-adjusted values — unconditional re-snap placed the active slot at a wrong X, producing "Ask screen zooms/deforms until the user navigates away" (navigateToTab unconditionally re-snaps, which is why tab nav recovered).
+2. **Focus-out forces a re-snap** (deferred one frame so the close-resize finishes first). Defense-in-depth — recovers any drift that somehow slipped past invariant 1.
+
+### Rules
+
+1. **Don't remove the `newWidth === screenWidthRef.current` early-return in `resync()`.** `tests/components/SwipeTabContainer.resize-guard.test.mjs` enforces it.
+2. **Don't remove the `onFocusOut` re-snap.** Same test enforces it.
+3. **Don't install `@capacitor/keyboard` with `resize: 'none'`** as a workaround — users rely on the default `adjustResize` so the input scrolls above the keyboard. Fix layout bugs at the stripX level, not by disabling resize.
+
+---
+
 ## Event bus — unified GRAPH_UPDATED (Phase 32.1)
 
 There is **ONE event for graph mutations**: `GRAPH_UPDATED`. Used by:
