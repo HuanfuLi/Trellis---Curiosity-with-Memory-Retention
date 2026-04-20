@@ -91,6 +91,14 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen, videoP
       || imageGenerationService.hasCachedImage(post.id, inferImageStyle(post)),
   );
 
+  // D-22a (Phase 33 Plan 06): hoist settings read out of per-card useEffect hot path.
+  // Was: settings.imageGeneration.enabled was re-read inside the per-card image-effect
+  // every time the effect's deps changed. Now: snapshot once on mount; if a settings
+  // update needs to invalidate, the snapshot stays stable for this card's lifetime
+  // (acceptable — image generation is a one-shot per-mount decision; users toggling
+  // the setting only affects future card mounts).
+  const [imageEnabled] = useState(() => settingsService.getSync().imageGeneration.enabled);
+
   useEffect(() => {
     // Skip AI image generation for non-image presentation styles
     if (isSuggestion || isVideoPost || isShortPost || isNewsPost) return;
@@ -100,7 +108,7 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen, videoP
     }
 
     // Also respect the image generation settings toggle (per D-11)
-    const imageEnabled = settingsService.getSync().imageGeneration.enabled;
+    // D-22a (Phase 33 Plan 06): imageEnabled now a useState snapshot from above
     if (!imageEnabled) {
       setImageResolved(true);
       return;
