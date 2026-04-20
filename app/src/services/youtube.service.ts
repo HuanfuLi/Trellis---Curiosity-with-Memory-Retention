@@ -9,7 +9,7 @@ import { buildYoutubeSearchUrl } from './youtube-locale-url.ts';
 
 // ─── Local Types ──────────────────────────────────────────────────────────────
 
-interface YouTubeSearchResult {
+export interface YouTubeSearchResult {
   videoId: string;
   title: string;
   description: string;

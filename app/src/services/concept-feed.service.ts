@@ -1,10 +1,10 @@
 import { chatCompletion, chatStream } from '../providers/llm/index.ts';
-import type { ChatSession, DailyPost, PostNarrativeMode, PostOriginContext, PostSnapshot, PresentationStyle, Question } from '../types';
+import type { ChatSession, DailyPost, PostNarrativeMode, PostOriginContext, PostSnapshot, PresentationStyle, Question, WebSearchResult } from '../types';
 import { today } from '../lib/date.ts';
 import { eventBus } from '../lib/event-bus.ts';
 import { settingsService, FEED_DEFAULTS } from './settings.service.ts';
 import { plannerService } from './planner.service.ts';
-import { youtubeService } from './youtube.service';
+import { youtubeService, type YouTubeSearchResult } from './youtube.service';
 import { webSearch } from './web-search.service';
 import { questionService } from './question.service';
 import { postQueueService } from './post-queue.service';
@@ -722,13 +722,34 @@ function buildYoutubeQuery(conceptName: string, cycleNumber: number, isShort: bo
 }
 
 /**
+ * Per-refill cache of external API results. Populated by the pre-validation pass
+ * in refillQueue and consumed by generatePostBatch's video/short/news loops so
+ * each YouTube/Tavily query is executed at most ONCE per refill cycle instead of
+ * twice (pre-validation + actual fetch). Cuts YouTube quota burn ~50%.
+ *
+ * Cache key for YouTube: `${conceptId}:${style}` where style is 'video'|'short'
+ * (both styles may fetch for the same concept in one cycle with different modifiers).
+ * Cache key for Tavily: `conceptId` (news is a single style per concept).
+ */
+interface PreFetchCache {
+  youtube: Map<string, YouTubeSearchResult[]>;  // key: `${conceptId}:${style}`
+  news: Map<string, WebSearchResult>;           // key: conceptId
+}
+
+/**
  * Generate a batch of posts from pre-assigned style assignments.
  * Reuses the existing LLM generation prompt for text-style posts,
  * fetches from YouTube/Tavily for video/news, and generates text-art content.
+ *
+ * If `preFetched` is provided, the video/short/news loops consume cached
+ * API results instead of issuing fresh calls (Phase 33 quota-burn fix
+ * 2026-04-20). When absent (legacy callers / session-post path), loops
+ * fall back to calling the APIs directly.
  */
 async function generatePostBatch(
   questions: Question[],
   assignments: import('./style-assignment').StyleAssignment[],
+  preFetched?: PreFetchCache,
 ): Promise<DailyPost[]> {
   const date = today();
   const byId = new Map(questions.map(q => [q.id, q]));
@@ -873,10 +894,20 @@ Return ONLY a JSON array of 4 strings, nothing else. Example: ["What is X?", "Ho
     try {
       const concept = byId.get(a.conceptId);
       const conceptName = concept?.title ?? concept?.content?.slice(0, 50) ?? a.conceptId;
-      const query = buildYoutubeQuery(conceptName, cycleNumber, false);
-      const searchResult = await youtubeService.searchVideos(query, YOUTUBE_FETCH_POOL_SIZE);
-      if (searchResult.success && searchResult.data) {
-        const freshVideo = searchResult.data.find(v => !hasSeenVideoId(v.videoId));
+      // Phase 33 quota-burn fix (2026-04-20): prefer cached pre-fetch result so
+      // the same YouTube search isn't issued twice per cycle (pre-validation + here).
+      const cacheKey = `${a.conceptId}:video`;
+      const cached = preFetched?.youtube.get(cacheKey);
+      let data: YouTubeSearchResult[] | undefined;
+      if (cached) {
+        data = cached;
+      } else {
+        const query = buildYoutubeQuery(conceptName, cycleNumber, false);
+        const searchResult = await youtubeService.searchVideos(query, YOUTUBE_FETCH_POOL_SIZE);
+        data = searchResult.success ? searchResult.data : undefined;
+      }
+      if (data && data.length > 0) {
+        const freshVideo = data.find(v => !hasSeenVideoId(v.videoId));
         if (freshVideo) {
           addSeenVideoId(freshVideo.videoId);
           posts.push({
@@ -909,10 +940,19 @@ Return ONLY a JSON array of 4 strings, nothing else. Example: ["What is X?", "Ho
     try {
       const concept = byId.get(a.conceptId);
       const conceptName = concept?.title ?? concept?.content?.slice(0, 50) ?? a.conceptId;
-      const query = buildYoutubeQuery(conceptName, cycleNumber, true);
-      const searchResult = await youtubeService.searchVideos(query, YOUTUBE_FETCH_POOL_SIZE);
-      if (searchResult.success && searchResult.data) {
-        const freshShort = searchResult.data.find(v => !hasSeenVideoId(v.videoId));
+      // Phase 33 quota-burn fix (2026-04-20): prefer cached pre-fetch result.
+      const cacheKey = `${a.conceptId}:short`;
+      const cached = preFetched?.youtube.get(cacheKey);
+      let data: YouTubeSearchResult[] | undefined;
+      if (cached) {
+        data = cached;
+      } else {
+        const query = buildYoutubeQuery(conceptName, cycleNumber, true);
+        const searchResult = await youtubeService.searchVideos(query, YOUTUBE_FETCH_POOL_SIZE);
+        data = searchResult.success ? searchResult.data : undefined;
+      }
+      if (data && data.length > 0) {
+        const freshShort = data.find(v => !hasSeenVideoId(v.videoId));
         if (freshShort) {
           addSeenVideoId(freshShort.videoId);
           posts.push({
@@ -945,9 +985,18 @@ Return ONLY a JSON array of 4 strings, nothing else. Example: ["What is X?", "Ho
     try {
       const concept = byId.get(a.conceptId);
       const conceptName = concept?.title ?? concept?.content?.slice(0, 50) ?? a.conceptId;
-      const searchResult = await webSearch(conceptName + ' latest research findings', { maxResults: 1 });
-      if (searchResult.success && searchResult.data?.results.length) {
-        const result = searchResult.data.results[0];
+      // Phase 33 quota-burn fix (2026-04-20): prefer cached pre-fetch result.
+      const cached = preFetched?.news.get(a.conceptId);
+      let result: WebSearchResult | undefined;
+      if (cached) {
+        result = cached;
+      } else {
+        const searchResult = await webSearch(conceptName + ' latest research findings', { maxResults: 1 });
+        if (searchResult.success && searchResult.data?.results.length) {
+          result = searchResult.data.results[0];
+        }
+      }
+      if (result) {
         posts.push({
           id: makePostId(date, 'news', a.conceptId),
           date,
@@ -1043,10 +1092,26 @@ export async function refillQueue(questions: Question[]): Promise<void> {
     // Step 3: Assign styles before generation (D-18)
     let assignments = assignStyles(conceptIds, availability);
 
-    // Step 4: Pre-validate YouTube/Tavily in parallel (D-21 step 2, D-20 fallback)
+    // Step 4: Pre-validate YouTube/Tavily in parallel AND cache results for reuse
+    // by the generation loops (D-21 step 2, D-20 fallback + Phase 33 quota-burn fix 2026-04-20).
+    //
+    // Before: pre-validation called searchVideos/webSearch with maxResults=1; the
+    // generation loops RE-called the same query with maxResults=15 — 2× the YouTube
+    // quota burn per assignment (200 units each at 100 units/search). After my
+    // cap-bypass fix (003b8e32) removed the implicit ~2-cycle cap, this doubled
+    // burn exhausted the user's 10,000-unit/day YouTube quota in ~10 cycles.
+    //
+    // Now: pre-validation fetches at full pool size (YOUTUBE_FETCH_POOL_SIZE for
+    // YouTube, maxResults:1 for Tavily since news loop picks results[0]) and
+    // stores the result in preFetched. Generation loops read from the cache.
+    // Halves YouTube calls per cycle; also halves Tavily calls.
     const videoAssigns = assignments.filter(a => a.style === 'video' || a.style === 'short');
     const newsAssigns = assignments.filter(a => a.style === 'news');
     const failedIds = new Set<string>();
+    const preFetched: PreFetchCache = {
+      youtube: new Map<string, YouTubeSearchResult[]>(),
+      news: new Map<string, WebSearchResult>(),
+    };
 
     const getConceptName = (id: string) => {
       const q = questions.find(q => q.id === id);
@@ -1061,9 +1126,11 @@ export async function refillQueue(questions: Question[]): Promise<void> {
         try {
           const conceptName = getConceptName(a.conceptId);
           const query = buildYoutubeQuery(conceptName, validationCycle, a.style === 'short');
-          const searchResult = await youtubeService.searchVideos(query, 1);
+          const searchResult = await youtubeService.searchVideos(query, YOUTUBE_FETCH_POOL_SIZE);
           if (!searchResult.success || !searchResult.data?.length) {
             failedIds.add(a.conceptId);
+          } else {
+            preFetched.youtube.set(`${a.conceptId}:${a.style}`, searchResult.data);
           }
         } catch {
           failedIds.add(a.conceptId);
@@ -1072,9 +1139,11 @@ export async function refillQueue(questions: Question[]): Promise<void> {
       ...newsAssigns.map(async (a) => {
         try {
           const conceptName = getConceptName(a.conceptId);
-          const results = await webSearch(conceptName + ' latest', { maxResults: 1 });
+          const results = await webSearch(conceptName + ' latest research findings', { maxResults: 1 });
           if (!results.success || !results.data?.results.length) {
             failedIds.add(a.conceptId);
+          } else {
+            preFetched.news.set(a.conceptId, results.data.results[0]);
           }
         } catch {
           failedIds.add(a.conceptId);
@@ -1085,8 +1154,10 @@ export async function refillQueue(questions: Question[]): Promise<void> {
     // Step 5: Reassign failures to text-art (D-20, D-21 step 3)
     assignments = reassignFailures(assignments, failedIds);
 
-    // Step 6: Generate posts with pre-assigned styles (D-21 step 4)
-    const posts = await generatePostBatch(questions, assignments);
+    // Step 6: Generate posts with pre-assigned styles (D-21 step 4).
+    // Pass the pre-fetched cache so YouTube/Tavily loops reuse validated results
+    // instead of issuing a second call per assignment.
+    const posts = await generatePostBatch(questions, assignments, preFetched);
 
     // Step 6b: Spread styles to prevent clustering (D-17 weighted round-robin)
     spreadByStyle(posts);
