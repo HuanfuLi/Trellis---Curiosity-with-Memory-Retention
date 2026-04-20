@@ -20,6 +20,25 @@ const CONNECTION_POSTS_KEY = 'echolearn_connection_posts';
 const MAX_POSTS = 4;
 const CONTEXT_LIMIT = 10;
 
+/**
+ * Produce a globally-unique post ID with a semantic prefix.
+ *
+ * Phase 33 gap fix (2026-04-20): replaces the prior deterministic ID scheme
+ * `post-${date}-${type}-${conceptId}-${cycleStamp}` which had two failure modes:
+ *   1. Intra-cycle collision when one concept got multiple video/short/news
+ *      assignments in the same refill (two posts share same id, two React cards
+ *      bound to same state → clicking one starts both iframes).
+ *   2. Cross-batch collision via state drift (localStorage clear, cache trim,
+ *      forgotten incrementCycle) — cycleStamp is only as monotonic as queue state.
+ *
+ * The semantic prefix (date, kind, conceptId) is preserved for debuggability
+ * (`grep post-2026-04-20-video-concept123` still finds that concept's videos).
+ * The UUID suffix guarantees uniqueness regardless of any application state.
+ */
+function makePostId(date: string, kind: string, conceptId: string): string {
+  return `post-${date}-${kind}-${conceptId}-${crypto.randomUUID()}`;
+}
+
 interface PlannerSignals {
   activeThreads: string[];
   confusionAreas: string[];
@@ -391,7 +410,6 @@ function parseGeneratedPosts(
   questions: Question[],
   date: string,
   candidates: Array<{ source: Question; target: Question; score: number }> = [],
-  indexOffset = 0,
   maxPosts = MAX_POSTS,
 ): ParsedGeneration {
   // Try object format first: {"posts": [...], "connectionCards": [...]}
@@ -401,7 +419,7 @@ function parseGeneratedPosts(
       const parsed = JSON.parse(objMatch[0]) as { posts?: unknown; connectionCards?: unknown };
       if (Array.isArray(parsed.posts)) {
         return {
-          posts: extractPosts(parsed.posts as Array<Record<string, unknown>>, questions, date, indexOffset, maxPosts),
+          posts: extractPosts(parsed.posts as Array<Record<string, unknown>>, questions, date, maxPosts),
           connectionCards: parseConnectionCards(parsed.connectionCards, candidates),
         };
       }
@@ -415,19 +433,18 @@ function parseGeneratedPosts(
   if (!arrMatch) return { posts: [], connectionCards: [] };
   try {
     const parsed = JSON.parse(arrMatch[0]) as Array<Record<string, unknown>>;
-    return { posts: extractPosts(parsed, questions, date, indexOffset, maxPosts), connectionCards: [] };
+    return { posts: extractPosts(parsed, questions, date, maxPosts), connectionCards: [] };
   } catch {
     return { posts: [], connectionCards: [] };
   }
 }
 
-function extractPosts(parsed: Array<Record<string, unknown>>, questions: Question[], date: string, indexOffset = 0, maxPosts = MAX_POSTS): DailyPost[] {
+function extractPosts(parsed: Array<Record<string, unknown>>, questions: Question[], date: string, maxPosts = MAX_POSTS): DailyPost[] {
   const byId = new Map(questions.map((question) => [question.id, question]));
 
   return parsed
     .slice(0, maxPosts)
-    .map((item, index) => {
-      const idIndex = index + indexOffset;
+    .map((item) => {
       const sourceQuestionIds = Array.isArray(item.sourceQuestionIds)
         ? item.sourceQuestionIds.filter((value): value is string => typeof value === 'string' && byId.has(value)).slice(0, 4)
         : [];
@@ -446,7 +463,7 @@ function extractPosts(parsed: Array<Record<string, unknown>>, questions: Questio
       if (!teaserHook || !teaserPreview || !title) return null;
 
       const post: DailyPost = {
-        id: `post-${date}-${idIndex}-${sourceQuestionIds.join('-') || 'general'}`,
+        id: makePostId(date, 'text', sourceQuestionIds[0] ?? 'general'),
         date,
         title,
         teaser: { hook: teaserHook, preview: teaserPreview },
@@ -732,8 +749,6 @@ async function generatePostBatch(
   // auto-clear on day boundary.
 
   const posts: DailyPost[] = [];
-  const existingPosts = loadCache()?.posts ?? [];
-  const indexOffset = existingPosts.length;
 
   // Generate text-style posts via LLM (text-art, image, suggestion)
   if (textStyleAssignments.length > 0 && settings.preferences.aiConsentGiven && settings.llm.isConfigured) {
@@ -761,7 +776,7 @@ async function generatePostBatch(
             settings.llm,
             { serviceName: 'posts' },
           );
-          const parsed = parseGeneratedPosts(raw, questions, date, [], indexOffset, textStyleAssignments.length);
+          const parsed = parseGeneratedPosts(raw, questions, date, [], textStyleAssignments.length);
           // Apply pre-assigned styles to generated posts
           for (let i = 0; i < parsed.posts.length && i < textStyleAssignments.length; i++) {
             if (!parsed.posts[i]) continue;
@@ -846,12 +861,9 @@ Return ONLY a JSON array of 4 strings, nothing else. Example: ["What is X?", "Ho
     }
   }
 
-  // Cycle-stamp video/short/news IDs so each refill produces a fresh post-id.
-  // Without this, the deterministic `post-${date}-{type}-${conceptId}` pattern collides
-  // across refill cycles for the same anchor; enqueue dedup blocks within a queue snapshot
-  // but not against already-served IDs in seenPostIds, so the user saw "only 1 post per
-  // swipe" because dedup filtered repeated IDs at loadNextBatch (Bug A, 2026-04-19).
-  const cycleStamp = `c${postQueueService.getCycleNumber()}`;
+  // Post IDs are produced by `makePostId` (UUID-suffixed) — see helper definition.
+  // Bug A's cycleStamp is obsolete under the new scheme; kept `cycleNumber` below
+  // because the YouTube query modifier rotation (Bug 6) still uses it.
 
   // Generate video posts from YouTube (with cross-cycle dedup via concept-feed-dedup helper).
   // Query modifier rotates per cycleNumber and pool widened to YOUTUBE_FETCH_POOL_SIZE so
@@ -868,7 +880,7 @@ Return ONLY a JSON array of 4 strings, nothing else. Example: ["What is X?", "Ho
         if (freshVideo) {
           addSeenVideoId(freshVideo.videoId);
           posts.push({
-            id: `post-${date}-video-${a.conceptId}-${cycleStamp}`,
+            id: makePostId(date, 'video', a.conceptId),
             date,
             title: freshVideo.title || conceptName,
             teaser: { hook: freshVideo.title || conceptName, preview: freshVideo.description?.slice(0, 170) || '' },
@@ -904,7 +916,7 @@ Return ONLY a JSON array of 4 strings, nothing else. Example: ["What is X?", "Ho
         if (freshShort) {
           addSeenVideoId(freshShort.videoId);
           posts.push({
-            id: `post-${date}-short-${a.conceptId}-${cycleStamp}`,
+            id: makePostId(date, 'short', a.conceptId),
             date,
             title: freshShort.title || conceptName,
             teaser: { hook: freshShort.title || conceptName, preview: freshShort.description?.slice(0, 170) || '' },
@@ -937,7 +949,7 @@ Return ONLY a JSON array of 4 strings, nothing else. Example: ["What is X?", "Ho
       if (searchResult.success && searchResult.data?.results.length) {
         const result = searchResult.data.results[0];
         posts.push({
-          id: `post-${date}-news-${a.conceptId}-${cycleStamp}`,
+          id: makePostId(date, 'news', a.conceptId),
           date,
           title: result.title || conceptName,
           teaser: { hook: result.title || conceptName, preview: result.content?.slice(0, 170) || '' },
@@ -1418,7 +1430,7 @@ export const conceptFeedService = {
       );
 
       const existingIds = new Set(existingPosts.map(p => p.id));
-      let newPosts = parseGeneratedPosts(raw, allQuestions, date, [], existingPosts.length, 6).posts
+      let newPosts = parseGeneratedPosts(raw, allQuestions, date, [], 6).posts
         .filter(p => !existingIds.has(p.id));
       newPosts = newPosts.slice(0, 6);
 
