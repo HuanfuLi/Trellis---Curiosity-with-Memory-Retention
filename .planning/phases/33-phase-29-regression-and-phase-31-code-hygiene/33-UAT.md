@@ -12,11 +12,12 @@ updated: 2026-04-19T00:00:00Z
 
 ## Current Test
 
-number: 4
-name: No empty cards with massive padding (Bug D)
+number: 5
+name: Different videos across swipe cycles (Bug 6)
 expected: |
-  Every post in the feed renders visible content (image, video thumbnail, news article, or text-art).
-  No blank cards. Any fallback-to-text-art surfaces are logged (dev-mode console.warn) but user still sees content.
+  Over multiple swipe-for-more cycles for the same concept, video posts show DIFFERENT videos —
+  not the same 3 videos repeating. Query modifier rotates per cycle and the pool widened from
+  3 to 15 candidates.
 awaiting: user response
 
 ## Tests
@@ -87,8 +88,9 @@ result: [pending]
 
 total: 14
 passed: 1
-issues: 2
-pending: 11
+issues: 1
+partial: 1
+pending: 10
 skipped: 0
 blocked: 0
 
@@ -287,7 +289,7 @@ blocked: 0
   debug_session: ""
 
 - truth: "AskScreen ChatInput layout stable: Send button always visible; opening keyboard does not deform the screen"
-  status: fixed
+  status: partial
   reason: "User reported (two device-only bugs during test 4): (1) Send button drifted off-screen in the ChatInput island, only a sliver visible; (2) tapping ChatInput opened the system keyboard and the entire Ask screen zoomed/deformed, did not recover on keyboard close, only recovered after navigating to another tab and back."
   severity: major
   test: 4
@@ -320,23 +322,55 @@ blocked: 0
     - "resync width-change guard so keyboard events are no-ops"
     - "focus-out forced re-snap (deferred one frame) as defense-in-depth"
     - "CLAUDE.md sections documenting both invariants (three-location rule)"
-  fix_commit: "cf1426ee, 438ec80b, 6bb1137d"
+  fix_commit: "cf1426ee, 438ec80b, 6bb1137d, 9f996789, 15d6f09b, 4492456a"
   fix_approach: |
-    Three atomic commits:
-    1. cf1426ee — ChatInput minWidth:0 + source-reading test
-       (ChatInput.flex-shrink.test.mjs). Structural fix — no future
-       button-size or gap change can re-break it.
-    2. 438ec80b — SwipeTabContainer two-layer fix:
-       a. resync() gates on width change (height-only keyboard events
-          are no-ops; race cannot produce drift).
-       b. onFocusOut forces stripX re-snap (rAF-deferred so close-resize
-          finishes first) — mirrors navigateToTab recovery path.
-       Tests: SwipeTabContainer.resize-guard.test.mjs (2 source-reading
-       asserts for both invariants).
-    3. 6bb1137d — CLAUDE.md sections for both patterns (mirroring the
-       existing Header-positioning load-bearing doc). Rule: document
-       in three places (CLAUDE.md, inline comment, test) when a bug
-       has regressed before.
+    Six atomic commits across three root causes:
+
+    Send-button drift (FIXED on device):
+    1. cf1426ee — ChatInput minWidth:0 + source-reading test. Structural
+       fix — no future button-size or gap change can re-break it.
+
+    Keyboard horizontal-drift (FIXED on device):
+    2. 438ec80b — SwipeTabContainer: resync gated on width change,
+       onFocusOut rAF-deferred re-snap. (Initial hypothesis was the
+       stripX race; partially contributed but NOT the whole story.)
+    3. 9f996789 — REAL fix: html,body { overflow-x: hidden } + root div
+       overflowX:'hidden' + onFocusOut scrollLeft reset. Root cause was
+       document.scrollLeft shifting via Android WebView scrollIntoView
+       on off-center slot input focus. Three layers of defense.
+
+    Nested-scroll elastic bounce (PARTIAL — half works):
+    4. 15d6f09b — extended html,body clip to both axes. Body
+       min-height:100vh doesn't shrink with keyboard, making body a
+       second scroll container; `overflow: hidden` clips both. Stopped
+       the whole-screen-moves-with-scroll symptom.
+    5. 4492456a — AskScreen messages container: overscrollBehavior:
+       'contain' + WebkitOverflowScrolling:'touch' to match the
+       app-wide convention (App.tsx:155-156, HomeScreen, InfoFlow).
+       Elastic bounce at scroll boundaries was absorbing reversing
+       swipes on direction change.
+
+    Doc:
+    6. 6bb1137d — CLAUDE.md sections for ChatInput + SwipeTab invariants.
+
+    Status after 6 commits: send-button drift fixed, keyboard horizontal
+    drift fixed, nested-scroll elastic bounce partially improved.
+    User (2026-04-20) reported "would barely work" on last re-test and
+    elected to defer further debugging; flagged as partial.
+  remaining_gap: |
+    AskScreen scroll on keyboard-open still feels mildly wrong on Android
+    device despite overscroll-contain. Possible remaining causes (not yet
+    investigated):
+      - Framer-motion onPan listener on SwipeTabContainer motion.div may
+        be intercepting the first ~10px of each vertical pan for axis
+        resolution, before relinquishing to native scroll.
+      - iOS/Android WebView pointer-capture quirks between framer-motion
+        and native scroll at direction-change boundaries.
+      - AskScreen messages container may need position:relative or
+        transform:translateZ(0) to isolate scroll context more strictly.
+    User decision: ship the partial fix, revisit only if the symptom
+    recurs or worsens on device QA.
   secondary_issues_flagged:
     - "@capacitor/keyboard plugin is NOT installed. Current fix works with default adjustResize behavior. If future work needs finer keyboard control, install the plugin but DO NOT use resize:'none' — users rely on the default so the input scrolls above the keyboard."
-  debug_session: ""
+    - "Initial stripX-race hypothesis (438ec80b) was half-right. The width-change gate + focus-out re-snap are still structurally correct defensive code, but the real keyboard-drift bug was document.scrollLeft shifting (fixed at 9f996789). Keeping 438ec80b landed — it covers a legitimate race that could still occur in other scenarios (device rotation, browser-UI resize)."
+  debug_session: "deferred — flagged as partial per user decision 2026-04-20"
