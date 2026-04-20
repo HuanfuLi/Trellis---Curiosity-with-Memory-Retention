@@ -13,12 +13,40 @@ import type {
   ServiceResult,
   StructuralSignalType,
 } from '../types/index.ts';
-import { cosine } from '../providers/embedding/index.ts';
+import { cosine, embedText } from '../providers/embedding/index.ts';
 import { chatCompletion } from '../providers/llm/index.ts';
 
 const ROOT_FALLBACK = 'Knowledge';
 const BRANCH_FALLBACK = 'General concepts';
 const CLUSTER_FALLBACK = 'Open questions';
+
+// Phase 33 UAT-4 classification fix (2026-04-20): embedding-based anchor pre-check.
+//
+// The by-layer classification design (step 1 branch → step 2 cluster → step 3 anchor)
+// was an intentional token-saving pivot for large mindmaps. But it has a structural
+// flaw: the LLM must commit to a branch at step 1 based on branch NAMES only, before
+// it can see which anchors exist. For cross-cutting concepts (e.g. "Spaced Repetition"
+// that plausibly fits Cognitive Science OR Educational Technology), the LLM guesses
+// at step 1 — and once it picks a branch, it's locked into that subtree and can never
+// reach a matching anchor living elsewhere. User evidence: twin "Spaced Repetition"
+// anchors under two different branches (device screenshot, 2026-04-20).
+//
+// The fix is an O(N_anchors) cosine pre-check BEFORE the tree descent. If the new
+// question's embedding is highly similar to an existing anchor, reuse it and adopt
+// that anchor's branch/cluster labels — no LLM tokens spent. The tree descent is
+// preserved as a fallback for genuinely novel concepts.
+//
+// Threshold tuned conservatively (0.82) to avoid false-positive merges. Compare to
+// the 0.5 "related" threshold used for relatedQuestionIds — that's much looser.
+// The pre-check represents "same concept", not "same topic area".
+const ANCHOR_PRE_CHECK_SIMILARITY_THRESHOLD = 0.82;
+
+// Opportunistic anchor-embedding backfill cap per classification. Anchors created
+// before this feature have no embeddingVector. Rather than a one-shot migration
+// (risky; blocks app startup), we embed up to N missing anchors during each
+// classification. At typical 100-200 anchor graphs this converges in a few Q&As
+// without perceptibly adding latency.
+const ANCHOR_BACKFILL_PER_CLASSIFICATION = 8;
 
 // Labels that were stored as fallbacks in early data — treat them as unset
 // so keyword-derived labels are used at display/context time instead.
@@ -416,8 +444,16 @@ export function buildTreeContext(questions: Question[]): string {
 
 // ─── Incremental Pipeline Helpers ───────────────────────────────────────────
 
-const PIPELINE_SYSTEM_PROMPT =
-  'You are a knowledge classification assistant. You help organize questions into a hierarchical knowledge tree with branches (academic disciplines), clusters (sub-fields), and anchors (specific concepts). Follow the response format instructions exactly.';
+const PIPELINE_SYSTEM_PROMPT = [
+  'You are a knowledge classification assistant. You organize questions into a hierarchical knowledge tree:',
+  '  - BRANCH: a broad academic discipline (e.g. Psychology, Biology, Computer Science, Mathematics, Physics, Philosophy, Economics, History, Linguistics). NOT a sub-field ("Educational Psychology", "Cognitive Science" belong under Psychology, not as separate branches). NOT a methodology ("Learning Techniques", "Personal Development" are not disciplines).',
+  '  - CLUSTER: a sub-field or recognized area WITHIN a branch (e.g. "Learning Theory" under Psychology, "Machine Learning" under Computer Science). Must be BROADER than the anchor it contains.',
+  '  - ANCHOR: a specific concept noun phrase, 1-3 words (e.g. "Spaced Repetition", "Loss Aversion", "Bernoulli Principle"). NEVER a question, sentence, or topic-description.',
+  '',
+  'STRONGLY prefer REUSING existing branches/clusters/anchors over creating new ones. Similar phrasings of the same concept belong in the same anchor. Similar sub-fields belong in the same cluster. Similar disciplines belong in the same branch. Only create NEW if the concept truly does not fit any existing option, even loosely.',
+  '',
+  'Follow the response format instructions exactly.',
+].join('\n');
 
 interface StepDecision {
   isNew: boolean;
@@ -478,23 +514,32 @@ export function buildStepPrompt(
   level: 'branch' | 'cluster' | 'anchor',
   candidates: Array<string | { id: string; name: string }>,
 ): string {
-  // Anchor-specific naming constraint. Without this, LLMs echo the user's full
-  // question phrasing (e.g. "Spaced repetition and why does it work") instead of
-  // extracting the concept noun ("Spaced Repetition"). The legacy classifyAndAnchor
-  // prompt already had this guidance; the incremental pipeline was missing it.
-  const namingHint = level === 'anchor'
-    ? '\n\nIMPORTANT: When creating a new anchor, the name MUST be a 1-3 word concept noun phrase — NEVER a sentence, question, or question paraphrase.\nGOOD: "Spaced Repetition", "Transformer Attention", "Loss Aversion", "Entropy".\nBAD: "Spaced repetition and why does it work" (this is a question, not a concept noun).'
-    : '';
+  // Level-specific hints baked in at the prompt level so the LLM sees them
+  // alongside the candidate list. Phase 33 UAT-4 fix: reuse bias + hierarchy
+  // rule previously only appeared in the one-shot new-branch combined prompt
+  // (buildNewBranchClusterAnchorPrompt); they now also guide the per-step path.
+  let levelHint = '';
+  if (level === 'branch') {
+    levelHint = '\n\nBRANCH = a broad academic discipline (Psychology, Biology, Computer Science, Mathematics, Physics, Philosophy, Economics, History, Linguistics). Do NOT create narrow sub-fields like "Educational Psychology", "Cognitive Science", "Learning Techniques", "Educational Technology" as separate branches — those belong inside Psychology or Computer Science.';
+  } else if (level === 'cluster') {
+    levelHint = '\n\nCLUSTER = a recognized sub-field WITHIN the chosen branch. Must be BROADER than the anchor it will contain, and MUST NOT be identical to the anchor name. Examples: "Learning Theory", "Behavioral Economics", "Cryptography". Do NOT use generic words ("fundamentals", "basics", "introduction", "general", "concepts") — pick a real sub-field name.';
+  } else if (level === 'anchor') {
+    levelHint = '\n\nANCHOR = a 1-3 word concept noun phrase. NEVER a sentence, question, or question paraphrase.\nGOOD: "Spaced Repetition", "Transformer Attention", "Loss Aversion", "Entropy".\nBAD: "Spaced repetition and why does it work" (question, not concept noun).';
+  }
+
+  // Reuse bias applies to every level. Applied AFTER the levelHint so the
+  // LLM reads "here is what a branch/cluster/anchor is" → "prefer reuse".
+  const reuseBias = '\n\nSTRONGLY prefer selecting an existing option over creating a new one. Similar phrasings of the same concept belong together. Only pick NEW if the concept truly does not fit ANY existing option, even loosely.';
 
   if (candidates.length === 0) {
-    return `Select or create a ${level}.\n\nNo existing ${level}s yet — create a new one.${namingHint}\n\nRespond with {"index":"NEW","name":"<${level} name>"}.`;
+    return `Select or create a ${level}.\n\nNo existing ${level}s yet — create a new one.${levelHint}\n\nRespond with {"index":"NEW","name":"<${level} name>"}.`;
   }
 
   const numbered = candidates
     .map((c, i) => `${i}. ${typeof c === 'string' ? c : c.name}`)
     .join('\n');
 
-  return `Select the best ${level} for this question, or create a new one if none fits.\n\nExisting ${level}s:\n${numbered}${namingHint}\n\nRespond with the index number (0-${candidates.length - 1}) to select an existing ${level}, or {"index":"NEW","name":"<${level} name>"} to create a new one.`;
+  return `Select the best ${level} for this question, or create a new one if truly none fits.\n\nExisting ${level}s:\n${numbered}${levelHint}${reuseBias}\n\nRespond with the index number (0-${candidates.length - 1}) to select an existing ${level}, or {"index":"NEW","name":"<${level} name>"} to create a new one.`;
 }
 
 /**
@@ -599,6 +644,104 @@ export function extractAnchorsUnderCluster(
     anchors.push({ id: q.id, name: q.title || q.content.slice(0, 40) });
   }
   return anchors;
+}
+
+// ─── Embedding-based anchor pre-check (Phase 33 UAT-4 fix) ──────────────────
+
+/**
+ * Embed the anchor's title and persist the vector on the anchor node. Called
+ * opportunistically during classification to backfill anchors that were
+ * created before this feature shipped (they have no embeddingVector).
+ * Returns the new vector, or undefined if embedding failed / not configured.
+ */
+async function backfillAnchorEmbedding(
+  anchor: Question,
+): Promise<number[] | undefined> {
+  const { settingsService } = await import('./settings.service.ts');
+  const embCfg = settingsService.getSync().embedding;
+  if (!embCfg.isConfigured) return undefined;
+  try {
+    const text = (anchor.title || anchor.content || '').trim();
+    if (!text) return undefined;
+    const vec = await embedText(text, embCfg);
+    if (!Array.isArray(vec) || vec.length === 0) return undefined;
+    const { questionService } = await import('./question.service.ts');
+    questionService.patchQuestion(anchor.id, { embeddingVector: vec });
+    return vec;
+  } catch (err) {
+    console.warn('[EchoLearn] anchor embedding backfill failed:', err instanceof Error ? err.message : err);
+    return undefined;
+  }
+}
+
+/**
+ * Pre-check: is the new question's concept already represented by an existing
+ * anchor anywhere in the graph? If yes, skip the 3-step LLM descent and reuse
+ * the matching anchor + adopt its branch/cluster labels.
+ *
+ * Returns:
+ *   - { match: Question, similarity: number } — high-confidence match above threshold
+ *   - null — no match, fall through to tree descent
+ *
+ * Uses the question's existing embeddingVector if present (set by
+ * question.service.ts post-save); otherwise embeds the question content inline.
+ * Backfills up to ANCHOR_BACKFILL_PER_CLASSIFICATION missing anchor embeddings
+ * per call so the pre-check becomes progressively more useful over time.
+ */
+export async function preCheckAnchorMatch(
+  question: Question,
+  allQuestions: Question[],
+): Promise<{ match: Question; similarity: number } | null> {
+  const { settingsService } = await import('./settings.service.ts');
+  const embCfg = settingsService.getSync().embedding;
+  if (!embCfg.isConfigured) return null;
+
+  const anchors = allQuestions.filter(q => q.isAnchorNode === true);
+  if (anchors.length === 0) return null;
+
+  // Resolve the query vector. Prefer the question's own embedding if already
+  // populated (fire-and-forget from question.service.ts might have completed);
+  // otherwise compute it inline so the pre-check works on the FIRST classification
+  // after the question is saved.
+  let queryVec = question.embeddingVector;
+  if (!queryVec || queryVec.length === 0) {
+    try {
+      queryVec = await embedText(question.content.trim(), embCfg);
+    } catch (err) {
+      console.warn('[EchoLearn] pre-check query embedding failed:', err instanceof Error ? err.message : err);
+      return null;
+    }
+  }
+
+  // Opportunistic backfill: embed up to N missing anchors inline. Embedding
+  // is async + network, so cap strictly to keep classification latency bounded.
+  let backfilled = 0;
+  for (const a of anchors) {
+    if (backfilled >= ANCHOR_BACKFILL_PER_CLASSIFICATION) break;
+    if (a.embeddingVector && a.embeddingVector.length > 0) continue;
+    const vec = await backfillAnchorEmbedding(a);
+    if (vec) {
+      a.embeddingVector = vec; // mutate the local copy so the scan below sees it
+      backfilled++;
+    }
+  }
+
+  // Scan anchors for the top cosine match.
+  let best: { match: Question; similarity: number } | null = null;
+  for (const a of anchors) {
+    if (!a.embeddingVector || a.embeddingVector.length === 0) continue;
+    const sim = cosine(queryVec, a.embeddingVector);
+    if (sim >= ANCHOR_PRE_CHECK_SIMILARITY_THRESHOLD && (!best || sim > best.similarity)) {
+      best = { match: a, similarity: sim };
+    }
+  }
+
+  if (best && import.meta.env?.DEV) {
+    console.debug(
+      `[classification] pre-check hit: anchor "${best.match.title}" similarity=${best.similarity.toFixed(3)} (threshold=${ANCHOR_PRE_CHECK_SIMILARITY_THRESHOLD})`,
+    );
+  }
+  return best;
 }
 
 // ─── Shared node-creation logic ─────────────────────────────────────────────
@@ -723,10 +866,18 @@ async function commitClassificationResult(
   }
 
   if (!anchorId) {
-    // Check if an anchor with the same name already exists under the same cluster
+    // Check if an anchor with the same name already exists under the same cluster.
+    // Phase 33 UAT-4 fix: normalize BOTH sides of the comparison. Previously the
+    // incoming result.anchorName was normalized (line ~740 above) but the stored
+    // q.title was compared raw. Anchors created pre-b2061554 (or via manual edit /
+    // import / older classification path) can have un-normalized titles like
+    // "Spaced repetition and why does it work", which would never match the clean
+    // "Spaced Repetition" the LLM produces post-normalization. Symmetric
+    // normalization makes the lookup robust against both sides.
+    const targetNormalized = result.anchorName.toLowerCase();
     const existingByName = freshQuestions.find(
       q => q.isAnchorNode === true &&
-        q.title?.toLowerCase() === result.anchorName.toLowerCase() &&
+        (normalizeAnchorName(q.title || '') || (q.title || '')).toLowerCase() === targetNormalized &&
         q.clusterLabel === result.clusterLabel
     );
 
@@ -860,6 +1011,29 @@ export async function classifyAndAnchorIncremental(
   signal?: AbortSignal,
 ): Promise<void> {
   try {
+    // 0. Embedding-based anchor pre-check (Phase 33 UAT-4 fix). If the new
+    // question's concept matches an existing anchor above the similarity
+    // threshold, reuse it and adopt its branch/cluster labels — skip the
+    // LLM tree descent entirely. See the load-bearing comment at the top
+    // of this file for rationale.
+    if (!signal?.aborted) {
+      const preCheck = await preCheckAnchorMatch(question, allQuestions);
+      if (preCheck) {
+        const existing = preCheck.match;
+        const reusedResult: ClassificationResult = {
+          briefAnswer: '',
+          keyword: '',
+          rootLabel: existing.rootLabel || 'Knowledge',
+          branchLabel: existing.branchLabel || BRANCH_FALLBACK,
+          clusterLabel: existing.clusterLabel || CLUSTER_FALLBACK,
+          anchorName: existing.title || '',
+          anchorId: existing.id,
+        };
+        await commitClassificationResult(question, reusedResult, allQuestions);
+        return;
+      }
+    }
+
     // 1. Build candidate lists
     const branches = extractUniqueBranches(allQuestions);
 
@@ -887,6 +1061,20 @@ export async function classifyAndAnchorIncremental(
     }
     // Push assistant response for KV cache continuity
     messages.push({ role: 'assistant', content: step1.rawResponse });
+
+    // Phase 33 UAT-4 fix: coerce LLM-NEW branch to an existing selection if the
+    // proposed name is a case/whitespace variant of one that already exists.
+    // Weaker models (Gemini Flash, Haiku) sometimes return {"index":"NEW","name":"psychology"}
+    // when the user already has branch "Psychology". Without this guard we'd mint
+    // a duplicate-except-for-casing branch and — because anchor lookup is scoped
+    // to cluster+branch — every subsequent anchor would also be a duplicate.
+    if (step1.decision.isNew) {
+      const proposed = (step1.decision.newName ?? '').trim().toLowerCase();
+      const matchIdx = branches.findIndex(b => b.trim().toLowerCase() === proposed);
+      if (matchIdx !== -1) {
+        step1 = { decision: { isNew: false, selectedIndex: matchIdx }, rawResponse: step1.rawResponse };
+      }
+    }
 
     if (step1.decision.isNew) {
       // New branch — must also create a cluster and an anchor. Previously this short-circuited
@@ -937,6 +1125,17 @@ export async function classifyAndAnchorIncremental(
         return;
       }
       messages.push({ role: 'assistant', content: step2.rawResponse });
+
+      // Phase 33 UAT-4 fix: same case/whitespace coercion for clusters as we do
+      // for branches above. A LLM-NEW cluster name that matches an existing one
+      // (case-insensitive) should be treated as selection of the existing one.
+      if (step2.decision.isNew) {
+        const proposedCluster = (step2.decision.newName ?? '').trim().toLowerCase();
+        const matchIdx = clusters.findIndex(c => c.trim().toLowerCase() === proposedCluster);
+        if (matchIdx !== -1) {
+          step2 = { decision: { isNew: false, selectedIndex: matchIdx }, rawResponse: step2.rawResponse };
+        }
+      }
 
       // Resolve the cluster name. The previous `step2.decision.isNew` branch
       // short-circuited with `anchorName = question.title` (raw question text);
