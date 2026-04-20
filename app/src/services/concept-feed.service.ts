@@ -989,15 +989,33 @@ export async function refillQueue(questions: Question[]): Promise<void> {
 
   try {
     const settings = settingsService.getSync();
-    // D-38: check daily generation cap.
-    // G1 / UAT-31-13 fix (Phase 32.1-02): floor dueConcepts.length at 3 so users
-    // with only 1 due concept don't exhaust the queue after one batch
-    // (multiplier=5 × 1 = 5 saturated immediately, refillQueue early-returned forever).
-    // Floor is a *minimum*, not a ceiling — users with many due concepts still get
-    // unlimited multiplier × N.
-    const dueConcepts = questions.filter(q => q.isAnchorNode);
-    const maxPosts = (settings.feed?.dailyGenerationCapMultiplier ?? FEED_DEFAULTS.dailyGenerationCapMultiplier) * Math.max(dueConcepts.length, 3);
-    if (postQueueService.getTotalGenerated() >= maxPosts) return;
+    // Daily generation cap — gate only applies AFTER the vine is finished.
+    //
+    // Phase 33 gap fix (2026-04-19): the cap was previously unconditional at this
+    // point, which caused a "vine unfinished but No more posts" regression — the
+    // cap counted totalGenerated (feed supply) while VineProgress counts
+    // exploredAnchors (user progress). The two counters drifted apart whenever
+    // the user swiped through posts without opening them, so the cap could fire
+    // while buildConceptBatch still had unexplored anchors to generate for.
+    //
+    // Fix (Option B): bypass the cap until allExplored. Once the vine is finished,
+    // the bonus-post regime takes over (see `allExplored` gate in generateMorePosts
+    // below) and the cap becomes a meaningful safety rail again.
+    //
+    // EchoLearn is local-first OSS where users provide their own LLM/YouTube/Tavily
+    // keys, so unbounded generation during the pre-finished window is NOT a cost
+    // concern for the project. If a commercial / key-brokered mode ships later,
+    // revisit this gate and reintroduce a pre-finished cap (e.g., scale with
+    // `unexploredAnchors.length` so the cap shrinks as the user reads).
+    //
+    // Previous context: D-38 + G1 / UAT-31-13 (Phase 32.1-02) added the `max(N, 3)`
+    // floor so 1-concept users didn't saturate after one batch. That floor is
+    // retained below for when the gate does eventually fire.
+    const anchors = questions.filter(q => q.isAnchorNode);
+    const exploredIds = new Set(dailyReadService.getExploredAnchors());
+    const allExplored = anchors.length > 0 && anchors.every(a => exploredIds.has(a.id));
+    const maxPosts = (settings.feed?.dailyGenerationCapMultiplier ?? FEED_DEFAULTS.dailyGenerationCapMultiplier) * Math.max(anchors.length, 3);
+    if (allExplored && postQueueService.getTotalGenerated() >= maxPosts) return;
 
     // Step 1: Build concept batch for this cycle
     const conceptIds = buildConceptBatch(questions);

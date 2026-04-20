@@ -64,7 +64,7 @@ The home feed is driven by THREE LISTS in a strict pipeline. **Do not invent a f
 - Queue length: **8**
 - Posts served per swipe-for-more: **4** (NOT 1 — operator confirmed the desired UX)
 - Style weights: see `app/src/services/style-assignment.ts:9-16` (`STYLE_WEIGHTS`)
-- Daily generation cap: `dailyGenerationCapMultiplier × max(dueConcepts.length, 3)` per `concept-feed.service.ts:937-938` (D-38, with the floor-3 fix from Phase 32.1-02)
+- Daily generation cap: `dailyGenerationCapMultiplier × max(anchors.length, 3)` — **gated by `allExplored`** (Phase 33 gap fix 2026-04-19). The cap only fires AFTER the vine is finished; before that, generation is bounded solely by `buildConceptBatch` returning `[]` when all anchors are explored. Rationale: EchoLearn is local-first OSS (users provide their own keys), so unbounded pre-finished generation is not a cost concern. If/when a key-brokered commercial mode ships, revisit this gate and scale the pre-finished cap with `unexploredAnchors.length` instead of removing it. See `concept-feed.service.ts` `refillQueue` inline comment for full rationale.
 
 ### Files
 
@@ -78,10 +78,10 @@ The home feed is driven by THREE LISTS in a strict pipeline. **Do not invent a f
 
 - Derived list is currently rebuilt every refill (not append-only with cycle position).
 - Each concept gets at most 2 entries (1 + isImportant), not weighted by style mix.
-- Removal on read is NOT wired — `dailyReadService.getExploredAnchors()` only filters rendering, doesn't remove concepts from the derived list before generation.
+- ~~Removal on read is NOT wired~~ — **CLOSED via Phase 33 gap fix**: `buildConceptBatch` at `concept-feed.service.ts:659` filters out explored anchors, AND the daily generation cap is now gated by `allExplored` so it no longer fires while the vine is unfinished.
 - Queue serves variable count (whatever's available) instead of strictly 4 per swipe.
 
-These gaps are why operator sees "swipe pops 1 post, then No more posts" on a fresh-install device with one anchor.
+The "vine unfinished but No more posts" symptom (reported 2026-04-19) was caused by the unconditional cap, not the removal-on-read logic. The cap now only applies after the vine is finished — see "Numeric defaults" above.
 
 ### When in doubt
 
