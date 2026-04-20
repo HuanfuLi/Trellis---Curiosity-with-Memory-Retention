@@ -565,7 +565,16 @@ export function AskScreen() {
       <div style={{ height: `${HEADER_HEIGHT}px`, flexShrink: 0 }} />
 
       {/* Messages */}
-      <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '16px', paddingBottom: '16px', touchAction: 'pan-y' }}>
+      {/* Phase 33 UAT-4 fix (2026-04-20): overscrollBehavior: 'contain' +
+          WebkitOverflowScrolling: 'touch' are required on every scrollable
+          region in this app. Without 'contain', the default `auto` fires
+          the native elastic bounce at scroll boundaries; the bounce
+          absorbs the first reversing swipe after a boundary hit, so users
+          need two gestures to change scroll direction — the "swipe down
+          twice to go back down" symptom. All other scroll containers in
+          the app already use this pair (App.tsx:155-156, HomeScreen,
+          InfoFlow). AskScreen was the lone outlier. */}
+      <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '16px', paddingBottom: '16px', touchAction: 'pan-y', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
         {session.origin?.type === 'post' && (
           <div
             style={{
