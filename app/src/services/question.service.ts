@@ -480,6 +480,7 @@ export const questionService = {
     saveStore(loadStore({ includeFlagged: true }).filter((q) => q.id !== id));
     deleteFromSQLite(id);
     eventBus.emit({ type: 'QUESTION_DELETED', payload: { id } });
+    eventBus.emit({ type: 'GRAPH_UPDATED' });
     return { success: true };
   },
 
