@@ -880,14 +880,17 @@ Scope:
 3. `git status` is clean (or WIP is intentionally carried with a commit explaining why).
 4. `29-VERIFICATION.md` is no longer stale w.r.t. TD-01.
 
-**Plans:** 5/8 plans executed
+**Plans:** 8/8 plans executed (Phase 33 COMPLETE 2026-04-20)
 
 Plans:
-- [x] 33-00-PLAN.md — WIP flush: commit 12 working-tree files from Phase 30-31 follow-up edits (Wave 0; WIP-FLUSH)
-- [x] 33-01-PLAN.md — TD-05 orphan sweep: delete ConceptProgressCard.tsx + 4 orphan i18n keys atomically (Wave 1; TD-05)
-- [x] 33-02-PLAN.md — TD-04 supersession: delete concept-feed-strategy.test.mjs + orphan plumbing assertion + update 29-VERIFICATION / 29-UAT-LOG (Wave 1; TD-04)
-- [x] 33-03-PLAN.md — TD-06 LeafState rename: yellow -> dying, fallen -> dead atomic commit across 9 files (Wave 2; TD-06)
-- [ ] 33-04-PLAN.md — Closure: verify 4 ROADMAP success criteria + record SATISFIED-BY-760fa4f8 + flip VALIDATION nyquist_compliant (Wave 3; TSC-HYGIENE)
+- [x] 33-00-PLAN.md — WIP flush: commit 12 working-tree files from Phase 30-31 follow-up edits (Wave 0; WIP-FLUSH) — `fe4a2387`
+- [x] 33-01-PLAN.md — TD-05 orphan sweep: delete ConceptProgressCard.tsx + 4 orphan i18n keys atomically (Wave 1; TD-05) — `e297a77a`
+- [x] 33-02-PLAN.md — TD-04 supersession: delete concept-feed-strategy.test.mjs + orphan plumbing assertion + update 29-VERIFICATION / 29-UAT-LOG (Wave 1; TD-04) — `e6ca3d35` + `69389d45`
+- [x] 33-03-PLAN.md — TD-06 LeafState rename: yellow -> dying, fallen -> dead atomic commit across 8 files (Wave 2; TD-06) — `c8177c72`
+- [x] 33-04-PLAN.md — Closure: verify 4 ROADMAP success criteria + record SATISFIED-BY-760fa4f8 + flip VALIDATION nyquist_compliant (Wave 3; TSC-HYGIENE) — `bbaefd86`
+- [x] 33-05-PLAN.md — v2 prerequisite: re-flush Phase 32.1 Wave 4 follow-on WIP (Bugs A/C/D + 6/7/8/9/10/14) (Wave 0; WAVE-4-WIP) — SATISFIED-BY-`6066c709` (operator pre-committed)
+- [x] 33-06-PLAN.md — v2 perf memoization: settings hoist (D-22) + React.memo on ConceptCard + VineProgress; TrellisLeaf excluded (D-23) (Wave 2; PERF-MEMO) — `5542f78f` + `59bb0a8d` + `9b9eeb01`
+- [x] 33-07-PLAN.md — v2 cosmetic polish: WCAG 2.5.8 touch targets (PlannerScreen refresh, ChatInput mic+globe → 44x44px) + spacing/shadow tokens (D-24/D-25/D-26) (Wave 2; COSMETIC-POLISH) — `616c761f` + `47d81049`
 
 ---
 
@@ -895,3 +898,5 @@ _Created: 2026-03-26 | v1.1 Roadmap | 17 phases | 91 requirements mapped_
 _Updated: 2026-04-18 — Phase 31: added 3 gap closure plans (31-08..10) from UAT feedback_
 _Updated: 2026-04-18 — v1.4 audit: added Phase 32 (verification close-out) + Phase 33 (code hygiene) to close `.planning/v1.4-MILESTONE-AUDIT.md` gaps_
 _Updated: 2026-04-19 — Phase 33 plans created (33-00..04): WIP flush + TD-04/05/06 resolution + closure_
+_Updated: 2026-04-19 — Phase 33 v2 plans added (33-05/06/07): Wave 4 WIP re-flush + perf memoization + cosmetic polish_
+_Updated: 2026-04-20 — Phase 33 COMPLETE (8/8 plans). VERIFICATION 8/8 must-haves passed. tsc clean. Test baseline preserved (419 pass / 27 pre-existing fail). Branch `gsd/phase-33-hygiene-and-polish` ready for review/merge._
