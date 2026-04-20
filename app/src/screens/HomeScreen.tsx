@@ -52,6 +52,21 @@ export function HomeScreen() {
   const isLoadingMoreRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // D-22b (Phase 33 Plan 06): snapshot settings reads to avoid re-evaluating
+  // settingsService.getSync() on every render. /home is always-mounted (Phase 22
+  // swipe-tab architecture) so it re-renders frequently on event-bus emissions.
+  // Snapshot pattern is per CONTEXT D-22 option (b) — subscribe-once-on-mount.
+  // Settings changes during a single home-screen mount are rare (user navigates to
+  // /settings, changes a value, navigates back). If invalidation becomes needed,
+  // add an event-bus subscription that calls a setter; the snapshot pattern
+  // already supports it.
+  const [settingsSnapshot] = useState(() => {
+    const s = settingsService.getSync();
+    return {
+      showConnectionScores: s.embeddingDebug.showScores,
+    };
+  });
+
   // Stable ref so the onLoadMore callback can access latest questions
   // without re-creating the callback (which would reset scroll listeners).
   const questionsRef = useRef<Question[]>(questions);
@@ -724,7 +739,7 @@ export function HomeScreen() {
         <InlineInfoFlow
           items={infoFlowItems}
           onOpenConnection={handleOpenConnection}
-          showConnectionScores={settingsService.getSync().embeddingDebug.showScores}
+          showConnectionScores={settingsSnapshot.showConnectionScores}
           onOpenPost={(postId, post) => {
             navigate(`/posts/${postId}`, { state: { post } });
           }}
