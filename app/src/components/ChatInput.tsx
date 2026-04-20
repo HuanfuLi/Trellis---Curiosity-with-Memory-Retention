@@ -159,6 +159,14 @@ export function ChatInput({ onSend, placeholder, disabled, webSearchEnabled, onT
             disabled={disabled}
             style={{
               flex: 1,
+              // Phase 33 UAT-4 fix (2026-04-20): minWidth: 0 is load-bearing.
+              // Without it, the input's flex-basis: auto defaults to intrinsic
+              // content width, which Android WebView refuses to shrink below.
+              // The flexShrink:0 send button then overflows off-screen. This
+              // regressed twice — once when position:fixed → flex-column
+              // (d45c228c), again when mic/globe grew 34→44px (47d81049).
+              // Do NOT remove without replacing the flex-shrink guarantee.
+              minWidth: 0,
               background: 'transparent',
               color: 'var(--foreground)',
             }}
