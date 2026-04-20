@@ -128,17 +128,33 @@ Recurring device-only regression. Prior incidents:
 
 ---
 
+## Root horizontal overflow clip (Phase 33 UAT-4 — load-bearing)
+
+The `SwipeTabContainer` strip is **500vw wide** (5 slots × 100vw). Without a horizontal overflow clip at the document root, the browser becomes horizontally scrollable. On Android WebView, opening the system keyboard on a focused input inside an off-center slot (AskScreen is index 2) triggers Chromium's `scrollIntoView` on the input, which shifts `document.scrollLeft` — the whole app visibly drifts left. On keyboard close, Chromium only reverses the viewport height, NOT the scrollLeft, so the drift persists. Tab navigation recovers because the route change re-layouts and resets scroll position as a side effect.
+
+Three layers of defense prevent this:
+
+1. **`html, body { overflow-x: hidden }`** in `app/src/index.css` — primary structural fix. The document cannot be horizontally scrolled regardless of descendant width.
+2. **`overflowX: 'hidden'`** on the App root div (`app/src/App.tsx`) — React-layer belt-and-suspenders if the CSS rule is ever removed.
+3. **`document.scrollingElement.scrollLeft = 0`** in `SwipeTabContainer.onFocusOut` — recovery path that resets any drift that somehow slipped past layers 1+2.
+
+### Rules
+
+1. **Don't remove `html, body { overflow-x: hidden }` from index.css.** `tests/layout/root-horizontal-clip.test.mjs` enforces all three layers.
+2. **Don't add a horizontally-scrolling region outside the SwipeTabContainer** (e.g., a horizontal carousel at the page root). The clip applies globally; design horizontal scrollers to be inside their own `overflow-x: auto` container.
+3. **Don't remove `overflowX: 'hidden'`** from the App root div or the `scrollLeft = 0` reset in `onFocusOut`. Same test.
+
 ## SwipeTabContainer resize + keyboard handling (Phase 33 UAT-4 — load-bearing)
 
 `app/src/components/SwipeTabContainer.tsx` owns the 5-wide horizontal strip's `translateX` (`stripX`). Two invariants are load-bearing:
 
-1. **`resync()` gates on width change.** The handler reads `getScreenWidth()`, compares to `screenWidthRef.current`, and **returns early if unchanged**. Height-only resize events (keyboard open/close) must be no-ops. Android WebView fires `visualViewport.resize` events repeatedly during keyboard animations and `window.innerWidth` can transiently report pixel-ratio-adjusted values — unconditional re-snap placed the active slot at a wrong X, producing "Ask screen zooms/deforms until the user navigates away" (navigateToTab unconditionally re-snaps, which is why tab nav recovered).
-2. **Focus-out forces a re-snap** (deferred one frame so the close-resize finishes first). Defense-in-depth — recovers any drift that somehow slipped past invariant 1.
+1. **`resync()` gates on width change.** The handler reads `getScreenWidth()`, compares to `screenWidthRef.current`, and **returns early if unchanged**. Height-only resize events (keyboard open/close) must be no-ops. Android WebView fires `visualViewport.resize` events repeatedly during keyboard animations and `window.innerWidth` can transiently report pixel-ratio-adjusted values — unconditional re-snap would drift the active slot mid-animation.
+2. **Focus-out forces a re-snap** (deferred one frame so the close-resize finishes first) AND resets `document.scrollingElement.scrollLeft` (see "Root horizontal overflow clip" above). Defense-in-depth recovery path.
 
 ### Rules
 
 1. **Don't remove the `newWidth === screenWidthRef.current` early-return in `resync()`.** `tests/components/SwipeTabContainer.resize-guard.test.mjs` enforces it.
-2. **Don't remove the `onFocusOut` re-snap.** Same test enforces it.
+2. **Don't remove the `onFocusOut` re-snap or scrollLeft reset.** Same test + the root-horizontal-clip test.
 3. **Don't install `@capacitor/keyboard` with `resize: 'none'`** as a workaround — users rely on the default `adjustResize` so the input scrolls above the keyboard. Fix layout bugs at the stripX level, not by disabling resize.
 
 ---

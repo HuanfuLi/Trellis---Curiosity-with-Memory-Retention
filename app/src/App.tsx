@@ -123,7 +123,7 @@ function RootLayout() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: 'var(--surface)' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--surface)', overflowX: 'hidden' }}>
       {/* Fixed shield that covers the status bar area so scrolled content never shows under it */}
       <div
         style={{

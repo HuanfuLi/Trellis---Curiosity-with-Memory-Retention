@@ -267,6 +267,18 @@ body.keyboard-open #bottom-navigation {
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* Phase 33 UAT-4 fix (2026-04-20): clip horizontal overflow at the root.
+   * The SwipeTabContainer strip is 500vw wide (5 slots × 100vw); without
+   * this clip the document becomes horizontally scrollable. When Android
+   * WebView's system keyboard opens on a focused input inside an off-center
+   * slot, Chromium calls scrollIntoView and shifts document.scrollLeft —
+   * the entire app visibly drifts left. On close, scrollLeft is NOT
+   * reset, so the drift persists until a route change re-layouts. This
+   * rule makes the drift structurally impossible. DO NOT REMOVE. */
+  html, body {
+    overflow-x: hidden;
+  }
+
   body {
     background-color: var(--background);
     color: var(--foreground);

@@ -92,12 +92,16 @@ export function SwipeTabContainer({ screens, routes, children }: SwipeTabContain
       keyboardOpenRef.current = false;
       // Defer one frame so the keyboard-close viewport resize finishes
       // before we read getScreenWidth(). Unconditional snap — mirrors
-      // navigateToTab's recovery path.
+      // navigateToTab's recovery path. Also reset document.scrollLeft
+      // as defense-in-depth against the keyboard-scroll-into-view drift
+      // (primary fix is overflow-x: hidden on html/body, see index.css).
       requestAnimationFrame(() => {
         screenWidthRef.current = getScreenWidth();
         if (!animatingRef.current && lockAxisRef.current !== 'x') {
           stripX.set(computeTargetX(activeIndexRef.current, screenWidthRef.current));
         }
+        const root = document.scrollingElement ?? document.documentElement;
+        if (root && root.scrollLeft !== 0) root.scrollLeft = 0;
       });
     };
     document.addEventListener('focusin', onFocusIn);
