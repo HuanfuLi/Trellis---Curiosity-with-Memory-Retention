@@ -892,6 +892,74 @@ Plans:
 - [x] 33-06-PLAN.md — v2 perf memoization: settings hoist (D-22) + React.memo on ConceptCard + VineProgress; TrellisLeaf excluded (D-23) (Wave 2; PERF-MEMO) — `5542f78f` + `59bb0a8d` + `9b9eeb01`
 - [x] 33-07-PLAN.md — v2 cosmetic polish: WCAG 2.5.8 touch targets (PlannerScreen refresh, ChatInput mic+globe → 44x44px) + spacing/shadow tokens (D-24/D-25/D-26) (Wave 2; COSMETIC-POLISH) — `616c761f` + `47d81049`
 
+### Phase 34: v1.4 close-out — verification debt + test/orphan cleanup + device UAT + WIP commit
+
+**Goal:** Close all gaps surfaced by `.planning/v1.4-MILESTONE-AUDIT.md` (2026-04-24) in a single bundled phase so v1.4 can ship. Combines (a) the verification write-ups Phase 32 was supposed to produce but never executed, (b) the two new test-desync warnings introduced post-2026-04-18, (c) the orphan-export tail Phase 33 plan 33-01 left behind, (d) the VALIDATION.md doc-drift flips, (e) the device UAT retests pending from Phase 32.1 + Phase 33, and (f) the WIP commit decision on the rebrand branch.
+
+**Requirements:** None net-new — closes audit gaps PHASE-30-VERIFICATION, PHASE-31-VERIFICATION, PHASE-32-EXECUTION, SEAM-11, SEAM-12, SEAM-2-tail, VALIDATION-DRIFT-{28,29,30,32}, 32.1-G2/G4/G5-DEVICE-RETEST, 33-HUMAN-UAT-1/2, WIP-COMMIT-DECISION.
+**Depends on:** Phase 33 (verification baseline; HEAD `245fae4d`)
+**Gap closure:** Closes all unresolved items from `.planning/v1.4-MILESTONE-AUDIT.md`
+
+Scope:
+
+1. **Write `30-VERIFICATION.md`** — audit each of the 22 Phase 30 decisions (D-01..D-22) inline against current code. 13 are claimed in `30-02-SUMMARY.md` frontmatter (D-04, D-07..D-11, D-13..D-18, D-20). 9 (D-01, D-02, D-03, D-05, D-06, D-12, D-19, D-21, D-22) need explicit VERIFIED / SUPERSEDED-BY-PHASE-31 / NO-OP / DEFERRED rows. Many of these were superseded by Phase 31's VineProgress redesign — document each supersession with a pointer to the Phase 31 / Phase 33 commit that replaced it. Use Phase 29's abbreviated style (truth table + artifacts + requirements coverage; skip Key Link/Data-Flow Trace).
+
+2. **Write `31-VERIFICATION.md`** — audit each of the 47 Phase 31 decisions (D-01..D-47) inline. 28 are claimed across 31-02/05/06/07/08/09 SUMMARY frontmatter; 19 (D-08, D-11, D-14..D-27, D-44..D-46) need explicit rows. Fold in 31-UAT.md retest rows from Phase 32.1 plans 32.1-01/02/03 (tests 2/3/4/5/7/11/13/14) so UAT outcomes are visible in the audit trail. Note: device-pending items (G2/G4/G5) flip to VERIFIED only after Phase 34's device UAT step records a pass.
+
+3. **Write `32-CLOSURE.md`** — annotate Phase 32 absorption: UAT retest intent (32-01-PLAN, 32-03-PLAN) was absorbed into Phase 32.1 plans 32.1-01/02/03; verification write-ups (32-02-PLAN — write 30/31 VERIFICATION) were absorbed into Phase 34 (this phase, plans 34-01/02). Annotate `32-VALIDATION.md` to reflect "absorbed, no execution".
+
+4. **Fix Seam 11 — CLASSIFICATION_COMPLETED test desync:**
+   - Update `app/tests/services/trellis-replant.test.mjs:137,145` and `app/tests/services/trellis-prune.test.mjs:95,103` to subscribe to `GRAPH_UPDATED` instead of the deleted `CLASSIFICATION_COMPLETED` event.
+   - Resolve the `_actions-mock-loader.mjs` runner gap so the 7 trellis-actions tests actually load — either add `--import ./tests/services/_actions-mock-loader.mjs` to the npm test invocation, or inline the necessary mocks inside each test file.
+   - Verify: 7 trellis-actions tests run + pass.
+
+5. **Fix Seam 12 — image-pregen test guards dead path:**
+   - **MUST land BEFORE the WIP commit** (item 7 below) so committing WIP doesn't introduce a regression.
+   - Update `app/tests/screens/HomeScreen.image-pregen-filter.test.mjs` to assert the `imagePosts.filter((p) => p.presentationStyle === 'image')` pattern in `concept-feed.service.ts:refillQueue` (around line 1388 in WIP) instead of `HomeScreen.tsx:handleLoad`.
+
+6. **Clean up Seam 2 tail — orphan exports:**
+   - Delete `app/src/services/post-store.service.ts` (zero consumers across `src/` and `tests/`).
+   - Delete `ImmersiveInfoFlow` export at `app/src/components/InfoFlow.tsx:808-815` (zero consumers; missing D-29 video-stop-on-swipe wiring is a footgun if revived).
+
+7. **VALIDATION.md flips (doc drift):**
+   - `28-VALIDATION.md`: `status: draft` → `validated`, `nyquist_compliant: false` → `true`. VERIFICATION.md already passed 30/30 on 2026-04-16; pure doc drift.
+   - `29-VALIDATION.md`: same flip. VERIFICATION.md already passed 10/10 on 2026-04-17; doc drift.
+   - `30-VALIDATION.md`: flip ONLY after item 1 lands clean (no DEFERRED rows that block validation).
+   - `32-VALIDATION.md`: do NOT flip — annotate "absorbed, no execution" instead per item 3.
+
+8. **Device UAT retest session (operator action — record in `34-UAT-LOG.md`):**
+   - 32.1-G2 (UAT-31-4): video touch overlay reaches YouTube native controls (or pattern-(b) fallback if needed)
+   - 32.1-G4 (STARTER-PERSIST): starter posts persist after view on fresh-install device
+   - 32.1-G5 (CLEAR-RELOAD): Clear All Data auto-navigates to /home
+   - 33-HUMAN-UAT-1: touch-target feel on PlannerScreen refresh + ChatInput mic/globe at 44×44
+   - 33-HUMAN-UAT-2: React.memo behavioral correctness on live feed (8 cards, swipe-for-more 4 posts, image-gen toggle, VineProgress full-width)
+   - **Opportunistic** (only if device session covers them): Phase 28's 6 deferred human-UAT items (haptic, slide-down, scroll shadow, resize re-snap, trellis pulse, locale switch). Per Phase 32 D-06 these don't gate v1.4.
+   - On pass: flip 32.1-VERIFICATION.md status from `human_needed` → `passed`; record human-verify pass on 33-VERIFICATION.md and 28-VERIFICATION.md (where applicable).
+
+9. **WIP commit decision on `gsd/phase-33-hygiene-and-polish`:**
+   - 26 modified files + 5 untracked PWA/icon assets. Documented in `33-REBRAND.md` as the EchoLearn → Trellis rebrand plus follow-on functional improvements.
+   - Operator decides commit shape: (a) single rebrand+functional commit, (b) split into rebrand-only + each functional change separately, or (c) further-fix-first then commit.
+   - Item 5 (Seam 12 fix) MUST be in the same commit set so test baseline doesn't regress.
+   - Verify post-commit: `npx tsc -b --noEmit` exits 0; `npm test` baseline matches 449 pass / 27 fail (or improves to 456 pass / 20 fail if Seam 11 fix in item 4 lands first).
+
+**Out of scope:**
+- VineProgress dead props cleanup (`explored`, `total`, `isComplete`) — defer to v1.5.
+- Pre-existing trellis test failures from `ERR_IMPORT_ATTRIBUTE_MISSING` (Node 25 JSON import) — long-standing infrastructure issue, not a v1.4 regression.
+- Phase 32.1 Wave 3/4 addenda formal verifier pass — addenda were written by session-Claude not gsd-verifier. Optional rerun at v1.5 close-out.
+- Rebrand localStorage key migration — documented in `33-REBRAND.md` as a separate post-presentation task.
+
+**Success criteria:**
+1. `30-VERIFICATION.md` and `31-VERIFICATION.md` exist; every decision row in each is VERIFIED / SUPERSEDED / NO-OP / DEFERRED with specific evidence.
+2. `32-CLOSURE.md` exists and `32-VALIDATION.md` is annotated.
+3. 7 trellis-actions tests actually run and pass; `HomeScreen.image-pregen-filter.test.mjs` passes both pre- and post-WIP commit.
+4. `post-store.service.ts` and `ImmersiveInfoFlow` export are deleted; tsc clean; no consumers broken.
+5. `28-VALIDATION.md`, `29-VALIDATION.md`, `30-VALIDATION.md` all show `status: validated` + `nyquist_compliant: true`. `32-VALIDATION.md` annotated.
+6. `34-UAT-LOG.md` records device retest results for all 5 items in step 8; 32.1-VERIFICATION.md flipped from `human_needed` → `passed`.
+7. `git status` shows clean working tree on `gsd/phase-33-hygiene-and-polish`; HEAD includes the WIP commit set.
+8. Re-run `/gsd:audit-milestone v1.4` produces `status: passed` (or `tech_debt` with only deferred items).
+
+**Plans:** TBD (run `/gsd:plan-phase 34` to break down — likely 4-6 plans across 2-3 waves).
+
 ---
 
 _Created: 2026-03-26 | v1.1 Roadmap | 17 phases | 91 requirements mapped_
@@ -900,3 +968,4 @@ _Updated: 2026-04-18 — v1.4 audit: added Phase 32 (verification close-out) + P
 _Updated: 2026-04-19 — Phase 33 plans created (33-00..04): WIP flush + TD-04/05/06 resolution + closure_
 _Updated: 2026-04-19 — Phase 33 v2 plans added (33-05/06/07): Wave 4 WIP re-flush + perf memoization + cosmetic polish_
 _Updated: 2026-04-20 — Phase 33 COMPLETE (8/8 plans). VERIFICATION 8/8 must-haves passed. tsc clean. Test baseline preserved (419 pass / 27 pre-existing fail). Branch `gsd/phase-33-hygiene-and-polish` ready for review/merge._
+_Updated: 2026-04-25 — Phase 34 added: v1.4 close-out bundling all gaps from `.planning/v1.4-MILESTONE-AUDIT.md` (verification debt + test desyncs + orphan tail + VALIDATION drift + device UAT + WIP commit) into a single phase per operator preference._
