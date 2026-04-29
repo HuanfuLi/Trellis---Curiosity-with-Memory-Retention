@@ -76,7 +76,8 @@ describe('useQuestions system prompt stability (Phase 35)', () => {
     // The assistant context message must appear AFTER ...historyMessages and BEFORE the user turn.
     const historySpread = pass1Array.indexOf('...historyMessages');
     const assistantCtx = pass1Array.search(/role:\s*['"]assistant['"],\s*content:\s*assistantContextMessage/);
-    const userTurn = pass1Array.search(/role:\s*['"]user['"],\s*content:\s*content\b/);
+    // Match both `content` shorthand and `content: content` long-form for the user turn.
+    const userTurn = pass1Array.search(/role:\s*['"]user['"]\s*,\s*content(?:\s*:\s*content)?\s*[,}]/);
     assert.ok(historySpread !== -1, 'Pass 1 array must spread ...historyMessages');
     assert.ok(userTurn !== -1, 'Pass 1 array must contain the new user turn `{ role: "user", content }`');
     assert.ok(
@@ -101,7 +102,8 @@ describe('useQuestions system prompt stability (Phase 35)', () => {
     // Order: ...historyMessages → assistant(context) → user(content) → assistant(searched-the-web) → user(search-results).
     const historySpread = pass2Array.indexOf('...historyMessages');
     const assistantCtx = pass2Array.search(/role:\s*['"]assistant['"],\s*content:\s*assistantContextMessage/);
-    const userTurn = pass2Array.search(/role:\s*['"]user['"],\s*content:\s*content\b/);
+    // Match both `content` shorthand and `content: content` long-form for the user turn.
+    const userTurn = pass2Array.search(/role:\s*['"]user['"]\s*,\s*content(?:\s*:\s*content)?\s*[,}]/);
     const searchAck = pass2Array.indexOf('I searched the web');
     const searchResults = pass2Array.indexOf('Web search results for');
     assert.ok(historySpread !== -1, 'Pass 2 array must spread ...historyMessages');
