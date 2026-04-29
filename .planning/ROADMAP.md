@@ -970,6 +970,16 @@ Plans:
 - [x] 34-07-PLAN.md — Flip 28/29/30-VALIDATION.md from draft to validated (Wave 4; VALIDATION-DRIFT-{28,29,30})
 - [x] 34-08-PLAN.md — Device UAT log (G2/G4/G5 retroactive PASS + 33-UAT-1/2 pending) + 32.1-VERIFICATION.md status flip + 33-REBRAND.md Functional Changes addendum + Presentation/ in .gitignore + 5-commit WIP land on gsd/phase-33-hygiene-and-polish (Wave 5; DEVICE-UAT-RETEST + WIP-COMMIT-SHAPE)
 
+### Phase 35: fix the dynamic-system-prompt issue
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 34
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 35 to break down)
+
 ---
 
 _Created: 2026-03-26 | v1.1 Roadmap | 17 phases | 91 requirements mapped_
@@ -980,3 +990,4 @@ _Updated: 2026-04-19 — Phase 33 v2 plans added (33-05/06/07): Wave 4 WIP re-fl
 _Updated: 2026-04-20 — Phase 33 COMPLETE (8/8 plans). VERIFICATION 8/8 must-haves passed. tsc clean. Test baseline preserved (419 pass / 27 pre-existing fail). Branch `gsd/phase-33-hygiene-and-polish` ready for review/merge._
 _Updated: 2026-04-25 — Phase 34 added: v1.4 close-out bundling all gaps from `.planning/v1.4-MILESTONE-AUDIT.md` (verification debt + test desyncs + orphan tail + VALIDATION drift + device UAT + WIP commit) into a single phase per operator preference._
 _Updated: 2026-04-25 — Phase 34 plans created (34-01..08): 8 plans across 5 waves closing all v1.4-MILESTONE-AUDIT gaps; ready for execute-phase._
+_Updated: 2026-04-29 — Phase 35 added: fix the dynamic-system-prompt issue (move per-turn candidate context out of system role to restore KV-cache prefix coverage in Ask chat). Tool miscount corrected manually from suggested "Phase 28" to actual next-integer "Phase 35"._
