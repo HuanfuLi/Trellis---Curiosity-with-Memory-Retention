@@ -133,4 +133,53 @@ describe('useQuestions system prompt stability (Phase 35)', () => {
       'useQuestions.ts must still import formatCandidateContextPack from canonical-knowledge.service — Phase 35 keeps the graph-context content, only relocates its message role',
     );
   });
+
+  it('USER_ACK_BEFORE_GRAPH_CONTEXT constant is declared once and inserted between history and assistant context in BOTH passes (Phase 35 UAT-1 strict-alternation fix)', () => {
+    // Asserts the gap-closure shape: `[system, ...history, user(ack), assistant(ctx), user(query)]`.
+    // Some open-source local LLMs (Qwen via LM Studio's OpenAI-compatible proxy was the prompting
+    // incident — UAT Test 1 blocker) reject the prior shape with "No user query found in messages"
+    // because their jinja chat template strictly requires user→assistant alternation. This test
+    // locks the user-ack message in place so a future "simplify back to D-08 original" refactor
+    // doesn't silently re-break the local-LLM dev path.
+
+    // 1. Constant declared exactly once.
+    const decls = source.match(/const\s+USER_ACK_BEFORE_GRAPH_CONTEXT\s*=/g) ?? [];
+    assert.equal(
+      decls.length,
+      1,
+      `USER_ACK_BEFORE_GRAPH_CONTEXT must be declared exactly once in useQuestions.ts so Pass 1 and Pass 2 share the constant byte-stable string. Found ${decls.length} declarations.`,
+    );
+
+    // 2. Pass 1 ordering: ...historyMessages → user(USER_ACK_BEFORE_GRAPH_CONTEXT) → assistant(assistantContextMessage) → user(content).
+    const pass1Idx = source.indexOf('const stream = chatStream(');
+    assert.ok(pass1Idx !== -1, 'useQuestions.ts must contain the Pass 1 chatStream call');
+    const pass1ArrayEnd = source.indexOf('llmConfig', pass1Idx);
+    const pass1Array = source.slice(pass1Idx, pass1ArrayEnd);
+
+    const p1History = pass1Array.indexOf('...historyMessages');
+    const p1UserAck = pass1Array.search(/role:\s*['"]user['"],\s*content:\s*USER_ACK_BEFORE_GRAPH_CONTEXT/);
+    const p1AssistantCtx = pass1Array.search(/role:\s*['"]assistant['"],\s*content:\s*assistantContextMessage/);
+    const p1UserTurn = pass1Array.search(/role:\s*['"]user['"]\s*,\s*content(?:\s*:\s*content)?\s*[,}]/);
+    assert.ok(p1UserAck !== -1, 'Pass 1 array must contain `{ role: "user", content: USER_ACK_BEFORE_GRAPH_CONTEXT }`');
+    assert.ok(
+      p1History < p1UserAck && p1UserAck < p1AssistantCtx && p1AssistantCtx < p1UserTurn,
+      `Pass 1 array order must be: ...historyMessages → user(USER_ACK_BEFORE_GRAPH_CONTEXT) → assistant(assistantContextMessage) → user(content). Got offsets history=${p1History}, userAck=${p1UserAck}, assistantCtx=${p1AssistantCtx}, userTurn=${p1UserTurn}.`,
+    );
+
+    // 3. Pass 2 ordering: same head shape as Pass 1, then existing search-flow messages tail.
+    const pass2Idx = source.indexOf('const stream2 = chatStream(');
+    assert.ok(pass2Idx !== -1, 'useQuestions.ts must contain the Pass 2 chatStream call');
+    const pass2ArrayEnd = source.indexOf('llmConfig', pass2Idx);
+    const pass2Array = source.slice(pass2Idx, pass2ArrayEnd);
+
+    const p2History = pass2Array.indexOf('...historyMessages');
+    const p2UserAck = pass2Array.search(/role:\s*['"]user['"],\s*content:\s*USER_ACK_BEFORE_GRAPH_CONTEXT/);
+    const p2AssistantCtx = pass2Array.search(/role:\s*['"]assistant['"],\s*content:\s*assistantContextMessage/);
+    const p2UserTurn = pass2Array.search(/role:\s*['"]user['"]\s*,\s*content(?:\s*:\s*content)?\s*[,}]/);
+    assert.ok(p2UserAck !== -1, 'Pass 2 array must contain `{ role: "user", content: USER_ACK_BEFORE_GRAPH_CONTEXT }` — same closure constant as Pass 1, preserves Pass1→Pass2 prefix-cache continuity');
+    assert.ok(
+      p2History < p2UserAck && p2UserAck < p2AssistantCtx && p2AssistantCtx < p2UserTurn,
+      `Pass 2 array order must be: ...historyMessages → user(USER_ACK_BEFORE_GRAPH_CONTEXT) → assistant(assistantContextMessage) → user(content) → ... search-flow messages ... . Got offsets history=${p2History}, userAck=${p2UserAck}, assistantCtx=${p2AssistantCtx}, userTurn=${p2UserTurn}.`,
+    );
+  });
 });
