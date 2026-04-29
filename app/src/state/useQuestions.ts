@@ -137,14 +137,29 @@ export function useQuestions(): UseQuestionsReturn {
         const store = questionService.getAll();
         const candidatePack = buildCandidateContextPack(content, store);
 
+        // ═══ Phase 35 — System prompt MUST be byte-stable across turns ═══
+        // The per-turn formatCandidateContextPack(candidatePack) interpolation lives in
+        // a tail assistant message below, NOT in this string. Keeping this string stable
+        // lets the provider's KV-cache prefix cover [system, ...history] across turns.
+        // See app/CLAUDE.md "Ask-chat system prompt — byte-stable across turns" and
+        // tests/state/useQuestions-system-prompt-stability.test.mjs.
         const systemPrompt = [
           'You are a knowledgeable learning assistant. Answer questions clearly and thoroughly.',
           'Do not generate harmful, illegal, sexually explicit, or deceptive content.',
-          `Knowledge graph candidate context:\n${formatCandidateContextPack(candidatePack)}`,
           WEB_SEARCH_TOOL_PROMPT,
         ]
           .filter(Boolean)
           .join('\n');
+
+        // Tail-position assistant message carries the per-turn candidate context pack.
+        // Keep this OUT of the system prompt — system must be byte-stable across turns
+        // so the provider's KV-cache prefix covers [system, ...history]. (Phase 35)
+        // Reused identically by Pass 1 AND Pass 2 (single closure variable referenced
+        // twice) so Pass 1's warm prefix carries over to Pass 2 unbroken. The empty-pack
+        // case still emits this message — formatCandidateContextPack returns the
+        // byte-stable string 'No close graph candidates found.' (D-07 planner choice:
+        // keep one structural shape across turns).
+        const assistantContextMessage = `Knowledge graph candidate context:\n${formatCandidateContextPack(candidatePack)}`;
 
         // Convert SessionMessage[] to ChatMessage[] for the LLM (append-only for KV-cache)
         const historyMessages: { role: 'user' | 'assistant'; content: string }[] =
@@ -161,6 +176,7 @@ export function useQuestions(): UseQuestionsReturn {
           [
             { role: 'system', content: systemPrompt },
             ...historyMessages,
+            { role: 'assistant', content: assistantContextMessage },
             { role: 'user', content },
           ],
           llmConfig,
@@ -220,6 +236,7 @@ export function useQuestions(): UseQuestionsReturn {
               [
                 { role: 'system', content: systemPrompt },
                 ...historyMessages,
+                { role: 'assistant', content: assistantContextMessage },
                 { role: 'user', content },
                 {
                   role: 'assistant',
