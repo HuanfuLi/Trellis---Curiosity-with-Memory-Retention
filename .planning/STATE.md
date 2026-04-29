@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: gap closure)
-status: Executing Phase 35
+status: Phase 35 shipped — PR pending manual creation on origin
 stopped_at: "Completed 35-05-PLAN.md (gap closure: strict-alternation user-ack for Qwen via LM Studio)"
-last_updated: "2026-04-29T13:58:22.195Z"
+last_updated: "2026-04-29T15:30:13.486Z"
 progress:
   total_phases: 21
   completed_phases: 0
