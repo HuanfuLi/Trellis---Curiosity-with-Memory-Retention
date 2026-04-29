@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: gap closure)
 status: Executing Phase 35
-stopped_at: Completed 35-03-PLAN.md (CLAUDE.md load-bearing rule for Ask-chat system-prompt byte-stability)
-last_updated: "2026-04-29T12:57:06.452Z"
+stopped_at: "Completed 35-05-PLAN.md (gap closure: strict-alternation user-ack for Qwen via LM Studio)"
+last_updated: "2026-04-29T13:58:22.195Z"
 progress:
   total_phases: 21
   completed_phases: 0
@@ -12,7 +12,17 @@ progress:
   completed_plans: 0
 ---
 
-# Project State: Phase 35 COMPLETE — KV-cache byte-stability close-out for LabPresentation Section 4.7
+# Project State: Phase 35 GAP CLOSURE LANDED — Qwen + LM Studio strict-alternation user-ack (35-05) shipped, awaiting operator UAT re-run
+
+## Latest Decisions (Phase 35-05, 2026-04-29 — gap closure)
+
+- [Phase 35-05] D-08 fallback executed verbatim: inserted `const USER_ACK_BEFORE_GRAPH_CONTEXT = 'Here is the knowledge graph context for this turn:'` as a constant byte-stable `role: 'user'` message BETWEEN `...historyMessages` and `{ role: 'assistant', content: assistantContextMessage }` in BOTH Pass 1 and Pass 2 of `useQuestions.askStreaming`. Closes UAT Test 1 blocker (Qwen 3.5 via LM Studio jinja error `"No user query found in messages"`).
+- [Phase 35-05] CONTEXT.md D-08 explicitly named this risk; 35-01-SUMMARY.md "Decisions Made" D-08 paragraph pre-recorded the exact fallback path. UAT Test 1 surfaced it as a blocker; 35-05 is the structural close-out. No new decisions required at execution time — the planner had already pre-decided the shape.
+- [Phase 35-05] KV-cache benefit preserved. Constant lives AFTER `...historyMessages` (still byte-stable across turns). Same closure constant referenced in BOTH passes, so Pass 1 → Pass 2 prefix-cache continuity is unbroken. The provider's cache prefix now covers `[system, ...history, user(ack)]` instead of `[system, ...history]` — both stable, same per-turn cache-break boundary at the per-turn `assistantContextMessage` element.
+- [Phase 35-05] Triple-guard intact (Phase 32.1 lesson #8 — documentation in three places): live code constant + 9-line comment block at the load-bearing site (Task 1 commit `0372b456`); 6th source-reading invariant in `useQuestions-system-prompt-stability.test.mjs` (Task 2 commit `98a75aae`); strict-alternation paragraph appended to CLAUDE.md `### Why this exists` + Rules item 3 updated (Task 3 commit `ae4398a1`).
+- [Phase 35-05] Verification: `tsc -b --noEmit` exit 0; `node --test tests/state/useQuestions-system-prompt-stability.test.mjs` reports `tests 6 / pass 6 / fail 0`; `node --test tests/state/useQuestions-locale-abort.test.mjs` reports `tests 5 / pass 5 / fail 0`; `npm test` baseline preserved at 389 pass / 26 fail (pre-existing JSON-import-attribute issues unchanged; no new failures from 35-05). All grep acceptance criteria met (source: 2 × `content: USER_ACK_BEFORE_GRAPH_CONTEXT`; test: 10 references; CLAUDE.md: 2 references).
+- [Phase 35-05] Three atomic commits on branch `gsd/phase-33-hygiene-and-polish`: `0372b456` (refactor — useQuestions.ts +15 lines), `98a75aae` (test — +49 lines), `ae4398a1` (docs — +3/-1 line in CLAUDE.md). ROADMAP.md updated by `gsd-tools roadmap update-plan-progress 35` to status `Complete` (5/5 plans landed). Plan 04's chatStream/chatCompletion audit not modified — its 24/26 one-shot finding remains accurate.
+- [Phase 35-05] **Empirical close-out PENDING:** operator must retest UAT Tests 1, 2, 3 against Qwen 3.5 via LM Studio on real device. Test 1 expected to flip blocker → pass (no jinja error). Tests 2 + 3 expected to flip blocked → pass (multi-turn coherence + web-search citations against the now-rendering prompt). After operator confirms, `35-UAT.md` should be updated with the re-test results. If any test still fails on Qwen, treat it as a NEW gap (not a Phase 35 close-out signal).
 
 ## Latest Decisions (Phase 35-03, 2026-04-29 evening)
 
@@ -495,7 +505,7 @@ Completed Phase 27 Plan 07 autonomous tasks (27-07-PLAN.md) — Task 1 landed pr
 ## Previous Session
 
 Completed Phase 27 Plan 04 (27-04-PLAN.md) — Locale switcher + mid-stream abort. SettingsScreen gains a 4-language picker at the top (D-19) that calls `i18n.changeLanguage`, persists `preferences.locale` (+ legacy `language` back-compat), and emits `LOCALE_CHANGED`. Row LABEL hardcoded as `Language / 语言 / Idioma / 言語` for cross-locale affordance. `providers/llm/index.ts` gains `CompletionOptions.signal?: AbortSignal` + a `composeSignal(callerSignal, ms)` helper that uses `AbortSignal.any` (Chromium 116+ / Safari 17.4+ / Node 20+) with manual-forwarder fallback; signal threaded through all 7 fetch call sites (openAI completion/stream, claude completion/stream, gemini completion/stream, plus localPost for Android-local streaming). `useQuestions.askStreaming` declares ONE shared AbortController at the top of the try, subscribes to LOCALE_CHANGED once, passes the same signal to BOTH Pass 1 and Pass 2 chatStream calls, and guards every buildAndSave path with 6 aborted-checks (loop entries, post-loop, pre-persistence, catch-level AbortError short-circuit) — toasts `ask.localeChangedDiscarded` and returns null on abort so partial half-English/half-Japanese output never persists (D-22). TDD cadence: RED commit landed failing test first, GREEN commit made all 4 assertions pass. 48 Wave 0 tests green; `npx vite build` green (3.0s); zero new tsc errors. Deviations: used direct `settingsService.getSync/.set` instead of `useSettings` hook (matches existing SettingsScreen convention); added `callerSignal?` param to `localPost` (LOCALE_CHANGED was silently not cancelling Android-local completions otherwise); removed dead `void options;` statements from claudeStream + geminiStream. Commits: `da5c69b5` (Task 1 — locale switcher), `c93ecf46` (Task 2 RED — failing test), `7e301831` (Task 2 GREEN — provider plumbing + useQuestions abort).
-**Stopped At:** Completed 35-03-PLAN.md (CLAUDE.md load-bearing rule for Ask-chat system-prompt byte-stability)
+**Stopped At:** Completed 35-05-PLAN.md (gap closure: strict-alternation user-ack for Qwen via LM Studio)
 **Date:** 2026-04-16
 
 ## Latest Decisions (Phase 25)
