@@ -972,13 +972,16 @@ Plans:
 
 ### Phase 35: fix the dynamic-system-prompt issue
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Move the per-turn `formatCandidateContextPack(candidatePack)` interpolation out of the `useQuestions.ts:askStreaming` system prompt into a tail-position assistant message so the provider's KV-cache prefix covers the full conversation history (system + append-only history) instead of breaking at the dynamic-content byte. Adds source-reading invariant test, CLAUDE.md load-bearing-rule section, and project-wide `chatStream`/`chatCompletion` audit confirming all other call sites are intentionally one-shot.
+**Requirements**: none (no roadmap REQ-IDs; this is a structural-quality phase driven by LabPresentation Section 4.7 self-disclosure)
 **Depends on:** Phase 34
-**Plans:** 0 plans
+**Plans:** 4 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 35 to break down)
+- [ ] 35-01-PLAN.md — Refactor useQuestions.ts: byte-stable system prompt + tail assistant context message in both Pass 1 and Pass 2 (Wave 1)
+- [ ] 35-02-PLAN.md — Add source-reading invariant test useQuestions-system-prompt-stability.test.mjs (Wave 1)
+- [ ] 35-03-PLAN.md — Add CLAUDE.md Phase 35 load-bearing-rule section adjacent to Classification dedup (Wave 2; depends on 35-01)
+- [ ] 35-04-PLAN.md — Project-wide chatStream/chatCompletion audit + 35-VERIFICATION.md must-haves rollup (Wave 1)
 
 ---
 
@@ -991,3 +994,4 @@ _Updated: 2026-04-20 — Phase 33 COMPLETE (8/8 plans). VERIFICATION 8/8 must-ha
 _Updated: 2026-04-25 — Phase 34 added: v1.4 close-out bundling all gaps from `.planning/v1.4-MILESTONE-AUDIT.md` (verification debt + test desyncs + orphan tail + VALIDATION drift + device UAT + WIP commit) into a single phase per operator preference._
 _Updated: 2026-04-25 — Phase 34 plans created (34-01..08): 8 plans across 5 waves closing all v1.4-MILESTONE-AUDIT gaps; ready for execute-phase._
 _Updated: 2026-04-29 — Phase 35 added: fix the dynamic-system-prompt issue (move per-turn candidate context out of system role to restore KV-cache prefix coverage in Ask chat). Tool miscount corrected manually from suggested "Phase 28" to actual next-integer "Phase 35"._
+_Updated: 2026-04-29 — Phase 35 plans created (35-01..04): 4 plans across 2 waves — surgical refactor of useQuestions.ts + source-reading invariant test + CLAUDE.md load-bearing section + project-wide audit/VERIFICATION._
