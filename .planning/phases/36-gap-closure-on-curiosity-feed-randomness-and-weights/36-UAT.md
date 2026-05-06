@@ -1,9 +1,9 @@
 ---
-status: diagnosed
+status: resolved
 phase: 36-gap-closure-on-curiosity-feed-randomness-and-weights
-source: [36-00-SUMMARY.md, 36-01-SUMMARY.md, 36-02-SUMMARY.md, 36-03-SUMMARY.md, 36-04-SUMMARY.md, 36-05-SUMMARY.md]
+source: [36-00-SUMMARY.md, 36-01-SUMMARY.md, 36-02-SUMMARY.md, 36-03-SUMMARY.md, 36-04-SUMMARY.md, 36-05-SUMMARY.md, 36-06-SUMMARY.md, 36-07-SUMMARY.md, 36-08-SUMMARY.md]
 started: 2026-05-06T08:30:00Z
-updated: 2026-05-06T09:30:00Z
+updated: 2026-05-06T17:45:00Z
 ---
 
 ## Current Test
@@ -122,7 +122,7 @@ blocked: 0
 ## Gaps
 
 - truth: "Cold start of a new day serves the user from the persisted queue snapshot taken before the previous app exit, NOT an empty feed. Pre-fetch validation transient errors must not gate the visible feed."
-  status: failed
+  status: resolved
   reason: "User reported: 'In the first start of a new day, the feed is empty and shows logs like \"error generating post, please check your settings.\" In design, the cold start of a new day should use persisted queue before last time user exit app, but it actually failed to comply to design.'"
   severity: blocker
   test: 1
@@ -144,7 +144,7 @@ blocked: 0
     - Suppression rule for setGenerationError(true): only fire when getDailyPosts returns [] AND no warm-start fallback is present (yesterday queue + history both empty). The toast/log "error generating post, please check your settings" is appropriate for misconfigured settings, NOT for cold-start-while-refill-in-flight.
 
 - truth: "Across the served window of ~16 posts, style counts approximate the stratified target: text-art ≈ 9 (round(16×0.55)), news/video/short ≈ 2 each (round(16×0.10) ±1), image ≈ 2 (round(16×0.10) ±1), suggestion ≈ 1 (round(16×0.05))."
-  status: failed
+  status: resolved
   reason: "User reported observed sequence 'video, news, short, news, short, news, video, news, text-art, short, text-art, suggestion, text-art, image, text-art, news' — counts text-art=4, news=5, short=3, video=2, image=1, suggestion=1. text-art is ~half expected; news/video/short combined are ~67% of posts vs. expected ~30%."
   severity: major
   test: 1
@@ -167,7 +167,7 @@ blocked: 0
     - An integration test that asserts text-art ≥ floor(N×0.55) for N=16 across a single refill cycle, not just per-batch.
 
 - truth: "Watching a video post for a concept fires CONCEPT_EXPLORED — same as scroll-70% or 30s-dwell does for text/image posts. Vine progress increments and the walker lazy-skips that concept on subsequent refills."
-  status: failed
+  status: resolved
   reason: "User reported during Test 3: 'There is no signal of completion for video posts. When user watch a video, the progress did not count.' Lazy-skip itself works correctly for non-video post types (Test 3 main expectation passes); the gap is upstream — CONCEPT_EXPLORED never fires for video posts because the existing detectors at PostDetailScreen.tsx assume scroll content or 30s passive dwell, neither of which is a clean signal for video media."
   severity: major
   test: 3
