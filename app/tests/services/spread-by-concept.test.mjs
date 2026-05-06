@@ -1,39 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-// localStorage polyfill for Node — concept-feed.service.ts requires settings.service
-// which touches localStorage during module load.
-globalThis.localStorage = {
-  _store: new Map(),
-  getItem(k) { return this._store.get(k) ?? null; },
-  setItem(k, v) { this._store.set(k, String(v)); },
-  removeItem(k) { this._store.delete(k); },
-  clear() { this._store.clear(); },
-};
-
-// Wave 0 RED note (Rule 3 deviation 2026-05-06):
-// concept-feed.service.ts transitively imports question.service.ts → locales/index.ts
-// → en.json — which crashes Node's ESM loader with ERR_IMPORT_ATTRIBUTE_MISSING.
-// CLAUDE.md i18n section warns about this exact chain ("Phase 27 locale tests
-// avoid the JSON-import-attribute failure chain ... follow the same pattern for
-// any new pure-logic helpers").
-//
-// We import lazily inside a try/catch so module load succeeds (file is loadable
-// by node --test) but `spreadByConcept` is `undefined` → assertions still fail
-// RED at test-body time, not crash with "module not found" at file-load time.
-// Plan 36-02 either (a) extracts spreadByConcept into a leaf module without
-// the i18n dependency chain, or (b) wires the loader so this chain becomes
-// resolvable. Either way, when the symbol becomes available these tests
-// flip GREEN.
-let cfMod = {};
-try {
-  cfMod = await import('../../src/services/concept-feed.service.ts');
-} catch (err) {
-  // Expected during Wave 0 if the i18n JSON-import chain is still in place.
-  // Tests below will fail RED on `spreadByConcept is not a function`.
-  console.warn('[spread-by-concept.test] dynamic import failed (Wave 0 RED is expected):', err?.message ?? err);
-}
-const { spreadByConcept, spreadByStyle } = cfMod;
+// Plan 36-02 took option (a) from the Wave-0 forward signal: spreadByConcept
+// + spreadByStyle were extracted into a leaf module (`feed-spread.ts`) with
+// zero transitive deps on settings.service / locales bundles, so Node's ESM
+// loader can import it directly without hitting ERR_IMPORT_ATTRIBUTE_MISSING
+// on en.json. concept-feed.service.ts re-exports both for runtime callers,
+// so production behavior is unchanged.
+import { spreadByConcept, spreadByStyle } from '../../src/services/feed-spread.ts';
 
 function makePost(id, anchorIds = [], style = 'text-art') {
   return {

@@ -20,6 +20,12 @@ import {
   isYoutubeRuntimeAvailable,
   isTavilyRuntimeAvailable,
 } from './api-availability';
+// Phase 36 GAP-4 — spread helpers extracted to a leaf module so node --test can
+// import them without hitting the i18n JSON-import-attribute chain. Both functions
+// mutate `posts` in place; this module re-exports them too so existing callers
+// (and downstream tests that import from here) keep working.
+import { spreadByStyle, spreadByConcept } from './feed-spread';
+export { spreadByStyle, spreadByConcept };
 
 const STORAGE_KEY = 'echolearn_daily_posts';
 const CONNECTION_POSTS_KEY = 'echolearn_connection_posts';
@@ -593,81 +599,10 @@ function _persistStylesToCache(styledPosts: DailyPost[]): void {
   saveCache(cachedNow);
 }
 
-/**
- * Spread posts so same-style items are maximally spaced apart.
- *
- * 2026-04-21 rewrite: the previous greedy "skip same-style if any non-same
- * bucket has content" heuristic clustered the tail whenever one style had
- * more than ~50% of the batch — once the minority buckets drained, the
- * majority bucket placed all remaining items back-to-back. Example with
- * [T×5, V×2, S×1] produced TVTVTSTT (3-run of T at the tail).
- *
- * New algorithm — proportional max-spacing (Bresenham-style):
- *   Each style claims slots at a stride = posts.length / bucketSize, offset
- *   by bucket position. Collisions resolve by bumping the loser to the next
- *   free slot. This guarantees the tail can't cluster because every style's
- *   placements are spread across the entire range, not just filling the
- *   remaining capacity at the end.
- *
- * Invariants:
- *   - same style items are separated by at least floor(N / count)-1 others
- *     whenever bucket sizes allow (not guaranteed when one style is strictly
- *     majority — clustering is structurally unavoidable then, but minimized)
- *   - stable relative order within each style group
- *   - idempotent: running twice yields the same result
- */
-function spreadByStyle(posts: DailyPost[]): void {
-  if (posts.length <= 2) return;
-  const n = posts.length;
-
-  // Group by style, preserving original intra-style order
-  const byStyle = new Map<string, DailyPost[]>();
-  for (const p of posts) {
-    const key = p.presentationStyle ?? 'unknown';
-    const arr = byStyle.get(key) ?? [];
-    arr.push(p);
-    byStyle.set(key, arr);
-  }
-
-  // Sort buckets largest-first so the dominant style gets its slots first
-  // (the bumps favor smaller buckets, which tolerate offset better)
-  const buckets = Array.from(byStyle.entries())
-    .sort((a, b) => b[1].length - a[1].length);
-
-  const result: (DailyPost | null)[] = new Array(n).fill(null);
-
-  for (const [, items] of buckets) {
-    const count = items.length;
-    if (count === 0) continue;
-    // Ideal stride: place `count` items uniformly across `n` slots
-    const stride = n / count;
-    for (let i = 0; i < count; i++) {
-      // Center the placement in each stride slice so stride=1 (full bucket)
-      // doesn't stack everything at index 0
-      let slot = Math.floor(i * stride + stride / 2);
-      if (slot >= n) slot = n - 1;
-      // Bump forward on collision, wrap around if necessary
-      let probe = slot;
-      let tries = 0;
-      while (result[probe] !== null && tries < n) {
-        probe = (probe + 1) % n;
-        tries++;
-      }
-      result[probe] = items[i];
-    }
-  }
-
-  // Safety: any remaining null slots get filled with whatever's left
-  // (should not happen with correct stride math but defends against off-by-one)
-  const leftover = posts.filter((p) => !result.includes(p));
-  let cursor = 0;
-  for (const p of leftover) {
-    while (cursor < n && result[cursor] !== null) cursor++;
-    if (cursor < n) result[cursor++] = p;
-  }
-
-  for (let i = 0; i < n; i++) posts[i] = result[i]!;
-}
+// spreadByStyle (Phase 31, rewritten 2026-04-21) and spreadByConcept (Phase 36
+// GAP-4) live in ./feed-spread.ts (leaf module — see import block at top of
+// file). Re-exported above for downstream callers/tests that import from this
+// service.
 
 // assignPresentationStyles removed in Phase 31 — replaced by pre-style assignment via style-assignment.ts (D-18)
 
@@ -1434,7 +1369,13 @@ export async function refillQueue(questions: Question[]): Promise<void> {
       }
       console.info('[refillQueue] batch styles:', batchStyles, 'batch size:', posts.length);
     }
-    postQueueService.enqueueInterleaved(posts, spreadByStyle);
+    // Phase 36 GAP-4 — run concept-axis spread BEFORE style-axis spread so
+    // dominant anchors (important / overdue with 2× entries) don't cluster
+    // in the served window. See spreadByConcept JSDoc + RESEARCH § Pattern 3.
+    postQueueService.enqueueInterleaved(posts, (combined) => {
+      spreadByConcept(combined);
+      spreadByStyle(combined);
+    });
     postQueueService.incrementCycle();
   } finally {
     _queueRefillRunning = false;
