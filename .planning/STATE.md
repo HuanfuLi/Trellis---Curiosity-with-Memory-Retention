@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: gap closure)
 status: Executing Phase 36
-stopped_at: Completed 36-05-PLAN.md (Wave 3 doc-sync; CLAUDE.md Concept Feed Pipeline section updated to reflect Phase 36 closures — MAX_QUEUE_SIZE documented, GAP-1/3/4 struck through with closure annotations, lazy-skip removal trigger described; 5/6 plans complete)
-last_updated: "2026-05-06T07:46:25Z"
+stopped_at: Completed 36-04-PLAN.md (Wave 3 integration smoke; refill-queue-integration.test.mjs lands 6 GREEN tests verifying GAP-1..4 composition end-to-end; full npm test 448/422/26 with fail count UNCHANGED vs. baseline; Phase 36 6/6 plans complete)
+last_updated: "2026-05-06T07:49:53Z"
 progress:
   total_phases: 21
   completed_phases: 0
@@ -12,7 +12,16 @@ progress:
   completed_plans: 0
 ---
 
-# Project State: Phase 36 WAVE 3 (36-05) COMPLETE — Plans 36-01 (GAP-3) + 36-02 (GAP-4) + 36-03 (GAP-1 + GAP-2) + 36-05 (GAP-6 doc-sync) GREEN; Plan 36-04 (integration smoke) running in parallel
+# Project State: Phase 36 COMPLETE — All 6 plans GREEN (36-00 RED tests, 36-01 GAP-3, 36-02 GAP-4, 36-03 GAP-1+GAP-2, 36-04 integration smoke, 36-05 GAP-6 doc-sync); ready for `/gsd:verify 36`
+
+## Latest Decisions (Phase 36-04, 2026-05-06 — Wave 3 integration smoke for GAP-1..4 composition)
+
+- [Phase 36-04] Landed end-to-end integration smoke at `app/tests/services/refill-queue-integration.test.mjs` (157 lines, 6 GREEN tests). SIMPLIFIED PATH per plan §<task><behavior>: composes Phase 36 helpers directly (appendToDerivedList → walkDerivedList → assignStylesStratified → spreadByConcept → spreadByStyle → enqueue) instead of mocking refillQueue's full async chain. Wave 0-2 unit tests already cover individual helpers; this file's job is COMPOSITION verification.
+- [Phase 36-04] Six tests cover all four GAPs in concert plus composition + all-explored gate: Test 1 (GAP-1) — appendToDerivedList(['A','B']) then (['A','C']) yields length=3 (cross-call dedup, NOT within-call); Test 2 (GAP-2) — cyclePosition advances 0→2→0 (wrap)→1 across walks; Test 3 (GAP-3) — N=12 stratified counts within ±1 of round(12×weight) for every style with weight > 0; Test 4 (GAP-4) — combined spreadByConcept + spreadByStyle on 4A/4B alternating styles → no two adjacent share BOTH concept AND style; Test 5 (Composition) — 3 unique IDs ['A','B','C'] → walk 3 → stratify → spread → enqueue produces a usable 3-post queue; Test 6 (allExplored) — walkDerivedList returns [] when all entries are explored.
+- [Phase 36-04] **Auto-fixed 2 Rule-3 blockers**: (a) plan example imported spreadByConcept/spreadByStyle from concept-feed.service.ts, which crashes node --test via the i18n chain (locales/index.ts → en.json → ERR_IMPORT_ATTRIBUTE_MISSING) — switched to the leaf module `feed-spread.ts` (same workaround Plan 36-02 chose for spread-by-concept.test.mjs; concept-feed.service.ts merely re-exports the same symbols, so behavioral semantics are identical); (b) static imports would crash on localStorage access before the polyfill runs (post-queue.service.ts has `let _state = load()` at module-level which calls `localStorage.getItem(...)`) — used dynamic `await import` for all three modules so the polyfill executes first (same pattern as derived-list.test.mjs / post-queue.test.mjs).
+- [Phase 36-04] STYLE_WEIGHTS imported from `style-assignment.ts` (drift-proof) — any future weight tuning auto-flows into Test 3 without test edits. Negative grep acceptance criterion `grep -c "const STYLE_WEIGHTS = {" refill-queue-integration.test.mjs` returns 0 (no inline literal). Test 3 comment reads `STYLE_WEIGHTS sum = 1.00 (0.10 + 0.55 + 0.05 + 0.10 + 0.10 + 0.10)` — the prior plan revision had the stale `1.05` value (checker iteration 1 fix). All 12 acceptance criteria pass: file exists, 6 it() blocks, ≥5 imports, STYLE_WEIGHTS imported, no inline literal, sum=1.00 comment, no sum=1.05 comment, node --test exits 0, npm test pass ≥ 416, npm test fail ≤ 26, tsc clean, SIMPLIFIED INTEGRATION PATH header comment present.
+- [Phase 36-04] Full npm test: **448 tests / 422 pass / 26 fail**. Pass count delta vs. STATE.md 2026-04-29 baseline (389 pass / 26 fail) is +33 (= +27 from Wave 0 RED tests + +6 from this plan). **Fail count UNCHANGED at 26** (pre-existing JSON-import-attribute / module-not-found issues unrelated to Phase 36; persisted through Phases 33, 34, 35, 36 untouched). No-regression suite of 5 named test files (style-assignment-stratified, style-assignment, spread-by-concept, post-queue, derived-list) reports 47/47 GREEN. `npx tsc -b --noEmit` exit 0.
+- [Phase 36-04] Single atomic commit on branch `gsd/phase-33-hygiene-and-polish`: `f7c0988f` (`test(36-04): integration smoke for Phase 36 GAP-1..4 composition (closes integration concern)`). Committed with `--no-verify` per parallel-execution coordination with Plan 36-05 (CLAUDE.md doc-sync — different file from this plan's test file, no conflict). Phase 36 now 6/6 plans complete; ready for `/gsd:verify 36`.
 
 ## Latest Decisions (Phase 36-05, 2026-05-06 — Wave 3 GAP-6 + doc-sync for closed gaps)
 
