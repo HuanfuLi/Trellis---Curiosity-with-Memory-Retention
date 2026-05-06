@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: gap closure)
-status: Executing Phase 36
-stopped_at: Completed 36-04-PLAN.md (Wave 3 integration smoke; refill-queue-integration.test.mjs lands 6 GREEN tests verifying GAP-1..4 composition end-to-end; full npm test 448/422/26 with fail count UNCHANGED vs. baseline; Phase 36 6/6 plans complete)
-last_updated: "2026-05-06T07:49:53Z"
+status: Phase 36 complete — verifier passed 13/13 must-haves
+stopped_at: Phase 36 COMPLETE (2026-05-06). All 6 plans executed; verifier 13/13 must-haves; 33 new passing tests; npm test baseline preserved at 422/26
+last_updated: "2026-05-06T08:00:00Z"
 progress:
   total_phases: 21
   completed_phases: 0
@@ -12,7 +12,7 @@ progress:
   completed_plans: 0
 ---
 
-# Project State: Phase 36 COMPLETE — All 6 plans GREEN (36-00 RED tests, 36-01 GAP-3, 36-02 GAP-4, 36-03 GAP-1+GAP-2, 36-04 integration smoke, 36-05 GAP-6 doc-sync); ready for `/gsd:verify 36`
+# Project State: Phase 36 COMPLETE — Verifier 13/13 must-haves passed. All four design-drift gaps closed (GAP-1 persistent derivedList, GAP-2 cyclic walker with lazy-skip, GAP-3 stratified style allocation, GAP-4 spreadByConcept mixer) + GAP-6 CLAUDE.md doc-sync. Branch `gsd/phase-33-hygiene-and-polish` ready for review/merge.
 
 ## Latest Decisions (Phase 36-04, 2026-05-06 — Wave 3 integration smoke for GAP-1..4 composition)
 
