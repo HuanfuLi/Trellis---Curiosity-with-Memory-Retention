@@ -61,20 +61,48 @@ export function assignStyles(
     weights.image = 0;
   }
 
-  const styleNames = Object.keys(weights);
-  const cumulative: { style: PresentationStyle; threshold: number }[] = [];
-  let sum = 0;
-  for (const s of styleNames) {
-    if (weights[s] <= 0) continue;
-    sum += weights[s];
-    cumulative.push({ style: s as PresentationStyle, threshold: sum });
+  // ─── Stratified allocation (Phase 36 GAP-3) ──────────────────────────────
+  // Replaces the prior i.i.d. draw that produced E[image]=0.8 in N=8 batches
+  // (most batches contained ZERO image posts — operator-confirmed defect).
+  // Largest-remainder (Hamilton's method) gives provable ±1 of round(N×w) per
+  // style, every run. Fisher-Yates shuffle then randomizes within-batch ORDER
+  // so the COUNTS are exact but the SEQUENCE is varied.
+  //
+  // CRITICAL: this runs on `weights` (effective, post-API-redirect) NOT on
+  // STYLE_WEIGHTS — see RESEARCH § Pitfall 2. The redistribution block above
+  // must execute first.
+  const sum = Object.values(weights).reduce<number>((a, b) => a + (b > 0 ? b : 0), 0);
+
+  if (sum <= 0) {
+    // Pathological: every weight zeroed. Should not happen — text-art always
+    // retains its base 0.55 (and absorbs redistributions). Return all-text-art.
+    const fallback: PresentationStyle = 'text-art';
+    return conceptIds.map((conceptId) => ({ conceptId, style: fallback }));
   }
 
-  const result = conceptIds.map((conceptId) => {
-    const r = Math.random() * sum;
-    const style = cumulative.find((c) => r < c.threshold)?.style ?? 'text-art';
-    return { conceptId, style };
-  });
+  const items: Array<{ style: PresentationStyle; count: number; rem: number }> = [];
+  for (const [s, w] of Object.entries(weights)) {
+    if (w <= 0) continue;
+    const exact = (conceptIds.length * w) / sum;
+    const count = Math.floor(exact);
+    items.push({ style: s as PresentationStyle, count, rem: exact - count });
+  }
+  const deficit = conceptIds.length - items.reduce((acc, x) => acc + x.count, 0);
+  items.sort((a, b) => b.rem - a.rem);
+  for (let i = 0; i < deficit; i++) items[i].count++;
+
+  const slots: PresentationStyle[] = [];
+  for (const { style, count } of items) {
+    for (let i = 0; i < count; i++) slots.push(style);
+  }
+  // Fisher-Yates shuffle (in place, Math.random — non-deterministic by design;
+  // tests assert COUNTS, not sequences, see RESEARCH § Risk Register row 3).
+  for (let i = slots.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [slots[i], slots[j]] = [slots[j], slots[i]];
+  }
+
+  const result = conceptIds.map((conceptId, i) => ({ conceptId, style: slots[i] }));
 
   // Dev-mode instrumentation (2026-04-21): print the style distribution per call
   // so missing-style regressions (e.g. "no image posts across 50+ posts") surface
@@ -104,3 +132,10 @@ export function reassignFailures(
       : a,
   );
 }
+
+// Phase 36 GAP-3 — alias for unambiguous import in tests / external callers
+// that want to reference the stratified algorithm by name. The body of
+// assignStyles IS the stratified algorithm now (replaced i.i.d. on 2026-05-06).
+// Kept as a separate export so the Wave 0 test file
+// `tests/services/style-assignment-stratified.test.mjs` resolves cleanly.
+export const assignStylesStratified = assignStyles;
