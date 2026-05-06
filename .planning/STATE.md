@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: gap closure)
 status: Executing Phase 36
-stopped_at: Completed 36-00-PLAN.md (Wave 0 RED test stubs for derived list / stratified style / concept spread)
-last_updated: "2026-05-06T06:47:02.489Z"
+stopped_at: Completed 36-02-PLAN.md (Wave 1 GAP-4 concept-axis spread; spreadByConcept extracted to leaf module feed-spread.ts; mixer wires concept-before-style)
+last_updated: "2026-05-06T07:31:00.000Z"
 progress:
   total_phases: 21
   completed_phases: 0
@@ -12,7 +12,25 @@ progress:
   completed_plans: 0
 ---
 
-# Project State: Phase 36 WAVE 0 LANDED — RED test stubs for curiosity feed gap closure (3 files / 27 assertions, all RED)
+# Project State: Phase 36 WAVE 1 COMPLETE — Plans 36-01 (GAP-3) + 36-02 (GAP-4) GREEN; Wave 2 (Plan 36-03 persistent derived list) ready
+
+## Latest Decisions (Phase 36-02, 2026-05-06 — Wave 1 GAP-4 concept-axis spread)
+
+- [Phase 36-02] Extracted `spreadByStyle` (relocated, body unchanged from concept-feed.service.ts:619-670) and `spreadByConcept` (new) into a NEW leaf module `app/src/services/feed-spread.ts` (224 lines). Zero transitive deps on settings.service / locales/index.ts / llm provider — node --test imports it directly without ERR_IMPORT_ATTRIBUTE_MISSING on en.json. concept-feed.service.ts re-exports both via `import { spreadByStyle, spreadByConcept } from './feed-spread'; export { spreadByStyle, spreadByConcept };` so existing callers and downstream tests are unaffected. The Wave 0 stub's i18n try/catch dance + localStorage polyfill is now retired.
+- [Phase 36-02] **Rule-1 deviation**: plan §<action> EDIT 1 prescribed a verbatim half-stride clone of spreadByStyle (`Math.floor(i * stride + stride / 2)`) for spreadByConcept. The clone failed Test 5 (`6 A + 2 B in 8 slots`, max-run ≤ 2): half-stride math produced `[A,B,A,A,A,B,A,A]` with max-run=3 because non-integer stride 1.333 aliases consecutive integers via floor. Pigeonhole shows max-run=2 is feasible (`AABAABAA`), so the algorithm needed strengthening, not the test relaxing. Replaced with a two-branch strategy: when the largest bucket holds > n/2 of the items, place its items at non-skip positions in order with skips at `floor(n * (i+1) / (skipCount + 1))` (symmetric separator placement); otherwise fall back to the existing half-stride formula. The dominant branch produces `AABAABAA` (max-run=2) for 6/2/8; the balanced branch preserves the alternation `[B,A,B,A,B,A]` for 3/3/6 (Test 1). spreadByStyle is intentionally NOT switched to this — its 2026-04-21 [T×5, V×2, S×1] empirical fix is preserved.
+- [Phase 36-02] Mixer at refillQueue's `enqueueInterleaved` call replaced from `enqueueInterleaved(posts, spreadByStyle)` (single function reference) with an inline arrow that runs spreadByConcept FIRST then spreadByStyle (RESEARCH § Pattern 3 Why-Concept-First). Concept distribution is established first; style spread refines within it — reverse order would corrupt concept separation via style spread's collision-bumps.
+- [Phase 36-02] All 7 spread-by-concept tests GREEN: `tests 7 / pass 7 / fail 0`. No regression in named existing tests: style-assignment-stratified (10/10), style-assignment (7/7), post-queue (13/13), post-queue-dedup (5/5), concept-batch-filter, concept-feed-cross-cycle-dedup. `tsc -b --noEmit` exit 0. No new event subscriptions (`grep -c "eventBus.emit\|eventBus.subscribe"` on diff = 0). CLAUDE.md best-practice rule 6 honored.
+- [Phase 36-02] Single atomic commit on branch `gsd/phase-33-hygiene-and-polish`: `5f65bf62` (`feat(36-02): extract spreadByStyle/spreadByConcept to leaf feed-spread module + concept-before-style mixer (closes GAP-4)`). Committed with `--no-verify` per parallel-execution coordination. 3 files changed (+248 / −109): app/src/services/feed-spread.ts created (224 lines), app/src/services/concept-feed.service.ts (+24 / −83), app/tests/services/spread-by-concept.test.mjs (+6 / −32). Continuation execution (previous agent killed mid-flight by rate limit after extraction + mixer wiring; this agent diagnosed Test 5 failure as Rule-1 algorithmic bug and shipped the two-branch fix).
+
+## Latest Decisions (Phase 36-01, 2026-05-06 — Wave 1 GAP-3 stratified style allocation)
+
+## Latest Decisions (Phase 36-01, 2026-05-06 — Wave 1 GAP-3 stratified style allocation)
+
+- [Phase 36-01] Replaced the i.i.d. cumulative-threshold draw inside `assignStyles` (`app/src/services/style-assignment.ts`) with Hamilton's largest-remainder + Fisher-Yates allocation. Diff: +47/-12 lines, single file. The new block sits AFTER the API-availability redistribution block (line 51) and BEFORE the dev-mode instrumentation block (line 107) — operates on EFFECTIVE post-redirect weights, not raw `STYLE_WEIGHTS` (RESEARCH § Pitfall 2 honored). Added defensive `sum <= 0` short-circuit returning all-text-art for the pathological all-keys-missing case (plan §<action> step 6 prescribed this).
+- [Phase 36-01] Added `export const assignStylesStratified = assignStyles` alias at end of `style-assignment.ts`. This was the locked implementation choice in plan §<objective>: replace + alias, NOT rename + re-export. Existing call sites (`concept-feed.service.ts:1300` etc.) require zero churn; Wave 0 RED test file (`tests/services/style-assignment-stratified.test.mjs`) resolves the alias and flips to GREEN.
+- [Phase 36-01] All Wave 0 stratified tests GREEN: `tests 10 / pass 10 / fail 0`. All existing style-assignment tests still GREEN (no regression): `tests 7 / pass 7 / fail 0`. `npx tsc -b --noEmit` exit 0. RESEARCH risk-register row 3 honored — Math.random() is unseeded, tests assert COUNT distributions (image ∈ {0,1,2}, text-art ∈ {3,4,5}) rather than specific style sequences. Fisher-Yates non-determinism preserved (≥1 of 50 paired runs differs in order).
+- [Phase 36-01] Single atomic commit on branch `gsd/phase-33-hygiene-and-polish`: `6be153e5` (`feat(36-01): stratified style allocation via largest-remainder (closes GAP-3)`). Committed with `--no-verify` per parallel-execution coordination with Plan 36-02 (which modifies `concept-feed.service.ts` — different file, no conflict).
+- [Phase 36-01] No deviations from plan. Each prescription in §<action> honored byte-for-byte: i.i.d. block replaced verbatim with the prescribed largest-remainder + Fisher-Yates pseudocode, alias export added at file end with the prescribed comment block, `sum <= 0` defensive guard inserted before items loop. Dev-mode instrumentation block (lines 107-115) preserved verbatim — only the `result` construction above it changed.
 
 ## Latest Decisions (Phase 36-00, 2026-05-06 — Wave 0 RED tests)
 
@@ -513,7 +531,7 @@ Completed Phase 27 Plan 07 autonomous tasks (27-07-PLAN.md) — Task 1 landed pr
 ## Previous Session
 
 Completed Phase 27 Plan 04 (27-04-PLAN.md) — Locale switcher + mid-stream abort. SettingsScreen gains a 4-language picker at the top (D-19) that calls `i18n.changeLanguage`, persists `preferences.locale` (+ legacy `language` back-compat), and emits `LOCALE_CHANGED`. Row LABEL hardcoded as `Language / 语言 / Idioma / 言語` for cross-locale affordance. `providers/llm/index.ts` gains `CompletionOptions.signal?: AbortSignal` + a `composeSignal(callerSignal, ms)` helper that uses `AbortSignal.any` (Chromium 116+ / Safari 17.4+ / Node 20+) with manual-forwarder fallback; signal threaded through all 7 fetch call sites (openAI completion/stream, claude completion/stream, gemini completion/stream, plus localPost for Android-local streaming). `useQuestions.askStreaming` declares ONE shared AbortController at the top of the try, subscribes to LOCALE_CHANGED once, passes the same signal to BOTH Pass 1 and Pass 2 chatStream calls, and guards every buildAndSave path with 6 aborted-checks (loop entries, post-loop, pre-persistence, catch-level AbortError short-circuit) — toasts `ask.localeChangedDiscarded` and returns null on abort so partial half-English/half-Japanese output never persists (D-22). TDD cadence: RED commit landed failing test first, GREEN commit made all 4 assertions pass. 48 Wave 0 tests green; `npx vite build` green (3.0s); zero new tsc errors. Deviations: used direct `settingsService.getSync/.set` instead of `useSettings` hook (matches existing SettingsScreen convention); added `callerSignal?` param to `localPost` (LOCALE_CHANGED was silently not cancelling Android-local completions otherwise); removed dead `void options;` statements from claudeStream + geminiStream. Commits: `da5c69b5` (Task 1 — locale switcher), `c93ecf46` (Task 2 RED — failing test), `7e301831` (Task 2 GREEN — provider plumbing + useQuestions abort).
-**Stopped At:** Completed 36-00-PLAN.md (Wave 0 RED test stubs for derived list / stratified style / concept spread)
+**Stopped At:** Completed 36-01-PLAN.md (Wave 1 GAP-3 stratified style allocation; assignStylesStratified alias exported)
 **Date:** 2026-04-16
 
 ## Latest Decisions (Phase 25)
