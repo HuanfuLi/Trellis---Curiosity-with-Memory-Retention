@@ -40,10 +40,14 @@ The home feed is driven by THREE LISTS in a strict pipeline. **Do not invent a f
 │     video / short / news / suggestion) AND multiplicity (more entries   │
 │     for important/overdue concepts).                                    │
 │     Update mode: APPEND-ONLY when new questions arrive. Don't rebuild   │
-│     from scratch — that loses cycle position.                           │
+│     from scratch — that loses cycle position. Implemented as            │
+│     postQueueService.appendToDerivedList(ids[]) — dedups by conceptId.  │
 │     Removal trigger: when user READS a post of a concept                │
-│     (CONCEPT_EXPLORED event), REMOVE that concept's remaining entries   │
-│     from the derived list so the next loop doesn't re-suggest it.       │
+│     (CONCEPT_EXPLORED event), the concept is added to                   │
+│     dailyReadService.getExploredAnchors(). The walker                   │
+│     (postQueueService.walkDerivedList) LAZILY skips explored ids        │
+│     at walk time rather than physically splicing the array              │
+│     (which would corrupt cyclePosition — see RESEARCH § Pitfall 1).     │
 └─────────────────────────────────────────────────────────────────────────┘
                               │ feeds
                               ▼
@@ -61,6 +65,7 @@ The home feed is driven by THREE LISTS in a strict pipeline. **Do not invent a f
 
 ### Numeric defaults
 
+- Queue maximum size: `MAX_QUEUE_SIZE` = **32** (in `post-queue.service.ts:13`). enqueueInterleaved + enqueue both cap at this size. Refill threshold (12) gives a 20-post runway between refills.
 - Queue refill threshold: **12** (bumped from 8 on 2026-04-21 when image pre-generation moved into `refillQueue`; earlier refill gives runway so the queue doesn't empty mid-swipe while image-gen is still in flight)
 - Posts served per swipe-for-more: **4** (NOT 1 — operator confirmed the desired UX)
 - Style weights: see `app/src/services/style-assignment.ts:9-16` (`STYLE_WEIGHTS`)
@@ -76,10 +81,12 @@ The home feed is driven by THREE LISTS in a strict pipeline. **Do not invent a f
 
 ### Known divergences from design (gaps to close, not to drift further)
 
-- Derived list is currently rebuilt every refill (not append-only with cycle position).
-- Each concept gets at most 2 entries (1 + isImportant), not weighted by style mix.
-- ~~Removal on read is NOT wired~~ — **CLOSED via Phase 33 gap fix**: `buildConceptBatch` at `concept-feed.service.ts:659` filters out explored anchors, AND the daily generation cap is now gated by `allExplored` so it no longer fires while the vine is unfinished.
-- Queue serves variable count (whatever's available) instead of strictly 4 per swipe.
+- ~~Derived list is currently rebuilt every refill (not append-only with cycle position).~~ **CLOSED via Phase 36 GAP-1 + GAP-2** (2026-05-06): postQueueService now persists `derivedList: string[]` + `cyclePosition: number` in QueueState. `appendToDerivedList(ids)` is dedup-on-append; `walkDerivedList(count, exploredIds)` is the cyclic walker with lazy skip of explored anchors. See `tests/services/derived-list.test.mjs` for the invariants.
+- ~~Style sampling is i.i.d. per entry — small-N batches (N=8) routinely produce zero image / zero suggestion posts.~~ **CLOSED via Phase 36 GAP-3** (2026-05-06): assignStyles (now stratified via largest-remainder + Fisher-Yates) guarantees ±1 of round(N×weight) for every style every run. See `tests/services/style-assignment-stratified.test.mjs`.
+- ~~Style-axis interleave only — same-anchor entries cluster regardless of style spread.~~ **CLOSED via Phase 36 GAP-4** (2026-05-06): refillQueue's enqueueInterleaved mixer now runs `spreadByConcept` BEFORE `spreadByStyle`, separating same-anchor entries before style refinement. See `tests/services/spread-by-concept.test.mjs`.
+- Each concept gets BASE_ENTRIES_PER_CONCEPT (4) entries by default, doubled to 8 if important (easeFactor < 1.5 OR leafState ∈ {dying, falling, dead}). This is intentional (per RESEARCH § Pitfall 4 — importance changes mid-day are accepted as a next-day approximation; design says "append-only when new questions arrive," not "rebuild importance weights continuously").
+- ~~Removal on read is NOT wired~~ — **CLOSED via Phase 33 gap fix**: `buildConceptBatch` at `concept-feed.service.ts:659` filters out explored anchors, AND the daily generation cap is now gated by `allExplored` so it no longer fires while the vine is unfinished. **Phase 36 layered the lazy-skip walker on top** so explored anchors are also skipped at walk time even if they slip past the build-time filter.
+- Queue serves variable count (whatever's available) instead of strictly 4 per swipe. (Out of scope for Phase 36.)
 
 The "vine unfinished but No more posts" symptom (reported 2026-04-19) was caused by the unconditional cap, not the removal-on-read logic. The cap now only applies after the vine is finished — see "Numeric defaults" above.
 
