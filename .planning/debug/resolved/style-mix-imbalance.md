@@ -1,5 +1,5 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "style mix imbalance — text-art severely under-represented, news/video/short over-represented across 16-post window"
 created: 2026-05-06T00:00:00Z
 updated: 2026-05-06T00:00:00Z

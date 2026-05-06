@@ -1,5 +1,5 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "Cold start of a new day shows empty feed + error generating post"
 created: 2026-05-06T00:00:00Z
 updated: 2026-05-06T00:00:00Z

@@ -1,5 +1,5 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "UAT Phase 36 — video posts do not fire CONCEPT_EXPLORED; vine progress never increments for video-only interactions"
 created: 2026-05-06T00:00:00Z
 updated: 2026-05-06T00:00:00Z
