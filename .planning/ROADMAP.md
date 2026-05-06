@@ -990,7 +990,7 @@ Plans:
 **Goal:** Close four divergences between CLAUDE.md "Concept Feed Generation Pipeline" design and live code: (GAP-1) derived list rebuilt from scratch each refill instead of append-only with cycle position; (GAP-2) no cyclic walker — same concepts re-suggested same order each cycle; (GAP-3) i.i.d. style sampling produces small-N variance (8-entry batches routinely have zero image / zero suggestion); (GAP-4) style-axis interleave alone — same-anchor entries cluster regardless of style spread. Plus GAP-6 doc fix (MAX_QUEUE_SIZE = 32 not documented).
 **Requirements**: GAP-1, GAP-2, GAP-3, GAP-4, GAP-6 (gap-closure phase — no new functional REQ-IDs; tracking via GAP-IDs from 36-RESEARCH.md)
 **Depends on:** Phase 35
-**Plans:** 8/9 plans executed
+**Plans:** 9/9 plans complete
 
 Plans:
 - [x] 36-00-test-stubs-red-PLAN.md — Write 3 RED test stubs (derived-list, style-assignment-stratified, spread-by-concept) covering all four GAPs (Wave 0)
@@ -1001,7 +1001,7 @@ Plans:
 - [x] 36-05-claude-md-doc-sync-PLAN.md — Update CLAUDE.md Concept Feed Pipeline section: document MAX_QUEUE_SIZE=32 (closes GAP-6); cross-reference appendToDerivedList; describe lazy-skip; strike GAP-1/3/4 (Wave 3)
 - [x] 36-06-cold-start-warm-start-PLAN.md — Warm-start guard on HomeScreen cold-start useEffect: functional setDailyPosts + conditional setGenerationError so yesterday's leftover posts persist when getDailyPosts returns [] on a new day (Wave 1; gap_closure; closes GAP-A blocker from 36-UAT.md)
 - [x] 36-07-walker-termination-guard-PLAN.md — Replace `maxSteps = len * 2` with `Math.max(count * 2, len)` in postQueueService.walkDerivedList; extend derived-list.test.mjs with N=16 truncation regression + integration assertion text-art ≥ floor(N×0.55); document walker contract in CLAUDE.md (Wave 1; gap_closure; closes GAP-B Phase-36 regression from 36-UAT.md)
-- [ ] 36-08-video-completion-signal-PLAN.md — Add `enablejsapi=1` to YouTubeEmbed/InfoFlow iframes + Detector D postMessage listener in PostDetailScreen for video posts (ENDED + currentTime/duration ≥ 0.8) + short tap-to-play emit in InfoFlow setVideoPlaying handler; document detector inventory in CLAUDE.md (Wave 1; gap_closure; closes GAP-C from 36-UAT.md)
+- [x] 36-08-video-completion-signal-PLAN.md — Add `enablejsapi=1` to YouTubeEmbed/InfoFlow iframes + Detector D postMessage listener in PostDetailScreen for video posts (ENDED + currentTime/duration ≥ 0.8) + short tap-to-play emit in InfoFlow setVideoPlaying handler; document detector inventory in CLAUDE.md (Wave 1; gap_closure; closes GAP-C from 36-UAT.md)
 
 ---
 
