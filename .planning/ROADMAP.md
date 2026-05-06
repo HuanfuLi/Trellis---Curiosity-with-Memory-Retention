@@ -985,7 +985,7 @@ Plans:
 - [x] 35-04-PLAN.md — Project-wide chatStream/chatCompletion audit + 35-VERIFICATION.md must-haves rollup (Wave 1)
 - [x] 35-05-PLAN.md — Gap closure: insert USER_ACK_BEFORE_GRAPH_CONTEXT user-ack between history and assistant context in Pass 1 + Pass 2 to satisfy strict-alternation chat templates (Qwen via LM Studio); extend invariant test + append strict-alternation paragraph to CLAUDE.md (Wave 1; gap_closure)
 
-### Phase 36: gap closure on curiosity feed randomness and weights — UAT GAP CLOSURE IN PROGRESS (2026-05-06)
+### Phase 36: gap closure on curiosity feed randomness and weights — COMPLETE (2026-05-06, gap closure 14/14 must-haves)
 
 **Goal:** Close four divergences between CLAUDE.md "Concept Feed Generation Pipeline" design and live code: (GAP-1) derived list rebuilt from scratch each refill instead of append-only with cycle position; (GAP-2) no cyclic walker — same concepts re-suggested same order each cycle; (GAP-3) i.i.d. style sampling produces small-N variance (8-entry batches routinely have zero image / zero suggestion); (GAP-4) style-axis interleave alone — same-anchor entries cluster regardless of style spread. Plus GAP-6 doc fix (MAX_QUEUE_SIZE = 32 not documented).
 **Requirements**: GAP-1, GAP-2, GAP-3, GAP-4, GAP-6 (gap-closure phase — no new functional REQ-IDs; tracking via GAP-IDs from 36-RESEARCH.md)
