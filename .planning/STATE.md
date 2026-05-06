@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: gap closure)
 status: Executing Phase 36
-stopped_at: Completed 36-02-PLAN.md (Wave 1 GAP-4 concept-axis spread; spreadByConcept extracted to leaf module feed-spread.ts; mixer wires concept-before-style)
-last_updated: "2026-05-06T07:31:00.000Z"
+stopped_at: Completed 36-03-PLAN.md (Wave 2 GAP-1 + GAP-2 persistent derived list + cyclic walker; QueueState extended with derivedList + cyclePosition; refillQueue uses appendToDerivedList + walkDerivedList; 4/6 plans complete)
+last_updated: "2026-05-06T07:39:04Z"
 progress:
   total_phases: 21
   completed_phases: 0
@@ -12,7 +12,19 @@ progress:
   completed_plans: 0
 ---
 
-# Project State: Phase 36 WAVE 1 COMPLETE — Plans 36-01 (GAP-3) + 36-02 (GAP-4) GREEN; Wave 2 (Plan 36-03 persistent derived list) ready
+# Project State: Phase 36 WAVE 2 COMPLETE — Plans 36-01 (GAP-3) + 36-02 (GAP-4) + 36-03 (GAP-1 + GAP-2) GREEN; Wave 3 (Plan 36-04 integration smoke + 36-05 doc-sync) ready
+
+## Latest Decisions (Phase 36-03, 2026-05-06 — Wave 2 GAP-1 + GAP-2 persistent derived list + cyclic walker)
+
+- [Phase 36-03] Extended `QueueState` (app/src/services/post-queue.service.ts) with `derivedList: string[]` + `cyclePosition: number`. Persisted to existing localStorage key `echolearn_post_queue` — no new keys, no parallel state, single reset boundary on day change. RESEARCH § Pattern 1 + plan §<objective> prescription honored verbatim.
+- [Phase 36-03] Four new methods on `postQueueService`: `getDerivedList()` (shallow copy), `getCyclePosition()` (walker index), `appendToDerivedList(conceptIds)` (dedup ACROSS calls; multiplicity preserved WITHIN call), `walkDerivedList(count, exploredIds)` (lazy-skip explored ids; advances cyclePosition past every step; wraps to 0 on overflow; 2*N termination guard prevents infinite loop when all explored).
+- [Phase 36-03] **Critical seed-once-before-loop invariant** in `appendToDerivedList`: `existing` Set is built ONCE before the for-loop and NEVER mutated inside. This was the BLOCKER from Checker Iteration 1 — mutating `existing.add(id)` per iteration would deduplicate within-call and destroy importance multiplicity. Verified absent via negative grep: `awk '/appendToDerivedList\(conceptIds/,/^  \},/' \| grep -c 'existing.add'` returns 0. Plan 36-00 Test 10 GREEN confirms behavior: first append of `['a','a','a','a','a','a','a','a','b','b','b','b']` stores 8 'a' + 4 'b' (importance weighting from buildConceptBatch's `BASE_ENTRIES_PER_CONCEPT * 2` for important anchors); second append of `['a','b']` is a no-op because both keys are in the freshly-seeded existing set.
+- [Phase 36-03] Lazy skip at walk time, NOT physical splice on CONCEPT_EXPLORED. RESEARCH § Pitfall 1 + Pattern 1 explicitly warned that physical removal corrupts cyclePosition via index shift. `walkDerivedList(count, exploredIds)` reads exploredIds at walk time and advances cyclePosition past skipped entries. No CONCEPT_EXPLORED subscription added — exploredIds comes from `dailyReadService.getExploredAnchors()` which is already computed at refillQueue line 1199. CLAUDE.md best-practice rule 6 (one signal per semantic event) preserved.
+- [Phase 36-03] Defensive `load()` rewrite handles BOTH the new schema (with derivedList + cyclePosition) AND legacy payloads (without). Per-field type-guard fallbacks: `Array.isArray(parsed.derivedList) ? parsed.derivedList : []`, `typeof parsed.cyclePosition === 'number' ? parsed.cyclePosition : 0`. RESEARCH § Risk Register row 1 (localStorage migration). Test 5 GREEN: legacy payload with cycleNumber=3 but no derivedList/cyclePosition loads with both new fields at fresh defaults — no crash, no migration script, no data loss.
+- [Phase 36-03] Refactored `refillQueue` Step 1 (concept-feed.service.ts ~line 1204) from 2-line direct consumption (`const conceptIds = buildConceptBatch(questions); if (conceptIds.length === 0) return;`) to 11-line append-walk flow: `dueConceptIds = buildConceptBatch(questions); appendToDerivedList(dueConceptIds); conceptIds = walkDerivedList(16, exploredIds); if (conceptIds.length === 0) return;`. The `exploredIds` Set computed at line 1199 is REUSED — no recomputation. walkDerivedList batchSize=16 (REFILL_THRESHOLD=12 + room for downgrades + spread before MAX_QUEUE_SIZE=32).
+- [Phase 36-03] **Phase 33 invariants preserved byte-unchanged**: (a) buildConceptBatch body at line 729-749 is byte-identical (`git diff` shows zero +/- lines for the function); (b) line 733 `dueAnchors = anchors.filter(a => !exploredIds.has(a.id))` Phase 33 explored-filter UNCHANGED; (c) line 745 `count = isImportant ? BASE_ENTRIES_PER_CONCEPT * 2 : BASE_ENTRIES_PER_CONCEPT` importance-weighting UNCHANGED; (d) line 1202 `if (allExplored && postQueueService.getTotalGenerated() >= maxPosts) return;` cap-gate UNCHANGED. The buildConceptBatch FUNCTION still does the same thing — what changes is what happens to its OUTPUT (now appended to the persistent list via appendToDerivedList instead of consumed directly).
+- [Phase 36-03] All 10 Wave 0 derived-list tests GREEN: `tests 10 / pass 10 / fail 0`, including Test 10 multiplicity-preservation contract guard. No regression in adjacent suites: post-queue (13/13), post-queue-dedup (5/5), spread-by-concept (7/7 — Plan 36-02 still GREEN), concept-batch-filter, concept-feed-cross-cycle-dedup, style-assignment (7/7), style-assignment-stratified (10/10) — full 65/65 across 9 suites GREEN. `npx tsc -b --noEmit` exit 0.
+- [Phase 36-03] Two atomic commits on branch `gsd/phase-33-hygiene-and-polish`, both with `--no-verify` per parallel-execution coordination: `8e70700b` (Task 1, post-queue.service.ts +110/-3) + `82fad9b1` (Task 2, concept-feed.service.ts +15/-2). Cumulative diff: +125 / -5 lines across 2 files. No deviations from plan — every prescription in §<action> Tasks 1 + 2 honored byte-for-byte (interface extension, freshState, defensive load, four methods with seed-once-before-loop, refillQueue Step 1 11-line replacement). Phase 36 progress: 4/6 plans complete; Wave 3 (36-04 integration smoke + 36-05 doc-sync) unblocked.
 
 ## Latest Decisions (Phase 36-02, 2026-05-06 — Wave 1 GAP-4 concept-axis spread)
 

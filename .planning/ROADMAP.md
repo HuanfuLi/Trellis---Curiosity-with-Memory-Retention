@@ -990,13 +990,13 @@ Plans:
 **Goal:** Close four divergences between CLAUDE.md "Concept Feed Generation Pipeline" design and live code: (GAP-1) derived list rebuilt from scratch each refill instead of append-only with cycle position; (GAP-2) no cyclic walker — same concepts re-suggested same order each cycle; (GAP-3) i.i.d. style sampling produces small-N variance (8-entry batches routinely have zero image / zero suggestion); (GAP-4) style-axis interleave alone — same-anchor entries cluster regardless of style spread. Plus GAP-6 doc fix (MAX_QUEUE_SIZE = 32 not documented).
 **Requirements**: GAP-1, GAP-2, GAP-3, GAP-4, GAP-6 (gap-closure phase — no new functional REQ-IDs; tracking via GAP-IDs from 36-RESEARCH.md)
 **Depends on:** Phase 35
-**Plans:** 3/6 plans executed
+**Plans:** 4/6 plans executed
 
 Plans:
 - [x] 36-00-test-stubs-red-PLAN.md — Write 3 RED test stubs (derived-list, style-assignment-stratified, spread-by-concept) covering all four GAPs (Wave 0)
 - [x] 36-01-stratified-style-allocation-PLAN.md — Replace i.i.d. style draw with largest-remainder + Fisher-Yates in style-assignment.ts; export assignStylesStratified alias (Wave 1; closes GAP-3)
 - [x] 36-02-spread-by-concept-PLAN.md — Add spreadByConcept to concept-feed.service.ts and wire into enqueueInterleaved before spreadByStyle (Wave 1; closes GAP-4)
-- [ ] 36-03-persistent-derived-list-PLAN.md — Extend QueueState with derivedList + cyclePosition + 4 new methods; refactor refillQueue Step 1 to append + walk (Wave 2; closes GAP-1 + GAP-2)
+- [x] 36-03-persistent-derived-list-PLAN.md — Extend QueueState with derivedList + cyclePosition + 4 new methods; refactor refillQueue Step 1 to append + walk (Wave 2; closes GAP-1 + GAP-2)
 - [ ] 36-04-integration-smoke-PLAN.md — End-to-end composition smoke test verifying all four invariants together; full npm test no-NEW-failure check (Wave 3)
 - [ ] 36-05-claude-md-doc-sync-PLAN.md — Update CLAUDE.md Concept Feed Pipeline section: document MAX_QUEUE_SIZE=32 (closes GAP-6); cross-reference appendToDerivedList; describe lazy-skip; strike GAP-1/3/4 (Wave 3)
 
