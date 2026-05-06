@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: gap closure)
-status: Phase 36 + GAP-B fix shipped — 36-07 closes walker truncation regression; 36-06/36-08 still in-flight
-stopped_at: Completed 36-07-PLAN.md (GAP-B walker termination guard fix)
-last_updated: "2026-05-06T17:23:29.118Z"
+status: Phase 36 + GAP-A + GAP-B fixes shipped — 36-06 closes cold-start blocker, 36-07 closes walker truncation regression; 36-08 (video completion signal) still in-flight
+stopped_at: Completed 36-06-PLAN.md (GAP-A warm-start guard fix)
+last_updated: "2026-05-06T17:25:56.900Z"
 progress:
   total_phases: 21
   completed_phases: 0
@@ -12,7 +12,18 @@ progress:
   completed_plans: 0
 ---
 
-# Project State: Phase 36 COMPLETE — Verifier 13/13 must-haves passed. All four design-drift gaps closed (GAP-1 persistent derivedList, GAP-2 cyclic walker with lazy-skip, GAP-3 stratified style allocation, GAP-4 spreadByConcept mixer) + GAP-6 CLAUDE.md doc-sync. Branch `gsd/phase-33-hygiene-and-polish` ready for review/merge. **GAP-B (Plan 36-07) fix shipped** on top of the verified Phase 36 — restores text-art's 56% target for single-anchor users.
+# Project State: Phase 36 COMPLETE — Verifier 13/13 must-haves passed. All four design-drift gaps closed (GAP-1 persistent derivedList, GAP-2 cyclic walker with lazy-skip, GAP-3 stratified style allocation, GAP-4 spreadByConcept mixer) + GAP-6 CLAUDE.md doc-sync. Branch `gsd/phase-33-hygiene-and-polish` ready for review/merge. **GAP-A (Plan 36-06) fix + GAP-B (Plan 36-07) fix shipped** on top of the verified Phase 36 — 36-06 restores cold-start warm-start posts; 36-07 restores text-art's 56% target for single-anchor users.
+
+## Latest Decisions (Phase 36-06, 2026-05-06 — GAP-A cold-start warm-start guard fix)
+
+- [Phase 36-06] Closed GAP-A (BLOCKER — pre-Phase-36 drift introduced 2026-04-18 by commit 6cda914e, surfaced under Phase 36 UAT). Diagnosed via gsd-debugger at `.planning/debug/cold-start-empty-feed.md`: HomeScreen.tsx useState initializer at lines 38-47 correctly seeded `dailyPosts` from `postQueueService.getYesterdayQueue()`, but the useEffect at lines 95-112 unconditionally called `setDailyPosts(posts)` on getDailyPosts → [] resolve (which is BY DESIGN on a new-day cold start while refillQueue runs in background) — wiping the warm-start posts ~200ms after mount. Same useEffect then fired `setGenerationError(true)` because `posts.length === 0 && questions.length > 0`, triggering misleading "Check your API keys" toast on every new-day launch.
+- [Phase 36-06] Fix uses `useRef`-snapshot pattern (NOT functional updater): `const warmStartHadPostsRef = useRef(dailyPosts.length > 0)` declared after the useState initializer (line 48 area). Captures warm-start fact ONCE at mount; the .then handler reads `.current` directly with no purity hazard. Chosen over `setDailyPosts(prev => { if (prev.length === 0) setGenerationError(true); return prev; })` because React.StrictMode (main.tsx:14) double-invokes updater functions in dev — calling `setGenerationError(true)` inside an updater violates React's "updaters must be pure" contract and would fire the side-effect twice.
+- [Phase 36-06] Two top-level conditional setters in the .then handler: `if (posts.length > 0) setDailyPosts(posts)` (don't overwrite warm-start with []) AND `if (posts.length === 0 && questions.length > 0 && !warmStartHadPostsRef.current) setGenerationError(true)` (no error UI when warm-start fallback is on screen). Both setters are top-level and pure. Original 6cda914e error-gate intent (genuinely broken API keys) preserved by the no-warm-start arm — when user has ZERO yesterday-queue AND today's fetch returns [], the error UI still fires correctly.
+- [Phase 36-06] Source-reading regression test at `app/tests/screens/HomeScreen.warm-start-guard.test.mjs` locks four invariants: (1) `warmStartHadPostsRef` declared, (2) `useRef(dailyPosts.length > 0)` initializer present, (3) `!warmStartHadPostsRef.current` gate present, (4) NO nested-setState anti-pattern (negative regex `setDailyPosts\(\s*\(\s*prev[\s\S]{0,200}?setGenerationError`). Pattern follows ChatInput.flex-shrink.test.mjs (CLAUDE.md ChatInput rule). All 4 GREEN.
+- [Phase 36-06] UAT retest recipe added at `.planning/phases/36-gap-closure-on-curiosity-feed-randomness-and-weights/36-UAT-RETEST.md` — operator-facing walkthrough: edit `echolearn_post_queue.date` to yesterday in devtools, reload, confirm no flicker + no error UI. File reusable for 36-07 + 36-08 retests under same parent (36-UAT.md).
+- [Phase 36-06] Three atomic commits on branch `gsd/phase-33-hygiene-and-polish`, all `--no-verify` per parallel-execution coordination with Plan 36-07 (post-queue.service.ts walker fix, disjoint files): `3664383e` (Task 1 fix, HomeScreen.tsx +34/-2) + `460340fd` (Task 2 test, +64 lines new file) + `5c61427b` (Task 3 docs, 36-UAT-RETEST.md +37 lines new file). NOTE: the parallel 36-07 STATE entry mistakenly references `3664383e`/`62a7697f`/`27c941b9` as its commit triple — actual 36-07 hashes are `d1427815`/`62a7697f`/`27c941b9` per git log. Not corrected here (out-of-scope for 36-06).
+- [Phase 36-06] Verification: `node --test tests/screens/HomeScreen.warm-start-guard.test.mjs` reports `tests 4 / pass 4 / fail 0`; `npx tsc -b --noEmit` exit 0; full `npm test` reports `tests 455 / pass 429 / fail 26` — Phase 36 baseline (422/26) preserved, +7 pass (4 from this plan + 3 from parallel 36-07), 0 new failures. All 6 phase-level verification greps pass: warmStartHadPostsRef occurrences=4 (≥3), !warmStartHadPostsRef.current=2 (≥1), if (posts.length > 0)=1 (≥1).
+- [Phase 36-06] No deviations from plan (zero auto-fixes, zero architectural decisions, zero auth gates). Plan was unusually precise — specified exact useRef placement, exact conditional shapes, exact comment text, exact test invariants. All three tasks landed verbatim.
 
 ## Latest Decisions (Phase 36-07, 2026-05-06 — GAP-B walker termination guard fix)
 
@@ -572,7 +583,7 @@ Completed Phase 27 Plan 07 autonomous tasks (27-07-PLAN.md) — Task 1 landed pr
 ## Previous Session
 
 Completed Phase 27 Plan 04 (27-04-PLAN.md) — Locale switcher + mid-stream abort. SettingsScreen gains a 4-language picker at the top (D-19) that calls `i18n.changeLanguage`, persists `preferences.locale` (+ legacy `language` back-compat), and emits `LOCALE_CHANGED`. Row LABEL hardcoded as `Language / 语言 / Idioma / 言語` for cross-locale affordance. `providers/llm/index.ts` gains `CompletionOptions.signal?: AbortSignal` + a `composeSignal(callerSignal, ms)` helper that uses `AbortSignal.any` (Chromium 116+ / Safari 17.4+ / Node 20+) with manual-forwarder fallback; signal threaded through all 7 fetch call sites (openAI completion/stream, claude completion/stream, gemini completion/stream, plus localPost for Android-local streaming). `useQuestions.askStreaming` declares ONE shared AbortController at the top of the try, subscribes to LOCALE_CHANGED once, passes the same signal to BOTH Pass 1 and Pass 2 chatStream calls, and guards every buildAndSave path with 6 aborted-checks (loop entries, post-loop, pre-persistence, catch-level AbortError short-circuit) — toasts `ask.localeChangedDiscarded` and returns null on abort so partial half-English/half-Japanese output never persists (D-22). TDD cadence: RED commit landed failing test first, GREEN commit made all 4 assertions pass. 48 Wave 0 tests green; `npx vite build` green (3.0s); zero new tsc errors. Deviations: used direct `settingsService.getSync/.set` instead of `useSettings` hook (matches existing SettingsScreen convention); added `callerSignal?` param to `localPost` (LOCALE_CHANGED was silently not cancelling Android-local completions otherwise); removed dead `void options;` statements from claudeStream + geminiStream. Commits: `da5c69b5` (Task 1 — locale switcher), `c93ecf46` (Task 2 RED — failing test), `7e301831` (Task 2 GREEN — provider plumbing + useQuestions abort).
-**Stopped At:** Completed 36-07-PLAN.md (GAP-B walker termination guard fix)
+**Stopped At:** Completed 36-06-PLAN.md (GAP-A warm-start guard fix)
 **Date:** 2026-04-16
 
 ## Latest Decisions (Phase 25)
