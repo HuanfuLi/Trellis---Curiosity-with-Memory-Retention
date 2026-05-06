@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: gap closure)
-status: Phase 35 shipped — PR pending manual creation on origin
-stopped_at: "Completed 35-05-PLAN.md (gap closure: strict-alternation user-ack for Qwen via LM Studio)"
-last_updated: "2026-04-29T15:30:13.486Z"
+status: Executing Phase 36
+stopped_at: Completed 36-00-PLAN.md (Wave 0 RED test stubs for derived list / stratified style / concept spread)
+last_updated: "2026-05-06T06:47:02.489Z"
 progress:
   total_phases: 21
   completed_phases: 0
@@ -12,7 +12,15 @@ progress:
   completed_plans: 0
 ---
 
-# Project State: Phase 35 GAP CLOSURE LANDED — Qwen + LM Studio strict-alternation user-ack (35-05) shipped, awaiting operator UAT re-run
+# Project State: Phase 36 WAVE 0 LANDED — RED test stubs for curiosity feed gap closure (3 files / 27 assertions, all RED)
+
+## Latest Decisions (Phase 36-00, 2026-05-06 — Wave 0 RED tests)
+
+- [Phase 36-00] Three RED test files landed at `app/tests/services/`: `derived-list.test.mjs` (10 assertions, GAP-1 + GAP-2 + REGRESSION), `style-assignment-stratified.test.mjs` (10 assertions, GAP-3), `spread-by-concept.test.mjs` (7 assertions, GAP-4). All 27 fail with `TypeError: <symbol> is not a function` — assertion-level RED, NOT module-load errors. Existing test suites (`post-queue.test.mjs`, `style-assignment.test.mjs`) still pass 20/20.
+- [Phase 36-00] **Rule-3 deviation**: spread-by-concept.test.mjs wraps the `await import('../../src/services/concept-feed.service.ts')` in try/catch because concept-feed transitively imports `question.service.ts → locales/index.ts → en.json`, which crashes Node ESM with `ERR_IMPORT_ATTRIBUTE_MISSING`. CLAUDE.md i18n section explicitly warned about this chain. With the try/catch, the file LOADS cleanly and tests fail RED at assertion time on `spreadByConcept is not a function`. Plan 36-02 must either extract `spreadByConcept` to a leaf module without the i18n chain OR avoid touching the import path — both paths flip the tests GREEN automatically.
+- [Phase 36-00] Test 10 in derived-list.test.mjs encodes RESEARCH § Pitfall 4 inline: importance weighting (8 entries for important "a", 4 for normal "b") survives through the dedup-on-append contract — second append with `['a', 'b']` after a 12-entry weighted first append leaves the original counts intact. This is the regression guard for "append-only with first-call weighting preserved".
+- [Phase 36-00] All count-based assertions over deterministic ones — no seeded RNG. Tests assert distributions (image ∈ {0,1,2}, text-art ∈ {3,4,5}) and Fisher-Yates non-determinism (≥1 of 50 paired runs differs). Honors RESEARCH risk-register entry "RNG determinism in tests" — keeps unseeded `Math.random()` testable.
+- [Phase 36-00] Three atomic commits on branch `gsd/phase-33-hygiene-and-polish`: `858a6638` (Task 1, derived-list +120 lines), `ac8e1fc7` (Task 2, stratified +90 lines), `b1d856d3` (Task 3, spread-by-concept +151 lines). Wave 1 (Plan 36-01) and Wave 2 (Plans 36-02 + 36-03 in parallel) flip these GREEN.
 
 ## Latest Decisions (Phase 35-05, 2026-04-29 — gap closure)
 
@@ -505,7 +513,7 @@ Completed Phase 27 Plan 07 autonomous tasks (27-07-PLAN.md) — Task 1 landed pr
 ## Previous Session
 
 Completed Phase 27 Plan 04 (27-04-PLAN.md) — Locale switcher + mid-stream abort. SettingsScreen gains a 4-language picker at the top (D-19) that calls `i18n.changeLanguage`, persists `preferences.locale` (+ legacy `language` back-compat), and emits `LOCALE_CHANGED`. Row LABEL hardcoded as `Language / 语言 / Idioma / 言語` for cross-locale affordance. `providers/llm/index.ts` gains `CompletionOptions.signal?: AbortSignal` + a `composeSignal(callerSignal, ms)` helper that uses `AbortSignal.any` (Chromium 116+ / Safari 17.4+ / Node 20+) with manual-forwarder fallback; signal threaded through all 7 fetch call sites (openAI completion/stream, claude completion/stream, gemini completion/stream, plus localPost for Android-local streaming). `useQuestions.askStreaming` declares ONE shared AbortController at the top of the try, subscribes to LOCALE_CHANGED once, passes the same signal to BOTH Pass 1 and Pass 2 chatStream calls, and guards every buildAndSave path with 6 aborted-checks (loop entries, post-loop, pre-persistence, catch-level AbortError short-circuit) — toasts `ask.localeChangedDiscarded` and returns null on abort so partial half-English/half-Japanese output never persists (D-22). TDD cadence: RED commit landed failing test first, GREEN commit made all 4 assertions pass. 48 Wave 0 tests green; `npx vite build` green (3.0s); zero new tsc errors. Deviations: used direct `settingsService.getSync/.set` instead of `useSettings` hook (matches existing SettingsScreen convention); added `callerSignal?` param to `localPost` (LOCALE_CHANGED was silently not cancelling Android-local completions otherwise); removed dead `void options;` statements from claudeStream + geminiStream. Commits: `da5c69b5` (Task 1 — locale switcher), `c93ecf46` (Task 2 RED — failing test), `7e301831` (Task 2 GREEN — provider plumbing + useQuestions abort).
-**Stopped At:** Completed 35-05-PLAN.md (gap closure: strict-alternation user-ack for Qwen via LM Studio)
+**Stopped At:** Completed 36-00-PLAN.md (Wave 0 RED test stubs for derived list / stratified style / concept spread)
 **Date:** 2026-04-16
 
 ## Latest Decisions (Phase 25)
@@ -632,3 +640,4 @@ Completed Phase 27 Plan 04 (27-04-PLAN.md) — Locale switcher + mid-stream abor
 - Phase 28 added: UI/UX polish from audit findings
 - Phase 30 added: Redesign curiosity feed as scroll progress bar with daily reading quota credits
 - Phase 32.1 inserted after Phase 32: v1.4 UAT retest gap closure — queue cycling (G1), video touch overlay (G2), starter posts retest (G3), starter post persistence (G4) (URGENT)
+- Phase 36 added: gap closure on curiosity feed randomness and weights
