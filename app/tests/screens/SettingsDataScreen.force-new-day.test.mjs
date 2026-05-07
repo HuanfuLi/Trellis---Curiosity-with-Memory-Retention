@@ -68,25 +68,45 @@ describe('SettingsDataScreen force-new-day dev affordance (Phase 36 GAP-D Fix B)
     );
   });
 
-  it('handler does NOT mutate echolearn_daily_posts (Plan 36-11 makes that mutation redundant)', () => {
-    // Commit 6a90224a added a defensive mutation of echolearn_daily_posts.date
-    // to yesterday, intended to prevent the served-posts cache from rendering
-    // across the rollover. Plan 36-11 Task 1's loadCache date-rejection makes
-    // that mutation redundant: stale caches return null without needing
-    // explicit invalidation. Plan 36-13 reverts the dual-cache hack.
-    // This negative assertion ensures we don't accidentally re-introduce it.
+  it('handler mutates echolearn_daily_posts.date so loadCache rejection fires symmetrically with queue rehydration', () => {
+    // Phase 36-15 inverts the negative regression assertion that Plan 36-13
+    // added (and that round-4 UAT proved wrong). Plan 36-11's loadCache
+    // date-rejection only fires on REAL midnight (where today() advances).
+    // The dev button cannot advance the wall clock, so today() returns the
+    // SAME value before and after this handler runs. If echolearn_daily_posts
+    // is left untouched, its stored .date still equals today(), loadCache()
+    // returns truthy, getDailyPosts() hits its cache-hit branch and returns
+    // yesterday's served posts — the rehydrated _state.posts from
+    // post-queue.service.ts (Plan 36-11) is never reached.
     //
-    // Extract by anchor pair (start of handler → start of next handler) — more
-    // robust than matching on closing-brace indent which silently regresses on
-    // formatter changes.
+    // Mirror the wall-clock-asymmetry pattern that the dailyReadService.reset()
+    // call already establishes: services that gate self-reset on today()
+    // comparisons cannot fire when the dev button doesn't (and shouldn't)
+    // advance the clock — so the handler must explicitly mutate every
+    // date-stamped cache key that natural midnight rollover would have
+    // tripped. echolearn_post_queue and echolearn_daily_posts are SYMMETRIC,
+    // not redundant.
+    //
+    // The runtime consequence (feed auto-populating from yesterday's queue
+    // when getCachedDailyPosts returns []) is owned by Plan 36-14's
+    // warm-start re-fallback effect in HomeScreen.tsx — see
+    // tests/screens/HomeScreen.warm-start-refallback.test.mjs.
+    //
+    // DO NOT FLIP THIS BACK to assert.doesNotMatch. The "redundant dual-cache
+    // hack" framing in Plan 36-13 was incorrect; round-4 UAT regressed
+    // sub-issue (b) because of it. See .planning/debug/feed-not-auto-
+    // populating-after-force-new-day.md and 36-15-SUMMARY.md.
     const start = source.indexOf('const handleForceNewDay');
     const next = source.indexOf('const refreshTokenUsage');
-    assert.ok(start !== -1 && next !== -1 && next > start, 'Could not locate handleForceNewDay anchor pair');
+    assert.ok(
+      start !== -1 && next !== -1 && next > start,
+      'Could not locate handleForceNewDay anchor pair (handleForceNewDay → refreshTokenUsage)',
+    );
     const handlerBody = source.slice(start, next);
-    assert.doesNotMatch(
+    assert.match(
       handlerBody,
-      /echolearn_daily_posts/,
-      'handleForceNewDay must NOT mutate echolearn_daily_posts directly. loadCache date-rejection (Plan 36-11) handles staleness symmetrically. See commit 6a90224a → reverted in Plan 36-13.',
+      /localStorage\.setItem\(['"]echolearn_daily_posts['"]/,
+      'handleForceNewDay must call localStorage.setItem(\'echolearn_daily_posts\', ...) to mutate the served-posts cache date to yesterday. Without this, loadCache()\'s parsed.date !== today() rejection (Plan 36-11) does not fire under the dev button (today() does not advance), and getDailyPosts() returns yesterday\'s served posts instead of dequeueing the rehydrated _state.posts. See round-4 sub-issue (b).',
     );
   });
 });
