@@ -168,11 +168,36 @@ export function HomeScreen() {
     };
   }, [questions, questionsLoading]);
 
-  // Re-sync feed from cache when navigating back to /home
+  // Re-sync feed from cache when navigating back to /home.
+  // Mirrors the line-38 useState initializer's fallback chain (tier 1: cache,
+  // tier 2: yesterday's rehydrated queue). The initializer runs ONCE at mount
+  // — HomeScreen is always-mounted in SwipeTabContainer, so navigate('/home')
+  // does NOT remount it. Without this re-fallback, after Plan 36-15's
+  // SettingsDataScreen mutation invalidates the daily-posts cache,
+  // getCachedDailyPosts() returns [] and the feed renders empty — the
+  // rehydrated _state.posts (Plan 36-11 Task 2) sits unreachable until the
+  // next async getDailyPosts run (which is mount-only, not navigation-fired).
+  // Phase 36-14 — closes the runtime half of round-4 sub-issue (b).
   useEffect(() => {
-    if (location.pathname === '/home') {
-      setDailyPosts(conceptFeedService.getCachedDailyPosts());
+    if (location.pathname !== '/home') return;
+    const cached = conceptFeedService.getCachedDailyPosts();
+    if (cached.length > 0) {
+      setDailyPosts(cached);
+      return;
     }
+    // Tier-2 fallback: yesterday's UNSERVED queue, rehydrated by
+    // postQueueService.load()'s date-mismatch branch (Plan 36-11 Task 2).
+    // This is the runtime mirror of the line-38 useState initializer's tier 2.
+    postQueueService.loadQueue();
+    const yesterdayQueue = postQueueService.getYesterdayQueue();
+    if (yesterdayQueue.length > 0) {
+      setDailyPosts(yesterdayQueue.slice(0, 8));
+      return;
+    }
+    // Both tiers empty — preserve current behavior (set to empty so the
+    // generic empty-state rendering takes over). The async getDailyPosts
+    // flow elsewhere will repopulate when its triggers fire.
+    setDailyPosts([]);
   }, [location.pathname]);
 
   // Load handler — called on intentional pull-and-release gesture.
@@ -473,6 +498,23 @@ export function HomeScreen() {
 
   const [showConfetti, setShowConfetti] = useState(false);
   const creditAwardedRef = useRef(dailyReadService.isCreditAwarded());
+
+  // Re-sync daily-read state from service when navigating back to /home.
+  // HomeScreen is always-mounted in SwipeTabContainer (see CLAUDE.md
+  // "Header positioning"), so navigate('/home') does NOT remount this
+  // component — useState/useRef initializers run once on app boot and never
+  // again. Without this resync, dailyReadService.reset() (called from
+  // SettingsDataScreen's Force-New-Day handler) clears persistence but the
+  // React state retains yesterday's exploredAnchors and creditAwardedRef
+  // keeps yesterday's "true". Result: vine chip on /home still shows
+  // yesterday's count, celebration gate at line ~516 is permanently closed.
+  // Phase 36-14 — closes round-4 sub-issue (a).
+  useEffect(() => {
+    if (location.pathname === '/home') {
+      setExploredAnchors(dailyReadService.getExploredAnchors());
+      creditAwardedRef.current = dailyReadService.isCreditAwarded();
+    }
+  }, [location.pathname]);
 
   // Subscribe to CONCEPT_EXPLORED events from PostDetailScreen
   useEffect(() => {
