@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef, useContext } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
 import { X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
 import { SwipeTabContext } from '../lib/swipe-tab-context';
 import type { BlindboxItem, DailyPost, GeneratedImage, Question } from '../types';
 import { FeedPostImage } from './FeedPostImage';
@@ -8,6 +9,9 @@ import { imageGenerationService } from '../services/imageGeneration.service';
 import { inferImageStyle, buildImagePrompt } from '../services/postFormatting.service';
 import { normalizePlainText } from '../lib/text-normalization';
 import { settingsService } from '../services/settings.service';
+import { dailyReadService, getAnchorIdForPost } from '../services/daily-read.service';
+import { questionService } from '../services/question.service';
+import { eventBus } from '../lib/event-bus';
 import { SuggestionCard } from './SuggestionCard';
 
 // ── Text-art theme pool (random selection per render) ──────────────────────────
@@ -91,6 +95,14 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen, videoP
       || imageGenerationService.hasCachedImage(post.id, inferImageStyle(post)),
   );
 
+  // D-22a (Phase 33 Plan 06): hoist settings read out of per-card useEffect hot path.
+  // Was: settings.imageGeneration.enabled was re-read inside the per-card image-effect
+  // every time the effect's deps changed. Now: snapshot once on mount; if a settings
+  // update needs to invalidate, the snapshot stays stable for this card's lifetime
+  // (acceptable — image generation is a one-shot per-mount decision; users toggling
+  // the setting only affects future card mounts).
+  const [imageEnabled] = useState(() => settingsService.getSync().imageGeneration.enabled);
+
   useEffect(() => {
     // Skip AI image generation for non-image presentation styles
     if (isSuggestion || isVideoPost || isShortPost || isNewsPost) return;
@@ -100,7 +112,7 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen, videoP
     }
 
     // Also respect the image generation settings toggle (per D-11)
-    const imageEnabled = settingsService.getSync().imageGeneration.enabled;
+    // D-22a (Phase 33 Plan 06): imageEnabled now a useState snapshot from above
     if (!imageEnabled) {
       setImageResolved(true);
       return;
@@ -279,9 +291,23 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen, videoP
   }
 
   // Regular concept posts
+  // Rendered as <div role="button"> rather than <button> so inner interactive
+  // elements (video stop button, etc.) can safely be actual <button>s without
+  // tripping the "<button> cannot be a descendant of <button>" DOM-nesting
+  // invariant. Preserves click + keyboard (Enter/Space) affordances.
+  const interactive = !isShortPost;
+  const handleActivate = () => { if (interactive) onOpen(post.id, post); };
   return (
-    <button
-      onClick={isShortPost ? undefined : () => onOpen(post.id, post)}
+    <div
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      onClick={interactive ? handleActivate : undefined}
+      onKeyDown={interactive ? (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleActivate();
+        }
+      } : undefined}
       style={{
         height: '100%',
         width: '100%',
@@ -312,7 +338,10 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen, videoP
             {videoPlaying === post.id ? (
               <>
                 <iframe
-                  src={`https://www.youtube.com/embed/${post.videoMeta.videoId}?autoplay=1&playsinline=1&rel=0`}
+                  // Phase 36 GAP-C: enablejsapi=1 added for symmetry with YouTubeEmbed.
+                  // Inline-feed video posts route to PostDetailScreen via onOpen for the
+                  // Detector D postMessage path; this iframe is the inline preview.
+                  src={`https://www.youtube.com/embed/${post.videoMeta.videoId}?autoplay=1&playsinline=1&rel=0&enablejsapi=1`}
                   style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none', pointerEvents: 'auto' }}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
@@ -398,6 +427,24 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen, videoP
               if (videoPlaying !== post.id) {
                 e.stopPropagation();
                 setVideoPlaying(post.id);
+                // Phase 36 GAP-C: tap-to-play on a short post is a strong implicit
+                // completion signal (5-15s clips). Shorts have interactive=false at
+                // ConceptCard line 295 — they never navigate to PostDetailScreen, so
+                // Detectors A/B/C/D never run. Emit CONCEPT_EXPLORED here instead.
+                // Idempotent via the markExplored call below (no-op if already set).
+                // See .planning/debug/video-completion-signal-missing.md.
+                try {
+                  const allQ = questionService.getAll({ includeFlagged: true });
+                  const byId = new Map(allQ.map(q => [q.id, q]));
+                  const anchorId = getAnchorIdForPost(post, byId);
+                  if (anchorId && !dailyReadService.isExplored(anchorId)) {
+                    dailyReadService.markExplored(anchorId);
+                    eventBus.emit({ type: 'CONCEPT_EXPLORED', payload: { anchorId } });
+                  }
+                } catch (err) {
+                  // Defensive: never let signal-emit errors break tap-to-play.
+                  console.warn('[InfoFlow] short tap-to-play emit failed:', err);
+                }
               }
             }}
             style={{
@@ -413,7 +460,11 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen, videoP
                 overflow: 'hidden',
               }}>
                 <iframe
-                  src={`https://www.youtube.com/embed/${post.videoMeta.videoId}?playsinline=1&autoplay=1&rel=0`}
+                  // Phase 36 GAP-C: enablejsapi=1 added for symmetry. Shorts emit
+                  // CONCEPT_EXPLORED on tap-to-play (see setVideoPlaying handler) — the
+                  // postMessage path is not used here, but keep the param for any future
+                  // postMessage-based detection on shorts.
+                  src={`https://www.youtube.com/embed/${post.videoMeta.videoId}?playsinline=1&autoplay=1&rel=0&enablejsapi=1`}
                   style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none', pointerEvents: 'auto' }}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
@@ -594,10 +645,37 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen, videoP
             </div>
             </div>
             )}
-            </button>
+            </div>
 
   );
 }
+
+// D-23 (Phase 33 Plan 06): React.memo wrapper around ConceptCard.
+// Custom equality: parent re-renders 8 cards on every event-bus emission;
+// without memo, all 8 re-render. With memo, only cards whose props actually
+// changed re-render. Internal state (image, imageResolved) is not in the
+// comparator because React.memo only sees props — internal state changes
+// always trigger re-render via useState's normal behavior.
+//
+// GUARDRAIL (Phase 32.1 Wave 4 D-W4-03): this wrapper sits OUTSIDE the
+// wouldRenderVisual fallback at the top of ConceptCard. The fallback runs on
+// every render that DOES occur — memo only changes WHETHER a render occurs,
+// not what happens inside one.
+function conceptCardPropsEqual(
+  prev: ConceptCardProps & { videoPlaying: string | null; setVideoPlaying: (id: string | null) => void },
+  next: ConceptCardProps & { videoPlaying: string | null; setVideoPlaying: (id: string | null) => void },
+): boolean {
+  return (
+    prev.post.id === next.post.id &&
+    prev.isActive === next.isActive &&
+    prev.videoPlaying === next.videoPlaying &&
+    prev.onOpen === next.onOpen &&
+    prev.setVideoPlaying === next.setVideoPlaying &&
+    prev.feedIndex === next.feedIndex
+  );
+}
+
+const MemoizedConceptCard = React.memo(ConceptCard, conceptCardPropsEqual);
 
 // Color palette for connection cards — vivid, high-contrast pairs.
 // Each entry: [bg, glowRgba]. No two adjacent colors in the pool are similar.
@@ -755,190 +833,6 @@ function MilestoneCard({ item, isActive }: { item: BlindboxItem; isActive: boole
   );
 }
 
-interface ImmersiveInfoFlowProps {
-  items: InfoFlowItem[];
-  onOpenConnection: (idA: string, idB: string) => void;
-  onClose: () => void;
-  onOpenPost: (postId: string, post: DailyPost) => void;
-}
-
-export function ImmersiveInfoFlow({ items, onOpenConnection, onClose, onOpenPost }: ImmersiveInfoFlowProps) {
-  const { t } = useTranslation();
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [videoPlaying, setVideoPlaying] = useState<string | null>(null);
-
-  useEffect(() => {
-    const container = scrollRef.current;
-    if (!container) return;
-    const cards = Array.from(container.querySelectorAll<Element>('[data-flow-card]'));
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            const idx = cards.indexOf(entry.target);
-            if (idx !== -1) setActiveIndex(idx);
-          }
-        }
-      },
-      { root: container, threshold: 0.6 },
-    );
-
-    cards.forEach((card) => observer.observe(card));
-    return () => observer.disconnect();
-  }, [items]);
-
-  if (items.length === 0) {
-    return (
-      <div
-        style={{
-          position: 'fixed',
-          inset: 0,
-          zIndex: 200,
-          backgroundColor: 'var(--surface)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '16px',
-          animation: 'slide-up 0.35s cubic-bezier(0.32,0.72,0,1)',
-        }}
-      >
-        <button onClick={onClose} style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--foreground)' }}>
-          <X size={24} />
-        </button>
-        <span style={{ fontSize: '2.5rem' }}>✨</span>
-        <p style={{ fontWeight: 700, fontSize: '1.2rem' }}>{t('infoFlow.emptyTitle')}</p>
-        <p style={{ color: 'var(--muted-foreground)', fontSize: '0.875rem', textAlign: 'center', padding: '0 32px' }}>
-          {t('infoFlow.emptyBodyImmersive')}
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 200,
-        backgroundColor: 'var(--surface)',
-        animation: 'slide-up 0.35s cubic-bezier(0.32,0.72,0,1)',
-      }}
-    >
-      <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 10,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: 'calc(12px + var(--safe-area-top)) 16px 12px',
-          background: 'linear-gradient(to bottom, var(--surface) 60%, transparent)',
-          pointerEvents: 'none',
-        }}
-      >
-        <div style={{ display: 'flex', gap: '4px', pointerEvents: 'none' }}>
-          {items.map((_, index) => (
-            <div
-              key={index}
-              style={{
-                height: '3px',
-                width: index < activeIndex ? '16px' : index === activeIndex ? '24px' : '8px',
-                borderRadius: '100px',
-                backgroundColor: index <= activeIndex ? 'var(--primary-40)' : 'var(--border)',
-                transition: 'width 0.3s, background-color 0.3s',
-                opacity: Math.max(0.3, 1 - Math.abs(index - activeIndex) * 0.15),
-              }}
-            />
-          ))}
-        </div>
-        <button
-          onClick={onClose}
-          style={{
-            pointerEvents: 'all',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '36px',
-            height: '36px',
-            borderRadius: '50%',
-            backgroundColor: 'var(--surface-variant)',
-            border: '1px solid var(--border)',
-            cursor: 'pointer',
-            color: 'var(--foreground)',
-          }}
-        >
-          <X size={18} />
-        </button>
-      </div>
-
-      <div
-        ref={scrollRef}
-        style={{
-          height: '100%',
-          overflowY: 'scroll',
-          scrollSnapType: 'y mandatory',
-          WebkitOverflowScrolling: 'touch',
-        }}
-      >
-        {items.map((item, index) => (
-            <div
-              key={index}
-              data-flow-card=""
-              style={{
-                height: '100svh',
-                scrollSnapAlign: 'start',
-                scrollSnapStop: 'always',
-                display: 'flex',
-                flexDirection: 'column',
-                padding: '64px 16px 24px',
-                boxSizing: 'border-box',
-                maxWidth: '480px',
-                margin: '0 auto',
-                width: '100%',
-              }}
-            >
-              <div
-                style={{
-                  flex: 1,
-                  position: 'relative',
-                }}
-              >
-              {item.kind === 'concept' ? (
-                <ConceptCard post={item.post} feedIndex={index} isActive={index === activeIndex} onOpen={onOpenPost} videoPlaying={videoPlaying} setVideoPlaying={setVideoPlaying} />
-              ) : item.kind === 'connection' ? (
-                <ConnectionCard
-                  questionA={item.questionA}
-                  questionB={item.questionB}
-                  conceptNounA={item.conceptNounA}
-                  conceptNounB={item.conceptNounB}
-                  bridgeInsight={item.bridgeInsight}
-                  cosineSimilarity={item.cosineSimilarity}
-                  showScore={false}
-                  onOpenConnection={onOpenConnection}
-                />
-              ) : (
-                <MilestoneCard item={item.item} isActive={index === activeIndex} />
-              )}
-            </div>
-
-            {index === items.length - 1 && (
-              <div style={{ textAlign: 'center', padding: '16px 0 0', color: 'var(--muted-foreground)', fontSize: '0.8rem' }}>
-                {t('infoFlow.endOfFlow')}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 interface InlineInfoFlowProps {
   items: InfoFlowItem[];
   onOpenConnection: (idA: string, idB: string) => void;
@@ -974,6 +868,38 @@ export function InlineInfoFlow({ items, onOpenConnection, showConnectionScores =
       unsub?.();
     };
   }, [swipeCtx]);
+
+  // Phase 33 gap fix (Bug 1, 2026-04-20): Stop video when the user navigates
+  // intra-app away from /home (e.g., into PostDetailScreen which mounts as an
+  // Outlet overlay above the swipe strip). The swipeProgress handler above
+  // only fires on horizontal tab-to-tab navigation; the Outlet overlay keeps
+  // Home "active" under the overlay, so this second subscription is required
+  // to prevent two iframes (feed + detail) from playing simultaneously.
+  const location = useLocation();
+  useEffect(() => {
+    if (location.pathname !== '/home') setVideoPlaying(null);
+  }, [location.pathname]);
+
+  // Phase 33 gap fix (Bug 2, 2026-04-20): Stop video when the currently-playing
+  // card is scrolled out of viewport. IntersectionObserver only activates while
+  // a video is playing, so zero perf overhead in the common case. Fullscreen
+  // guard avoids stopping when YouTube's own fullscreen takes over the viewport.
+  useEffect(() => {
+    if (!videoPlaying) return;
+    const card = document.querySelector<HTMLElement>(`[data-feed-id="${videoPlaying}"]`);
+    if (!card) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) return;
+        if (document.fullscreenElement) return;
+        setVideoPlaying(null);
+      },
+      { threshold: 0.3 },
+    );
+    observer.observe(card);
+    return () => observer.disconnect();
+  }, [videoPlaying]);
   // On first render, mark all current items as "already seen" so they
   // don't animate. Only items added AFTER mount will animate.
   const [newPostIds] = useState<Set<string>>(() => {
@@ -1038,7 +964,7 @@ export function InlineInfoFlow({ items, onOpenConnection, showConnectionScores =
               }}
             >
               {item.kind === 'concept' ? (
-                <ConceptCard
+                <MemoizedConceptCard
                   post={item.post}
                   feedIndex={index}
                   isActive={shouldAnimate}

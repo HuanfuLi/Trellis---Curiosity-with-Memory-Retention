@@ -277,7 +277,7 @@ Plans:
 
 **Depends on:** Phase 16
 
-**Plans:** 4/4 plans complete
+**Plans:** 4/4 original plans complete + 1 gap-closure plan pending (35-05)
 
 Plans:
 - [x] 17-00-PLAN.md — Wave 0 test scaffold for youtube.service.ts
@@ -643,7 +643,7 @@ Plans:
 
 **Requirements**: PHASE-25-WAVE-0, PHASE-25-DATA-LAYER, PHASE-25-VARIANT-C, PHASE-25-VARIANT-A, PHASE-25-VARIANT-V, PHASE-25-POLISH-AND-INTEGRATION (internal phase-local IDs — no ROADMAP-level requirement tracking since this phase is additive motivational UX with goal as the success criterion)
 **Depends on:** Phase 24
-**Plans:** 6/6 plans executed
+**Plans:** 6/6 original + 3 gap-closure plans pending (06, 07, 08)
 
 Plans:
 - [x] 25-00-PLAN.md — Wave 0 foundations: AppEvent types (REVIEW_COMPLETED/CLASSIFICATION_COMPLETED/ANCHOR_DELETED), blossom-date persistence service, asset directory with AI-prompt README, REVIEW_COMPLETED bridge in review.service.ts
@@ -880,14 +880,133 @@ Scope:
 3. `git status` is clean (or WIP is intentionally carried with a commit explaining why).
 4. `29-VERIFICATION.md` is no longer stale w.r.t. TD-01.
 
-**Plans:** 5 plans
+**Plans:** 8/8 plans executed (Phase 33 COMPLETE 2026-04-20)
 
 Plans:
-- [ ] 33-00-PLAN.md — WIP flush: commit 12 working-tree files from Phase 30-31 follow-up edits (Wave 0; WIP-FLUSH)
-- [ ] 33-01-PLAN.md — TD-05 orphan sweep: delete ConceptProgressCard.tsx + 4 orphan i18n keys atomically (Wave 1; TD-05)
-- [ ] 33-02-PLAN.md — TD-04 supersession: delete concept-feed-strategy.test.mjs + orphan plumbing assertion + update 29-VERIFICATION / 29-UAT-LOG (Wave 1; TD-04)
-- [ ] 33-03-PLAN.md — TD-06 LeafState rename: yellow -> dying, fallen -> dead atomic commit across 9 files (Wave 2; TD-06)
-- [ ] 33-04-PLAN.md — Closure: verify 4 ROADMAP success criteria + record SATISFIED-BY-760fa4f8 + flip VALIDATION nyquist_compliant (Wave 3; TSC-HYGIENE)
+- [x] 33-00-PLAN.md — WIP flush: commit 12 working-tree files from Phase 30-31 follow-up edits (Wave 0; WIP-FLUSH) — `fe4a2387`
+- [x] 33-01-PLAN.md — TD-05 orphan sweep: delete ConceptProgressCard.tsx + 4 orphan i18n keys atomically (Wave 1; TD-05) — `e297a77a`
+- [x] 33-02-PLAN.md — TD-04 supersession: delete concept-feed-strategy.test.mjs + orphan plumbing assertion + update 29-VERIFICATION / 29-UAT-LOG (Wave 1; TD-04) — `e6ca3d35` + `69389d45`
+- [x] 33-03-PLAN.md — TD-06 LeafState rename: yellow -> dying, fallen -> dead atomic commit across 8 files (Wave 2; TD-06) — `c8177c72`
+- [x] 33-04-PLAN.md — Closure: verify 4 ROADMAP success criteria + record SATISFIED-BY-760fa4f8 + flip VALIDATION nyquist_compliant (Wave 3; TSC-HYGIENE) — `bbaefd86`
+- [x] 33-05-PLAN.md — v2 prerequisite: re-flush Phase 32.1 Wave 4 follow-on WIP (Bugs A/C/D + 6/7/8/9/10/14) (Wave 0; WAVE-4-WIP) — SATISFIED-BY-`6066c709` (operator pre-committed)
+- [x] 33-06-PLAN.md — v2 perf memoization: settings hoist (D-22) + React.memo on ConceptCard + VineProgress; TrellisLeaf excluded (D-23) (Wave 2; PERF-MEMO) — `5542f78f` + `59bb0a8d` + `9b9eeb01`
+- [x] 33-07-PLAN.md — v2 cosmetic polish: WCAG 2.5.8 touch targets (PlannerScreen refresh, ChatInput mic+globe → 44x44px) + spacing/shadow tokens (D-24/D-25/D-26) (Wave 2; COSMETIC-POLISH) — `616c761f` + `47d81049`
+
+### Phase 34: v1.4 close-out — verification debt + test/orphan cleanup + device UAT + WIP commit
+
+**Goal:** Close all gaps surfaced by `.planning/v1.4-MILESTONE-AUDIT.md` (2026-04-24) in a single bundled phase so v1.4 can ship. Combines (a) the verification write-ups Phase 32 was supposed to produce but never executed, (b) the two new test-desync warnings introduced post-2026-04-18, (c) the orphan-export tail Phase 33 plan 33-01 left behind, (d) the VALIDATION.md doc-drift flips, (e) the device UAT retests pending from Phase 32.1 + Phase 33, and (f) the WIP commit decision on the rebrand branch.
+
+**Requirements:** None net-new — closes audit gaps PHASE-30-VERIFICATION, PHASE-31-VERIFICATION, PHASE-32-EXECUTION, SEAM-11, SEAM-12, SEAM-2-tail, VALIDATION-DRIFT-{28,29,30,32}, 32.1-G2/G4/G5-DEVICE-RETEST, 33-HUMAN-UAT-1/2, WIP-COMMIT-DECISION.
+**Depends on:** Phase 33 (verification baseline; HEAD `245fae4d`)
+**Gap closure:** Closes all unresolved items from `.planning/v1.4-MILESTONE-AUDIT.md`
+
+Scope:
+
+1. **Write `30-VERIFICATION.md`** — audit each of the 22 Phase 30 decisions (D-01..D-22) inline against current code. 13 are claimed in `30-02-SUMMARY.md` frontmatter (D-04, D-07..D-11, D-13..D-18, D-20). 9 (D-01, D-02, D-03, D-05, D-06, D-12, D-19, D-21, D-22) need explicit VERIFIED / SUPERSEDED-BY-PHASE-31 / NO-OP / DEFERRED rows. Many of these were superseded by Phase 31's VineProgress redesign — document each supersession with a pointer to the Phase 31 / Phase 33 commit that replaced it. Use Phase 29's abbreviated style (truth table + artifacts + requirements coverage; skip Key Link/Data-Flow Trace).
+
+2. **Write `31-VERIFICATION.md`** — audit each of the 47 Phase 31 decisions (D-01..D-47) inline. 28 are claimed across 31-02/05/06/07/08/09 SUMMARY frontmatter; 19 (D-08, D-11, D-14..D-27, D-44..D-46) need explicit rows. Fold in 31-UAT.md retest rows from Phase 32.1 plans 32.1-01/02/03 (tests 2/3/4/5/7/11/13/14) so UAT outcomes are visible in the audit trail. Note: device-pending items (G2/G4/G5) flip to VERIFIED only after Phase 34's device UAT step records a pass.
+
+3. **Write `32-CLOSURE.md`** — annotate Phase 32 absorption: UAT retest intent (32-01-PLAN, 32-03-PLAN) was absorbed into Phase 32.1 plans 32.1-01/02/03; verification write-ups (32-02-PLAN — write 30/31 VERIFICATION) were absorbed into Phase 34 (this phase, plans 34-01/02). Annotate `32-VALIDATION.md` to reflect "absorbed, no execution".
+
+4. **Fix Seam 11 — CLASSIFICATION_COMPLETED test desync:**
+   - Update `app/tests/services/trellis-replant.test.mjs:137,145` and `app/tests/services/trellis-prune.test.mjs:95,103` to subscribe to `GRAPH_UPDATED` instead of the deleted `CLASSIFICATION_COMPLETED` event.
+   - Resolve the `_actions-mock-loader.mjs` runner gap so the 7 trellis-actions tests actually load — either add `--import ./tests/services/_actions-mock-loader.mjs` to the npm test invocation, or inline the necessary mocks inside each test file.
+   - Verify: 7 trellis-actions tests run + pass.
+
+5. **Fix Seam 12 — image-pregen test guards dead path:**
+   - **MUST land BEFORE the WIP commit** (item 7 below) so committing WIP doesn't introduce a regression.
+   - Update `app/tests/screens/HomeScreen.image-pregen-filter.test.mjs` to assert the `imagePosts.filter((p) => p.presentationStyle === 'image')` pattern in `concept-feed.service.ts:refillQueue` (around line 1388 in WIP) instead of `HomeScreen.tsx:handleLoad`.
+
+6. **Clean up Seam 2 tail — orphan exports:**
+   - Delete `app/src/services/post-store.service.ts` (zero consumers across `src/` and `tests/`).
+   - Delete `ImmersiveInfoFlow` export at `app/src/components/InfoFlow.tsx:808-815` (zero consumers; missing D-29 video-stop-on-swipe wiring is a footgun if revived).
+
+7. **VALIDATION.md flips (doc drift):**
+   - `28-VALIDATION.md`: `status: draft` → `validated`, `nyquist_compliant: false` → `true`. VERIFICATION.md already passed 30/30 on 2026-04-16; pure doc drift.
+   - `29-VALIDATION.md`: same flip. VERIFICATION.md already passed 10/10 on 2026-04-17; doc drift.
+   - `30-VALIDATION.md`: flip ONLY after item 1 lands clean (no DEFERRED rows that block validation).
+   - `32-VALIDATION.md`: do NOT flip — annotate "absorbed, no execution" instead per item 3.
+
+8. **Device UAT retest session (operator action — record in `34-UAT-LOG.md`):**
+   - 32.1-G2 (UAT-31-4): video touch overlay reaches YouTube native controls (or pattern-(b) fallback if needed)
+   - 32.1-G4 (STARTER-PERSIST): starter posts persist after view on fresh-install device
+   - 32.1-G5 (CLEAR-RELOAD): Clear All Data auto-navigates to /home
+   - 33-HUMAN-UAT-1: touch-target feel on PlannerScreen refresh + ChatInput mic/globe at 44×44
+   - 33-HUMAN-UAT-2: React.memo behavioral correctness on live feed (8 cards, swipe-for-more 4 posts, image-gen toggle, VineProgress full-width)
+   - **Opportunistic** (only if device session covers them): Phase 28's 6 deferred human-UAT items (haptic, slide-down, scroll shadow, resize re-snap, trellis pulse, locale switch). Per Phase 32 D-06 these don't gate v1.4.
+   - On pass: flip 32.1-VERIFICATION.md status from `human_needed` → `passed`; record human-verify pass on 33-VERIFICATION.md and 28-VERIFICATION.md (where applicable).
+
+9. **WIP commit decision on `gsd/phase-33-hygiene-and-polish`:**
+   - 26 modified files + 5 untracked PWA/icon assets. Documented in `33-REBRAND.md` as the EchoLearn → Trellis rebrand plus follow-on functional improvements.
+   - Operator decides commit shape: (a) single rebrand+functional commit, (b) split into rebrand-only + each functional change separately, or (c) further-fix-first then commit.
+   - Item 5 (Seam 12 fix) MUST be in the same commit set so test baseline doesn't regress.
+   - Verify post-commit: `npx tsc -b --noEmit` exits 0; `npm test` baseline matches 449 pass / 27 fail (or improves to 456 pass / 20 fail if Seam 11 fix in item 4 lands first).
+
+**Out of scope:**
+- VineProgress dead props cleanup (`explored`, `total`, `isComplete`) — defer to v1.5.
+- Pre-existing trellis test failures from `ERR_IMPORT_ATTRIBUTE_MISSING` (Node 25 JSON import) — long-standing infrastructure issue, not a v1.4 regression.
+- Phase 32.1 Wave 3/4 addenda formal verifier pass — addenda were written by session-Claude not gsd-verifier. Optional rerun at v1.5 close-out.
+- Rebrand localStorage key migration — documented in `33-REBRAND.md` as a separate post-presentation task.
+
+**Success criteria:**
+1. `30-VERIFICATION.md` and `31-VERIFICATION.md` exist; every decision row in each is VERIFIED / SUPERSEDED / NO-OP / DEFERRED with specific evidence.
+2. `32-CLOSURE.md` exists and `32-VALIDATION.md` is annotated.
+3. 7 trellis-actions tests actually run and pass; `HomeScreen.image-pregen-filter.test.mjs` passes both pre- and post-WIP commit.
+4. `post-store.service.ts` and `ImmersiveInfoFlow` export are deleted; tsc clean; no consumers broken.
+5. `28-VALIDATION.md`, `29-VALIDATION.md`, `30-VALIDATION.md` all show `status: validated` + `nyquist_compliant: true`. `32-VALIDATION.md` annotated.
+6. `34-UAT-LOG.md` records device retest results for all 5 items in step 8; 32.1-VERIFICATION.md flipped from `human_needed` → `passed`.
+7. `git status` shows clean working tree on `gsd/phase-33-hygiene-and-polish`; HEAD includes the WIP commit set.
+8. Re-run `/gsd:audit-milestone v1.4` produces `status: passed` (or `tech_debt` with only deferred items).
+
+**Plans:** 8/8 plans complete
+
+Plans:
+- [x] 34-01-PLAN.md — Seam 11 fix: rename CLASSIFICATION_COMPLETED → GRAPH_UPDATED in trellis-replant + trellis-prune tests (Wave 1; SEAM-11)
+- [x] 34-02-PLAN.md — Seam 12 fix: redirect HomeScreen.image-pregen-filter.test.mjs grep target to concept-feed.service.ts:refillQueue (Wave 1; SEAM-12 — folds into Commit 2)
+- [x] 34-03-PLAN.md — Write 30-VERIFICATION.md auditing all 22 Phase 30 decisions in Phase 29 abbreviated style (Wave 2; PHASE-30-VERIFICATION)
+- [x] 34-04-PLAN.md — Write 31-VERIFICATION.md auditing all 47 Phase 31 decisions + inline UAT retest integration (Wave 2; PHASE-31-VERIFICATION)
+- [x] 34-05-PLAN.md — Write 32-CLOSURE.md + annotate 32-VALIDATION.md (no flip) per VALIDATION-32-ANNOTATE rule (Wave 2; PHASE-32-EXECUTION + VALIDATION-32-ANNOTATE)
+- [x] 34-06-PLAN.md — Delete post-store.service.ts + ImmersiveInfoFlow export from InfoFlow.tsx; document D-15 VineProgress dead-prop fold as NO-OP (Wave 3; SEAM-2-tail)
+- [x] 34-07-PLAN.md — Flip 28/29/30-VALIDATION.md from draft to validated (Wave 4; VALIDATION-DRIFT-{28,29,30})
+- [x] 34-08-PLAN.md — Device UAT log (G2/G4/G5 retroactive PASS + 33-UAT-1/2 pending) + 32.1-VERIFICATION.md status flip + 33-REBRAND.md Functional Changes addendum + Presentation/ in .gitignore + 5-commit WIP land on gsd/phase-33-hygiene-and-polish (Wave 5; DEVICE-UAT-RETEST + WIP-COMMIT-SHAPE)
+
+### Phase 35: fix the dynamic-system-prompt issue
+
+**Status:** COMPLETE (2026-04-29) — 35-01..05 shipped; UAT round 2 all 3 tests PASS on Qwen 3.5 via LM Studio (single-turn streams cleanly, multi-turn coherent, web-search Pass 2 cited); empirical close-out confirmed
+**Goal:** Move the per-turn `formatCandidateContextPack(candidatePack)` interpolation out of the `useQuestions.ts:askStreaming` system prompt into a tail-position assistant message so the provider's KV-cache prefix covers the full conversation history (system + append-only history) instead of breaking at the dynamic-content byte. Adds source-reading invariant test, CLAUDE.md load-bearing-rule section, and project-wide `chatStream`/`chatCompletion` audit confirming all other call sites are intentionally one-shot.
+**Requirements**: none (no roadmap REQ-IDs; this is a structural-quality phase driven by LabPresentation Section 4.7 self-disclosure)
+**Depends on:** Phase 34
+**Plans:** 5/5 plans complete
+
+Plans:
+- [x] 35-01-PLAN.md — Refactor useQuestions.ts: byte-stable system prompt + tail assistant context message in both Pass 1 and Pass 2 (Wave 1)
+- [x] 35-02-PLAN.md — Add source-reading invariant test useQuestions-system-prompt-stability.test.mjs (Wave 1)
+- [x] 35-03-PLAN.md — Add CLAUDE.md Phase 35 load-bearing-rule section adjacent to Classification dedup (Wave 2; depends on 35-01) (completed 2026-04-29)
+- [x] 35-04-PLAN.md — Project-wide chatStream/chatCompletion audit + 35-VERIFICATION.md must-haves rollup (Wave 1)
+- [x] 35-05-PLAN.md — Gap closure: insert USER_ACK_BEFORE_GRAPH_CONTEXT user-ack between history and assistant context in Pass 1 + Pass 2 to satisfy strict-alternation chat templates (Qwen via LM Studio); extend invariant test + append strict-alternation paragraph to CLAUDE.md (Wave 1; gap_closure)
+
+### Phase 36: gap closure on curiosity feed randomness and weights — COMPLETE (2026-05-06, gap closure 14/14 must-haves)
+
+**Goal:** Close four divergences between CLAUDE.md "Concept Feed Generation Pipeline" design and live code: (GAP-1) derived list rebuilt from scratch each refill instead of append-only with cycle position; (GAP-2) no cyclic walker — same concepts re-suggested same order each cycle; (GAP-3) i.i.d. style sampling produces small-N variance (8-entry batches routinely have zero image / zero suggestion); (GAP-4) style-axis interleave alone — same-anchor entries cluster regardless of style spread. Plus GAP-6 doc fix (MAX_QUEUE_SIZE = 32 not documented).
+**Requirements**: GAP-1, GAP-2, GAP-3, GAP-4, GAP-6 (gap-closure phase — no new functional REQ-IDs; tracking via GAP-IDs from 36-RESEARCH.md)
+**Depends on:** Phase 35
+**Plans:** 16/16 plans complete
+
+Plans:
+- [x] 36-00-test-stubs-red-PLAN.md — Write 3 RED test stubs (derived-list, style-assignment-stratified, spread-by-concept) covering all four GAPs (Wave 0)
+- [x] 36-01-stratified-style-allocation-PLAN.md — Replace i.i.d. style draw with largest-remainder + Fisher-Yates in style-assignment.ts; export assignStylesStratified alias (Wave 1; closes GAP-3)
+- [x] 36-02-spread-by-concept-PLAN.md — Add spreadByConcept to concept-feed.service.ts and wire into enqueueInterleaved before spreadByStyle (Wave 1; closes GAP-4)
+- [x] 36-03-persistent-derived-list-PLAN.md — Extend QueueState with derivedList + cyclePosition + 4 new methods; refactor refillQueue Step 1 to append + walk (Wave 2; closes GAP-1 + GAP-2)
+- [x] 36-04-integration-smoke-PLAN.md — End-to-end composition smoke test verifying all four invariants together; full npm test no-NEW-failure check (Wave 3)
+- [x] 36-05-claude-md-doc-sync-PLAN.md — Update CLAUDE.md Concept Feed Pipeline section: document MAX_QUEUE_SIZE=32 (closes GAP-6); cross-reference appendToDerivedList; describe lazy-skip; strike GAP-1/3/4 (Wave 3)
+- [x] 36-06-cold-start-warm-start-PLAN.md — Warm-start guard on HomeScreen cold-start useEffect: functional setDailyPosts + conditional setGenerationError so yesterday's leftover posts persist when getDailyPosts returns [] on a new day (Wave 1; gap_closure; closes GAP-A blocker from 36-UAT.md)
+- [x] 36-07-walker-termination-guard-PLAN.md — Replace `maxSteps = len * 2` with `Math.max(count * 2, len)` in postQueueService.walkDerivedList; extend derived-list.test.mjs with N=16 truncation regression + integration assertion text-art ≥ floor(N×0.55); document walker contract in CLAUDE.md (Wave 1; gap_closure; closes GAP-B Phase-36 regression from 36-UAT.md)
+- [x] 36-08-video-completion-signal-PLAN.md — Add `enablejsapi=1` to YouTubeEmbed/InfoFlow iframes + Detector D postMessage listener in PostDetailScreen for video posts (ENDED + currentTime/duration ≥ 0.8) + short tap-to-play emit in InfoFlow setVideoPlaying handler; document detector inventory in CLAUDE.md (Wave 1; gap_closure; closes GAP-C from 36-UAT.md)
+- [x] 36-09-durable-yesterday-snapshot-PLAN.md — STORAGE_KEY_YESTERDAY snapshot key in post-queue.service.ts; load() snapshots prior payload on date-mismatch; getYesterdayQueue reads from snapshot key (Wave 2; gap_closure; closes GAP-D Fix A from 36-UAT round 2)
+- [x] 36-10-dev-force-new-day-PLAN.md — DEV-only "Force new day" button in SettingsDataScreen.tsx; rolls back postQueue date by one day + navigates to /home for cold-start retest (Wave 2; gap_closure; closes GAP-D Fix B verification gap)
+- [x] 36-11-rehydrate-and-reject-stale-cache-PLAN.md — In-flight (Wave 1 round-3, parallel with 36-12 / 36-13)
+- [x] 36-12-promise-mutex-refill-PLAN.md — Promise-based mutex on refillQueue (extracted into leaf module `refill-mutex.ts`); REFILL_THRESHOLD 12 → 16; concurrent callers AWAIT shared Promise instead of bailing (Wave 1 round-3; gap_closure; closes round-3 sub-issue (e) from 36-UAT.md)
+- [x] 36-13-force-new-day-cleanup-PLAN.md — In-flight (Wave 1 round-3, parallel with 36-11 / 36-12)
 
 ---
 
@@ -895,3 +1014,20 @@ _Created: 2026-03-26 | v1.1 Roadmap | 17 phases | 91 requirements mapped_
 _Updated: 2026-04-18 — Phase 31: added 3 gap closure plans (31-08..10) from UAT feedback_
 _Updated: 2026-04-18 — v1.4 audit: added Phase 32 (verification close-out) + Phase 33 (code hygiene) to close `.planning/v1.4-MILESTONE-AUDIT.md` gaps_
 _Updated: 2026-04-19 — Phase 33 plans created (33-00..04): WIP flush + TD-04/05/06 resolution + closure_
+_Updated: 2026-04-19 — Phase 33 v2 plans added (33-05/06/07): Wave 4 WIP re-flush + perf memoization + cosmetic polish_
+_Updated: 2026-04-20 — Phase 33 COMPLETE (8/8 plans). VERIFICATION 8/8 must-haves passed. tsc clean. Test baseline preserved (419 pass / 27 pre-existing fail). Branch `gsd/phase-33-hygiene-and-polish` ready for review/merge._
+_Updated: 2026-04-25 — Phase 34 added: v1.4 close-out bundling all gaps from `.planning/v1.4-MILESTONE-AUDIT.md` (verification debt + test desyncs + orphan tail + VALIDATION drift + device UAT + WIP commit) into a single phase per operator preference._
+_Updated: 2026-04-25 — Phase 34 plans created (34-01..08): 8 plans across 5 waves closing all v1.4-MILESTONE-AUDIT gaps; ready for execute-phase._
+_Updated: 2026-04-29 — Phase 35 added: fix the dynamic-system-prompt issue (move per-turn candidate context out of system role to restore KV-cache prefix coverage in Ask chat). Tool miscount corrected manually from suggested "Phase 28" to actual next-integer "Phase 35"._
+_Updated: 2026-04-29 — Phase 35 plans created (35-01..04): 4 plans across 2 waves — surgical refactor of useQuestions.ts + source-reading invariant test + CLAUDE.md load-bearing section + project-wide audit/VERIFICATION._
+_Updated: 2026-04-29 — Phase 35 COMPLETE (4/4 plans). 7/7 must-haves verified (35-VERIFICATION-PHASE-CLOSE.md). System prompt now byte-stable across Ask-chat turns; KV-cache prefix covers [system, ...history]. New invariant test `useQuestions-system-prompt-stability.test.mjs` passes 5/5; CLAUDE.md Phase 35 load-bearing rule landed; chatStream audit confirms 24/26 call sites are one-shot, 2/26 (useQuestions Pass 1+2) now properly append-only with tail assistant context. Test regex hotfix `22a5162e` (shorthand-property compatibility). No regressions in prior-phase invariant tests._
+_Updated: 2026-04-29 — Phase 35 gap closure plan 35-05 created from UAT.md Test 1 blocker (Qwen via LM Studio jinja "No user query found in messages" error). Inserts constant byte-stable user-ack message between ...historyMessages and assistantContextMessage in BOTH Pass 1 and Pass 2 of useQuestions.askStreaming, extends source-reading invariant test with sixth assertion, appends strict-alternation paragraph to CLAUDE.md Phase 35 section. CONTEXT.md D-08 risk realized; 35-01-SUMMARY pre-recorded fallback executed verbatim._
+_Updated: 2026-04-29 — Phase 35-05 EXECUTED (3 atomic commits on `gsd/phase-33-hygiene-and-polish`: refactor `0372b456` + test `98a75aae` + docs `ae4398a1`). useQuestions.ts now declares `USER_ACK_BEFORE_GRAPH_CONTEXT='Here is the knowledge graph context for this turn:'` and emits it as `role:'user'` between history and assistantContextMessage in BOTH passes. Source-reading invariant suite passes 6/6 (5 pre-existing + 1 new). CLAUDE.md Phase 35 section now documents strict-alternation rationale + Rules item 3 references the new constant. tsc clean; npm test baseline preserved at 389 pass / 26 fail (pre-existing JSON-import-attribute issues only). Triple-guard intact: code + 6th invariant test + CLAUDE.md rule. ROADMAP plan-count now 5/5 complete. Operator UAT re-run on real device pending for empirical close-out._
+_Updated: 2026-04-29 — Phase 35 EMPIRICALLY CLOSED. UAT round 2 on Qwen 3.5 via LM Studio: all 3 tests PASS (single-turn streams cleanly, multi-turn coherent, web-search Pass 2 cited). Strict-alternation fix from 35-05 confirmed working on the project's primary local-LLM dev path. Phase status flipped to COMPLETE. Public LabPresentation/SCRIPTS.md slide 4.7 self-disclosure ("I haven't shipped the fix yet") can now be flipped to past tense before the talk._
+_Updated: 2026-05-06 — Phase 36 added: gap closure on curiosity feed randomness and weights (close known divergences from CLAUDE.md "Concept Feed Generation Pipeline" — non-persistent derived list, no cycle walker, i.i.d. style sampling clustering, no concept-axis variety constraint). Tool miscount corrected manually from suggested "Phase 28" to actual next-integer "Phase 36"._
+_Updated: 2026-05-06 — Phase 36-05 EXECUTED: doc-sync to CLAUDE.md "Concept Feed Generation Pipeline" section. Atomic commit `e97e5df5` (1 file, +14/-7) lands four edits: MAX_QUEUE_SIZE=32 documented in Numeric defaults (closes GAP-6), `postQueueService.appendToDerivedList(ids[])` cross-referenced in APPEND-ONLY line, lazy-skip removal trigger (`walkDerivedList` reading `dailyReadService.getExploredAnchors()`) replaces never-implemented physical-removal wording, and Known divergences list strikes through GAP-1/GAP-3/GAP-4 with Phase 36 closure annotations. GAP-5 (queue serves variable count) preserved as out-of-scope. All 6 required-content greps pass, all 6 byte-stability greps for OTHER load-bearing rule sections pass. Phase 36 now 5/6 plans complete; 36-04 integration smoke running in parallel._
+_Updated: 2026-05-06 — Phase 36-04 EXECUTED: integration smoke test for GAP-1..4 composition. Atomic commit `f7c0988f` (1 file, +157 lines) lands `app/tests/services/refill-queue-integration.test.mjs` with 6 GREEN tests covering: (1) cross-call dedup on appendToDerivedList; (2) cyclePosition advance + wrap; (3) ±1 stratification of round(N×w) on N=12; (4) combined spreadByConcept + spreadByStyle no-double-share; (5) full chain composition smoke; (6) all-explored gate. STYLE_WEIGHTS imported from style-assignment.ts (drift-proof, negative-grep enforced). Spread helpers imported from feed-spread.ts leaf module (i18n chain workaround, same as Plan 36-02). Full npm test: 448 tests / 422 pass / 26 fail — pass count +33 vs. 389 baseline (Wave 0 +27 + this plan +6); fail count UNCHANGED at 26 (pre-existing JSON-import-attribute issues unrelated to Phase 36). tsc -b --noEmit exit 0. Phase 36 now 6/6 plans complete; ready for `/gsd:verify 36`._
+_Updated: 2026-05-06 — Phase 36 COMPLETE. Verifier passed 13/13 must-haves (`36-VERIFICATION.md`). All four design-drift gaps closed: GAP-1 derived list now persistent in QueueState, GAP-2 cyclic walker with cyclePosition + lazy-skip explored, GAP-3 largest-remainder + Fisher-Yates stratified style allocation, GAP-4 spreadByConcept mixer wired before spreadByStyle in enqueueInterleaved. GAP-6 doc drift closed (CLAUDE.md MAX_QUEUE_SIZE=32 documented). GAP-5 (variable-count vs strict-4) explicitly out of scope. Phase 33 fixes preserved: dueAnchors filter at concept-feed.service.ts:798 + allExplored cap-gate at lines 1265-1267. New leaf module `app/src/services/feed-spread.ts` hosts both spread helpers (i18n JSON-import-attribute workaround). 33 new passing tests added across 4 test files (derived-list 10, style-assignment-stratified 10, spread-by-concept 7, refill-queue-integration 6). npm test baseline preserved: 422 pass / 26 pre-existing fail (no new failures). tsc clean. Branch `gsd/phase-33-hygiene-and-polish` ready for review/merge._
+_Updated: 2026-05-06 — Phase 36 UAT round 1 surfaced 3 gaps after initial close-out (5 tests / 4 pass / 1 issue with 3 sub-gaps). Gap-closure plans 36-06/07/08 created targeting (A) cold-start empty feed (HomeScreen.tsx warm-start vs. error-gate conflict, pre-existing drift from commit 6cda914e), (B) style-mix imbalance (post-queue.service.ts walkDerivedList maxSteps=len*2 silently caps walker at 8 entries when len=4, defeats Phase 36-01 stratified allocation at single-anchor case — Phase 36 regression, missed by 36-04 integration smoke), (C) video/short completion signal absent (YouTubeEmbed iframe lacks enablejsapi=1; short posts have interactive=false bypassing PostDetailScreen detectors — pre-existing drift since Phase 17/18). All three plans parallel-safe (different files); each plan spec includes concrete code replacements per <action> and source-reading regression tests. See `.planning/debug/cold-start-empty-feed.md`, `.planning/debug/style-mix-imbalance.md`, `.planning/debug/video-completion-signal-missing.md` for diagnostics._
+_Updated: 2026-05-06 — Phase 36-07 EXECUTED: walker termination-guard fix closes GAP-B. Three atomic commits on `gsd/phase-33-hygiene-and-polish`: `3664383e` (fix, post-queue.service.ts:301 — `maxSteps = len * 2` → `Math.max(count * 2, len)` + comment block + docstring update; +17/-4) + `62a7697f` (tests, derived-list.test.mjs +Test 11/12 for truncation regression + multi-wrap explored skip; refill-queue-integration.test.mjs +Test 7 for text-art ≥ floor(N × 0.55) at N=16; +58/-0) + `27c941b9` (docs, CLAUDE.md +1 numeric-defaults bullet + 1 closed-divergence strikethrough; +2/-0). Phase 36 quick-suite 53/53 → 56/56 GREEN. Phase 33 sentinels (`dueAnchors` filter at concept-feed.service.ts:798, `allExplored && postQueueService.getTotalGenerated()` cap-gate at lines 1265-1267) preserved byte-unchanged. CLAUDE.md other load-bearing sections byte-stable (html/body overflow=3, ChatInput minWidth=2, USER_ACK=2, dedup threshold=1, MAX_QUEUE_SIZE=1). Out-of-scope: HomeScreen.tsx TS6133 unused-var warning logged but not fixed — in 36-06's parallel-execution territory. Phase 36 now 7/9 plans complete; 36-06 + 36-08 still in-flight._
+_Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round-3 sub-issue (e) (rapid-swipe / Force-New-Day silent-no-op against empty queue). Six atomic commits on `worktree-agent-ad725506964b3ddbe` worktree off `gsd/phase-33-hygiene-and-polish`, all `--no-verify` per parallel-execution coordination with Wave 1 plans 36-11 / 36-13: `41b9f7e7` (Task 1 initial inline IIFE — superseded by leaf refactor) + `5604cd45` (Task 2 REFILL_THRESHOLD bump 12 → 16) + `567b7c54` (Task 2.5 needsRefill threshold test 12 → 16) + `9a0658a5` (Task 1 leaf-module refactor — extracts `createPromiseMutex` into `app/src/services/refill-mutex.ts` for testability) + `75d41254` (Task 3 mutex tests + wiring tests, 9 GREEN — 3 behavioral mutex semantics + 6 source-reading wiring) + `d65f6b90` (Task 4 CLAUDE.md docs). One Rule-3 deviation: Plan §<task><behavior> Test 4 spec calls `await conceptFeedService.generateMorePosts(qs, 4)`, but concept-feed.service.ts cannot be imported under `node --test` (i18n chain blocker; Node 25 lacks `mock.module`). Resolved via leaf-module pattern (same workaround Plan 36-04 used for `feed-spread.ts`) + source-reading wiring tests. Phase 36 quick suite (12 files): 91/91 GREEN. tsc -b --noEmit exit 0. Phase preservation: STORAGE_KEY_YESTERDAY (Phase 36-09), USER_ACK_BEFORE_GRAPH_CONTEXT (Phase 35), REFILL_THRESHOLD = 16 (this plan) all present. Phase 36 round-3 progress: 1/3 wave plans complete; 36-11 (rehydrate-and-reject-stale-cache) + 36-13 (force-new-day-cleanup) running in parallel against disjoint files._

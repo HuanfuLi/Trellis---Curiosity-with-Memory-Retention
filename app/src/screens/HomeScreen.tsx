@@ -45,12 +45,43 @@ export function HomeScreen() {
     // D-32 fallback: show last 4 from history
     return postHistoryService.getPosts().slice(0, 4);
   });
+  // Phase 36 GAP-A: Capture warm-start presence at mount BEFORE the async
+  // getDailyPosts call. Used as the disambiguator inside the .then handler
+  // to decide whether an empty getDailyPosts return is a normal cold-start
+  // (warm-start was seeded → queue not ready yet, no error UI) or a genuine
+  // error (no warm-start AND empty fetch → "Check your API keys" UI).
+  //
+  // Ref-snapshot pattern (NOT functional updater) chosen for two reasons:
+  // 1. Strict Mode compatibility: React.StrictMode (main.tsx:14) double-invokes
+  //    state updater functions in dev. Calling setGenerationError(true) inside
+  //    a setDailyPosts(prev => ...) updater violates the React purity contract
+  //    (updater functions must be side-effect-free).
+  // 2. The warm-start presence is a fact-at-mount, not a continuously-derived
+  //    value — useRef is the canonical place for "snapshot at construction
+  //    time, read in async callbacks" data.
+  // See .planning/debug/cold-start-empty-feed.md.
+  const warmStartHadPostsRef = useRef(dailyPosts.length > 0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
   const isLoadingMoreRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // D-22b (Phase 33 Plan 06): snapshot settings reads to avoid re-evaluating
+  // settingsService.getSync() on every render. /home is always-mounted (Phase 22
+  // swipe-tab architecture) so it re-renders frequently on event-bus emissions.
+  // Snapshot pattern is per CONTEXT D-22 option (b) — subscribe-once-on-mount.
+  // Settings changes during a single home-screen mount are rare (user navigates to
+  // /settings, changes a value, navigates back). If invalidation becomes needed,
+  // add an event-bus subscription that calls a setter; the snapshot pattern
+  // already supports it.
+  const [settingsSnapshot] = useState(() => {
+    const s = settingsService.getSync();
+    return {
+      showConnectionScores: s.embeddingDebug.showScores,
+    };
+  });
 
   // Stable ref so the onLoadMore callback can access latest questions
   // without re-creating the callback (which would reset scroll listeners).
@@ -82,9 +113,25 @@ export function HomeScreen() {
     setGenerationError(false);
     void conceptFeedService.getDailyPosts(questions).then((posts) => {
       if (!cancelled) {
-        setDailyPosts(posts);
+        // Warm-start guard (Phase 36 GAP-A): getDailyPosts returns [] on a new-day
+        // cold start by design (today's queue empty; refillQueue runs in background).
+        // The useState initializer at lines 38-47 may have already seeded dailyPosts
+        // with yesterday's leftover queue via postQueueService.getYesterdayQueue().
+        // Only overwrite when getDailyPosts returns actual posts — top-level setter,
+        // pure (Strict Mode safe).
+        if (posts.length > 0) {
+          setDailyPosts(posts);
+        }
         setIsGenerating(false);
-        if (posts.length === 0 && questions.length > 0) {
+        // Error-gate suppression (Phase 36 GAP-A): only flag generationError when
+        // BOTH today's getDailyPosts returned [] AND no warm-start fallback was
+        // seeded at mount (warmStartHadPostsRef captured pre-fetch). If warm-start
+        // was present, the user can see content and the empty `posts` is a normal
+        // cold-start condition, not an error. Original 6cda914e error-gate intent
+        // (genuinely broken API keys) is preserved by the !warmStartHadPostsRef.current
+        // condition — no warm-start AND no fetch result = real error.
+        // Top-level conditional setter (no nested setState — Strict Mode safe).
+        if (posts.length === 0 && questions.length > 0 && !warmStartHadPostsRef.current) {
           setGenerationError(true);
         }
       }
@@ -121,11 +168,36 @@ export function HomeScreen() {
     };
   }, [questions, questionsLoading]);
 
-  // Re-sync feed from cache when navigating back to /home
+  // Re-sync feed from cache when navigating back to /home.
+  // Mirrors the line-38 useState initializer's fallback chain (tier 1: cache,
+  // tier 2: yesterday's rehydrated queue). The initializer runs ONCE at mount
+  // — HomeScreen is always-mounted in SwipeTabContainer, so navigate('/home')
+  // does NOT remount it. Without this re-fallback, after Plan 36-15's
+  // SettingsDataScreen mutation invalidates the daily-posts cache,
+  // getCachedDailyPosts() returns [] and the feed renders empty — the
+  // rehydrated _state.posts (Plan 36-11 Task 2) sits unreachable until the
+  // next async getDailyPosts run (which is mount-only, not navigation-fired).
+  // Phase 36-14 — closes the runtime half of round-4 sub-issue (b).
   useEffect(() => {
-    if (location.pathname === '/home') {
-      setDailyPosts(conceptFeedService.getCachedDailyPosts());
+    if (location.pathname !== '/home') return;
+    const cached = conceptFeedService.getCachedDailyPosts();
+    if (cached.length > 0) {
+      setDailyPosts(cached);
+      return;
     }
+    // Tier-2 fallback: yesterday's UNSERVED queue, rehydrated by
+    // postQueueService.load()'s date-mismatch branch (Plan 36-11 Task 2).
+    // This is the runtime mirror of the line-38 useState initializer's tier 2.
+    postQueueService.loadQueue();
+    const yesterdayQueue = postQueueService.getYesterdayQueue();
+    if (yesterdayQueue.length > 0) {
+      setDailyPosts(yesterdayQueue.slice(0, 8));
+      return;
+    }
+    // Both tiers empty — preserve current behavior (set to empty so the
+    // generic empty-state rendering takes over). The async getDailyPosts
+    // flow elsewhere will repopulate when its triggers fire.
+    setDailyPosts([]);
   }, [location.pathname]);
 
   // Load handler — called on intentional pull-and-release gesture.
@@ -140,16 +212,28 @@ export function HomeScreen() {
       // 4 per swipe by design). Was 6; that was an undocumented divergence.
       const newPosts = await infiniteScrollService.loadNextBatch(questionsRef.current, 4);
       if (newPosts.length > 0) {
-        // Pre-generate images for all new posts before showing them
-        const { inferImageStyle, buildImagePrompt } = await import('../services/postFormatting.service');
-        const { imageGenerationService } = await import('../services/imageGeneration.service');
-        await Promise.allSettled(
-          newPosts.map((post) => {
-            const style = inferImageStyle(post);
-            const prompt = buildImagePrompt(post);
-            return imageGenerationService.generateImage(post.id, prompt, style);
-          }),
-        );
+        // Phase 33 UAT-4 fix (2026-04-20): only pre-generate images for posts
+        // that actually RENDER an image. Previously this loop ran generateImage
+        // for every post regardless of presentationStyle, and with a real
+        // Gemini/NanoBanana key each call hit the provider for seconds —
+        // blocking the swipe on "Loading more posts" for 10-30s while 3 of 4
+        // generations were thrown away (video/short/news/text-art ignore the
+        // result). Now we only wait for the subset that will use the image.
+        // Dev-mode instrumentation (2026-04-21): track what styles the queue
+        // is actually serving so "no image posts" regressions surface per-pop.
+        if (import.meta.env.DEV) {
+          const styles: Record<string, number> = {};
+          for (const p of newPosts) {
+            const k = p.presentationStyle ?? 'unknown';
+            styles[k] = (styles[k] ?? 0) + 1;
+          }
+          console.info(`[HomeScreen loadNextBatch] popped ${newPosts.length} posts, styles:`, styles);
+        }
+        // Image pre-generation now happens in refillQueue BEFORE enqueue
+        // (2026-04-21 architectural fix). By the time a post pops here, its
+        // image is already in the IndexedDB cache — InfoFlow's useState
+        // initializer hits the cache and renders instantly. No pop-time
+        // image generation means no loading-state lag on swipe.
         conceptFeedService.appendToCache(newPosts);
         setDailyPosts((prev) => [...prev, ...newPosts]);
       } else {
@@ -415,6 +499,23 @@ export function HomeScreen() {
   const [showConfetti, setShowConfetti] = useState(false);
   const creditAwardedRef = useRef(dailyReadService.isCreditAwarded());
 
+  // Re-sync daily-read state from service when navigating back to /home.
+  // HomeScreen is always-mounted in SwipeTabContainer (see CLAUDE.md
+  // "Header positioning"), so navigate('/home') does NOT remount this
+  // component — useState/useRef initializers run once on app boot and never
+  // again. Without this resync, dailyReadService.reset() (called from
+  // SettingsDataScreen's Force-New-Day handler) clears persistence but the
+  // React state retains yesterday's exploredAnchors and creditAwardedRef
+  // keeps yesterday's "true". Result: vine chip on /home still shows
+  // yesterday's count, celebration gate at line ~516 is permanently closed.
+  // Phase 36-14 — closes round-4 sub-issue (a).
+  useEffect(() => {
+    if (location.pathname === '/home') {
+      setExploredAnchors(dailyReadService.getExploredAnchors());
+      creditAwardedRef.current = dailyReadService.isCreditAwarded();
+    }
+  }, [location.pathname]);
+
   // Subscribe to CONCEPT_EXPLORED events from PostDetailScreen
   useEffect(() => {
     const unsub = eventBus.subscribe('CONCEPT_EXPLORED', () => {
@@ -671,7 +772,7 @@ export function HomeScreen() {
               {t('home.feed.loadingTitle')}
             </span>
             <a
-              href="mailto:huanfuli4408@gmail.com?subject=EchoLearn%20Feed%20Feedback"
+              href="mailto:huanfuli4408@gmail.com?subject=Trellis%20Feedback"
               style={{
                 fontSize: '12px', fontWeight: 400,
                 color: 'var(--primary-40)', textDecoration: 'underline',
@@ -709,7 +810,7 @@ export function HomeScreen() {
               {t('home.feed.generationErrorRetry')}
             </button>
             <a
-              href="mailto:huanfuli4408@gmail.com?subject=EchoLearn%20Feed%20Feedback"
+              href="mailto:huanfuli4408@gmail.com?subject=Trellis%20Feedback"
               style={{
                 fontSize: '12px', color: 'var(--primary-40)',
                 textDecoration: 'underline', marginTop: '16px',
@@ -724,7 +825,7 @@ export function HomeScreen() {
         <InlineInfoFlow
           items={infoFlowItems}
           onOpenConnection={handleOpenConnection}
-          showConnectionScores={settingsService.getSync().embeddingDebug.showScores}
+          showConnectionScores={settingsSnapshot.showConnectionScores}
           onOpenPost={(postId, post) => {
             navigate(`/posts/${postId}`, { state: { post } });
           }}

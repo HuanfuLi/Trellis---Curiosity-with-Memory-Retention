@@ -137,14 +137,42 @@ export function useQuestions(): UseQuestionsReturn {
         const store = questionService.getAll();
         const candidatePack = buildCandidateContextPack(content, store);
 
+        // ═══ Phase 35 — System prompt MUST be byte-stable across turns ═══
+        // The per-turn formatCandidateContextPack(candidatePack) interpolation lives in
+        // a tail assistant message below, NOT in this string. Keeping this string stable
+        // lets the provider's KV-cache prefix cover [system, ...history] across turns.
+        // See app/CLAUDE.md "Ask-chat system prompt — byte-stable across turns" and
+        // tests/state/useQuestions-system-prompt-stability.test.mjs.
+        // Strict-alternation note: the tail position is `user(ack) → assistant(ctx) → user(query)`
+        // so chat templates requiring user→assistant alternation (Qwen via LM Studio) accept turn 1.
         const systemPrompt = [
           'You are a knowledgeable learning assistant. Answer questions clearly and thoroughly.',
           'Do not generate harmful, illegal, sexually explicit, or deceptive content.',
-          `Knowledge graph candidate context:\n${formatCandidateContextPack(candidatePack)}`,
           WEB_SEARCH_TOOL_PROMPT,
         ]
           .filter(Boolean)
           .join('\n');
+
+        // ═══ Phase 35 gap closure (UAT-1) — Strict-alternation user-ack ═══
+        // Constant byte-stable user message inserted BETWEEN ...historyMessages and the
+        // tail assistant context message so chat templates that strictly require user→
+        // assistant alternation (Qwen via LM Studio's OpenAI-compatible proxy was the
+        // prompting incident; smaller Llama variants likely also affected) accept the
+        // turn-1 shape. KV-cache benefit preserved because (a) the ack is a constant,
+        // (b) it lives AFTER history (still byte-stable across turns), (c) Pass 1 and
+        // Pass 2 reference the same closure constant. See app/CLAUDE.md "Ask-chat
+        // system prompt — byte-stable across turns" and the source-reading test.
+        const USER_ACK_BEFORE_GRAPH_CONTEXT = 'Here is the knowledge graph context for this turn:';
+
+        // Tail-position assistant message carries the per-turn candidate context pack.
+        // Keep this OUT of the system prompt — system must be byte-stable across turns
+        // so the provider's KV-cache prefix covers [system, ...history]. (Phase 35)
+        // Reused identically by Pass 1 AND Pass 2 (single closure variable referenced
+        // twice) so Pass 1's warm prefix carries over to Pass 2 unbroken. The empty-pack
+        // case still emits this message — formatCandidateContextPack returns the
+        // byte-stable string 'No close graph candidates found.' (D-07 planner choice:
+        // keep one structural shape across turns).
+        const assistantContextMessage = `Knowledge graph candidate context:\n${formatCandidateContextPack(candidatePack)}`;
 
         // Convert SessionMessage[] to ChatMessage[] for the LLM (append-only for KV-cache)
         const historyMessages: { role: 'user' | 'assistant'; content: string }[] =
@@ -161,6 +189,8 @@ export function useQuestions(): UseQuestionsReturn {
           [
             { role: 'system', content: systemPrompt },
             ...historyMessages,
+            { role: 'user', content: USER_ACK_BEFORE_GRAPH_CONTEXT },
+            { role: 'assistant', content: assistantContextMessage },
             { role: 'user', content },
           ],
           llmConfig,
@@ -220,6 +250,8 @@ export function useQuestions(): UseQuestionsReturn {
               [
                 { role: 'system', content: systemPrompt },
                 ...historyMessages,
+                { role: 'user', content: USER_ACK_BEFORE_GRAPH_CONTEXT },
+                { role: 'assistant', content: assistantContextMessage },
                 { role: 'user', content },
                 {
                   role: 'assistant',
@@ -282,7 +314,7 @@ export function useQuestions(): UseQuestionsReturn {
         // Fire ONLY when Q&A enters the mindmap (not flagged).
         if (question.flagged !== true) {
           void classifyAndAnchorIncremental(question, questionService.getAll(), llmConfig, abortController.signal).catch((err: unknown) => {
-            console.warn('[EchoLearn] classifyAndAnchorIncremental failed:', err instanceof Error ? err.message : err);
+            console.warn('[Trellis] classifyAndAnchorIncremental failed:', err instanceof Error ? err.message : err);
           });
         }
 

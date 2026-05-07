@@ -40,10 +40,14 @@ The home feed is driven by THREE LISTS in a strict pipeline. **Do not invent a f
 │     video / short / news / suggestion) AND multiplicity (more entries   │
 │     for important/overdue concepts).                                    │
 │     Update mode: APPEND-ONLY when new questions arrive. Don't rebuild   │
-│     from scratch — that loses cycle position.                           │
+│     from scratch — that loses cycle position. Implemented as            │
+│     postQueueService.appendToDerivedList(ids[]) — dedups by conceptId.  │
 │     Removal trigger: when user READS a post of a concept                │
-│     (CONCEPT_EXPLORED event), REMOVE that concept's remaining entries   │
-│     from the derived list so the next loop doesn't re-suggest it.       │
+│     (CONCEPT_EXPLORED event), the concept is added to                   │
+│     dailyReadService.getExploredAnchors(). The walker                   │
+│     (postQueueService.walkDerivedList) LAZILY skips explored ids        │
+│     at walk time rather than physically splicing the array              │
+│     (which would corrupt cyclePosition — see RESEARCH § Pitfall 1).     │
 └─────────────────────────────────────────────────────────────────────────┘
                               │ feeds
                               ▼
@@ -61,10 +65,16 @@ The home feed is driven by THREE LISTS in a strict pipeline. **Do not invent a f
 
 ### Numeric defaults
 
-- Queue length: **8**
+- Queue maximum size: `MAX_QUEUE_SIZE` = **32** (in `post-queue.service.ts:13`). enqueueInterleaved + enqueue both cap at this size. Refill threshold (12) gives a 20-post runway between refills.
+- Queue refill threshold: **16** (bumped from 12 on 2026-05-07; Phase 36-12 mutex-fix eliminates the silent-no-op race in `_refillMutex`, and the larger threshold further reduces empty-state during rapid swiping; forward-looking for the planned double-column feed which dequeues more per swipe). Earlier history: 8 → 12 on 2026-04-21 when image pre-generation moved into `refillQueue`.
+- Refill mutex: `createPromiseMutex()` from `app/src/services/refill-mutex.ts` (Phase 36-12 leaf extraction). `concept-feed.service.ts` instantiates one as `_refillMutex` and wraps `refillQueue`'s body in `_refillMutex.run(...)`. In-flight callers await the same Promise instead of bailing; single LLM body per refill cycle. Mutex's internal `try/finally` clears the in-flight reference on BOTH success AND error paths so a failed refill cannot permanently lock subsequent callers. See `concept-feed.service.ts` refillQueue and `tests/services/refill-mutex.test.mjs`.
 - Posts served per swipe-for-more: **4** (NOT 1 — operator confirmed the desired UX)
 - Style weights: see `app/src/services/style-assignment.ts:9-16` (`STYLE_WEIGHTS`)
-- Daily generation cap: `dailyGenerationCapMultiplier × max(dueConcepts.length, 3)` per `concept-feed.service.ts:937-938` (D-38, with the floor-3 fix from Phase 32.1-02)
+- Daily generation cap: `dailyGenerationCapMultiplier × max(anchors.length, 3)` — **gated by `allExplored`** (Phase 33 gap fix 2026-04-19). The cap only fires AFTER the vine is finished; before that, generation is bounded solely by `buildConceptBatch` returning `[]` when all anchors are explored. Rationale: EchoLearn is local-first OSS (users provide their own keys), so unbounded pre-finished generation is not a cost concern. If/when a key-brokered commercial mode ships, revisit this gate and scale the pre-finished cap with `unexploredAnchors.length` instead of removing it. See `concept-feed.service.ts` `refillQueue` inline comment for full rationale.
+- Walker termination guard: `walkDerivedList`'s `maxSteps = Math.max(count * 2, len)` (in `post-queue.service.ts:301`). The `count * 2` factor preserves lazy-skip headroom (walker can scan up to twice the request size to skip explored entries); the `len` floor preserves the "at least one full pass possible" property when `count < len`. **Do not regress to `len * 2`** — that was the Phase 36 GAP-B bug that pinned text-art at 50% (floor) instead of the design-target 56% (floor + bonus at N=16). Single-anchor users (derivedList.length=4) hit the truncation: `walkDerivedList(16, ...)` returned only 8 entries, so `assignStylesStratified` operated on N=8 where text-art's remainder 0.40 loses to minority 0.80. At the design's intended N=16, text-art's 0.80 beats minority 0.60. See `.planning/debug/style-mix-imbalance.md` for the full math walkthrough; regression tests at `app/tests/services/derived-list.test.mjs` (Test 11/12) and `app/tests/services/refill-queue-integration.test.mjs` (Test 7).
+- Yesterday-queue snapshot: `STORAGE_KEY_YESTERDAY = 'echolearn_post_queue_yesterday'` is written by `postQueueService.load()` whenever a date-mismatch is detected on the live queue key. `getYesterdayQueue()` reads from this snapshot key (NOT the live key), making the warm-start path durable across multiple cold-start mounts of a new day. Phase 36 GAP-D close-out (2026-05-07) — the prior single-key implementation was destroyed by the first `save()` of today's queue. See `.planning/debug/cold-start-warm-start-fragile.md`.
+- **New-day rehydration (Phase 36-11):** `load()`'s date-mismatch branch in `post-queue.service.ts` snapshots yesterday's payload to `STORAGE_KEY_YESTERDAY` (Plan 36-09) AND rehydrates today's `_state.posts` + `derivedList` + `cyclePosition` from `parsed.posts`. Yesterday's UNSERVED queue auto-populates today's feed (no manual swipe needed). Counters (`totalGenerated`, `totalServed`) reset to 0; `cycleNumber` inherits. After rehydration, `spreadByConcept` then `spreadByStyle` re-interleave the rehydrated posts to balance the style mix (yesterday's leftover skews toward minority styles since text-art is plurality and gets popped first). Symmetric counterpart in `concept-feed.service.ts`: `loadCache()` returns `null` when `cached.date !== today()` so yesterday's SERVED posts do NOT render across midnight. The two together implement: served posts archived in `postHistoryService` (DB), unserved posts surface as today's first source ahead of the LLM pipeline. See `.planning/phases/36-.../36-UAT.md` round-3 sub-issues (b), (c), (d).
+- **Always-mounted screens must explicitly re-read service state on /home navigation (Phase 36-14):** HomeScreen, PlannerScreen, AskScreen, GraphScreen, and SettingsScreen are all always-mounted slots in `SwipeTabContainer` (see "Header positioning" section). `useState(() => svc.get())` initializers fire ONCE at app boot — they never re-run on `navigate('/home')` (or to any other top-level swipe route). Any screen that reads from a service whose state can change while another screen is in the foreground (e.g., `dailyReadService` reset by Force-New-Day in SettingsDataScreen, or any future cross-screen state mutation) MUST add a `useEffect` that re-reads the service when its `location.pathname` matches the screen's route. HomeScreen.tsx has the canonical pattern: one effect re-syncs `dailyPosts` from `conceptFeedService.getCachedDailyPosts()` with a fallback to `postQueueService.getYesterdayQueue()` when the cache is empty (Plan 36-11 + 36-14 — mirroring the line-38 useState initializer's tier-1/tier-2 chain at runtime), another sibling effect re-syncs `exploredAnchors` + `creditAwardedRef` from `dailyReadService` (Plan 36-14). Tests at `app/tests/screens/HomeScreen.exploredAnchors-resync.test.mjs` and `app/tests/screens/HomeScreen.warm-start-refallback.test.mjs` enforce both resyncs structurally via anchor-pair extraction. Related principle: when a dev affordance simulates a wall-clock event the service code can't observe (e.g., `today()` cannot advance under Force-New-Day), the dev handler must explicitly call every service `reset()` AND mutate every date-stamped storage key that the natural event would have triggered, AND any always-mounted screen reading the service must re-sync on navigation. Single source of asymmetry → three layers of defense (handler mutates storage; rejection-on-mismatch fires on next read; navigation effect re-pulls from service).
 
 ### Files
 
@@ -76,18 +86,50 @@ The home feed is driven by THREE LISTS in a strict pipeline. **Do not invent a f
 
 ### Known divergences from design (gaps to close, not to drift further)
 
-- Derived list is currently rebuilt every refill (not append-only with cycle position).
-- Each concept gets at most 2 entries (1 + isImportant), not weighted by style mix.
-- Removal on read is NOT wired — `dailyReadService.getExploredAnchors()` only filters rendering, doesn't remove concepts from the derived list before generation.
-- Queue serves variable count (whatever's available) instead of strictly 4 per swipe.
+- ~~Derived list is currently rebuilt every refill (not append-only with cycle position).~~ **CLOSED via Phase 36 GAP-1 + GAP-2** (2026-05-06): postQueueService now persists `derivedList: string[]` + `cyclePosition: number` in QueueState. `appendToDerivedList(ids)` is dedup-on-append; `walkDerivedList(count, exploredIds)` is the cyclic walker with lazy skip of explored anchors. See `tests/services/derived-list.test.mjs` for the invariants.
+- ~~Style sampling is i.i.d. per entry — small-N batches (N=8) routinely produce zero image / zero suggestion posts.~~ **CLOSED via Phase 36 GAP-3** (2026-05-06): assignStyles (now stratified via largest-remainder + Fisher-Yates) guarantees ±1 of round(N×weight) for every style every run. See `tests/services/style-assignment-stratified.test.mjs`.
+- ~~Style-axis interleave only — same-anchor entries cluster regardless of style spread.~~ **CLOSED via Phase 36 GAP-4** (2026-05-06): refillQueue's enqueueInterleaved mixer now runs `spreadByConcept` BEFORE `spreadByStyle`, separating same-anchor entries before style refinement. See `tests/services/spread-by-concept.test.mjs`.
+- Each concept gets BASE_ENTRIES_PER_CONCEPT (4) entries by default, doubled to 8 if important (easeFactor < 1.5 OR leafState ∈ {dying, falling, dead}). This is intentional (per RESEARCH § Pitfall 4 — importance changes mid-day are accepted as a next-day approximation; design says "append-only when new questions arrive," not "rebuild importance weights continuously").
+- ~~Removal on read is NOT wired~~ — **CLOSED via Phase 33 gap fix**: `buildConceptBatch` at `concept-feed.service.ts:659` filters out explored anchors, AND the daily generation cap is now gated by `allExplored` so it no longer fires while the vine is unfinished. **Phase 36 layered the lazy-skip walker on top** so explored anchors are also skipped at walk time even if they slip past the build-time filter.
+- ~~Walker silently capped batch size at `derivedList.length × 2` regardless of requested count~~ — **CLOSED via Phase 36 GAP-B fix (Plan 36-07)**: `maxSteps = Math.max(count * 2, len)` lets `walkDerivedList(16, ...)` return 16 entries even when `len=4` (single-anchor case); restores text-art's 56% target via the largest-remainder bonus that requires N≥12.
+- Queue serves variable count (whatever's available) instead of strictly 4 per swipe. (Out of scope for Phase 36.)
 
-These gaps are why operator sees "swipe pops 1 post, then No more posts" on a fresh-install device with one anchor.
+The "vine unfinished but No more posts" symptom (reported 2026-04-19) was caused by the unconditional cap, not the removal-on-read logic. The cap now only applies after the vine is finished — see "Numeric defaults" above.
 
 ### When in doubt
 
 The derived list is **append-only** (grows on new question, shrinks on read). The queue is **cyclic** over that list. The queue serves **4 per swipe**. Don't re-architect this — implement what the design says.
 
----
+___
+
+## Video & short post completion signals (Phase 36 GAP-C — load-bearing)
+
+Video and short posts have explicit completion-signal detectors so the lazy-skip walker (Phase 36 GAP-2) sees `CONCEPT_EXPLORED` events for video-only engagement. Without these detectors, watching a video for a concept never increments vine progress and the walker keeps re-suggesting the same concept on subsequent refills.
+
+### Detector inventory (PostDetailScreen.tsx + InfoFlow.tsx)
+
+| Detector | Where | Trigger | Post types covered |
+|----------|-------|---------|---------------------|
+| A — scroll 70% sentinel | `PostDetailScreen.tsx:124-137` | IntersectionObserver fires on essay sentinel | text/image/news (sentinel below essay body) |
+| B — 30s dwell timer | `PostDetailScreen.tsx:139-149` | setTimeout(30_000) on resolvedAnchorId | all post types reaching detail screen |
+| C — Q&A follow-up | `PostDetailScreen.tsx:406-411` | handleAsk on user submit | all post types reaching detail screen |
+| **D — YouTube IFrame API postMessage** | `PostDetailScreen.tsx` (after Detector B) | window 'message' event: `onStateChange info=0` (ENDED) OR `infoDelivery currentTime/duration >= 0.8` | video (sourceType='video') |
+| **Short tap-to-play emit** | `InfoFlow.tsx` (short card onClick) | setVideoPlaying invoked on short post | short (sourceType='short') — never reaches detail screen |
+
+### Why both Detector D AND the short tap emit exist
+
+- Video posts (`sourceType === 'video'`) navigate to PostDetailScreen via `onOpen`. Detector D listens on the parent window for postMessage events from the YouTube iframe (which now includes `enablejsapi=1` — required to activate the API channel).
+- Short posts (`sourceType === 'short'`) have `interactive=false` at `InfoFlow.tsx:295` and play inline in the feed without navigating. Detectors A/B/C/D never run. Tap-to-play (5-15s clips) is the strongest implicit signal available — `setVideoPlaying(post.id)` fires `dailyReadService.markExplored` + `eventBus.emit({type: 'CONCEPT_EXPLORED', ...})` directly.
+
+### Rules
+
+1. **Don't remove `enablejsapi=1` from YouTubeEmbed.tsx or InfoFlow.tsx iframe srcs.** Without it, YouTube's IFrame Player API postMessage channel is closed and Detector D receives nothing. Tests at `app/tests/screens/PostDetailScreen.video-detector.test.mjs` enforce Detector D's structure but cannot detect a missing query param at compile time — the iframe-src tests at `app/tests/components/InfoFlow.short-tap-emit.test.mjs` do not directly assert this either, but `grep -c "enablejsapi=1" app/src/components/YouTubeEmbed.tsx app/src/components/InfoFlow.tsx` is the source-of-truth check (must return ≥3).
+2. **Don't remove the origin allowlist from Detector D** (`event.origin !== 'https://www.youtube.com' && event.origin !== 'https://www.youtube-nocookie.com'`). Without it, any iframe on the page can spoof concept-explored signals.
+3. **Don't add a duplicate emit in the InfoFlow video card onClick** (line ~368-371). Video posts route through PostDetailScreen → Detector D; adding an emit at the feed-tap point would double-fire (idempotent via `hasEmittedRef`/markExplored, but still unnecessary work + confusing semantics). Test `InfoFlow.short-tap-emit.test.mjs` enforces `markExplored` is called exactly once in InfoFlow.tsx.
+4. **Don't introduce new event types** for video/short completion. Reuse `CONCEPT_EXPLORED` (CLAUDE.md best practice rule 6 — one signal per semantic event). The walker subscribes to a single event; multiple events would fragment the lazy-skip flow.
+5. **Don't refactor PostDetailScreen.tsx's video render branch** (lines 589-601) to a native `<video>` element. The current `YouTubeEmbed` is correct; the postMessage path is preferred over swapping renderers.
+
+___
 
 ## Header positioning (Phase 32.1 — load-bearing, do not regress)
 
@@ -108,6 +150,61 @@ The `Header` component (`app/src/components/ui/Header.tsx`) auto-portals based o
 1. **Don't add `transform`/`will-change`/`filter`/`contain`/`perspective` to any ancestor of a `Header` in the React tree.** This is mostly belt-and-suspenders since portalled Headers are immune, but in-tree Headers (top-level swipe screens) still depend on the slot's translateZ(0) being the only containing-block creator in the chain.
 2. **Don't render a Header inside a screen that's both always-mounted AND always-visible.** SwipeTabContainer's slots are always-mounted but only ONE is visible at a time (others off-screen via translateX). If you create a new layout where multiple Headers could be visible at once, they'll stack.
 3. **Don't move `Header.tsx` out of the portal-vs-in-tree pattern.** Rewriting it as "always in-tree" reintroduces sub-screen flicker. Rewriting as "always portal" makes top-level swipe Headers globally visible (operator-caught regression at commit `808c6e85`).
+
+---
+
+## ChatInput flex shrink (Phase 33 UAT-4 — load-bearing)
+
+`app/src/components/ChatInput.tsx`: the `<input type="text">` MUST keep `minWidth: 0` alongside its `flex: 1` inline style. This is the canonical flex-shrink remedy — without it, `flex-basis: auto` refuses to shrink the input below intrinsic content width on Android WebView, and the `flexShrink: 0` Send button overflows off-screen, leaving only a sliver visible.
+
+### Why this exists
+
+Recurring device-only regression. Prior incidents:
+- `d45c228c` switched ChatInput from `position: fixed` to a flex column but didn't add the guard — bug latent.
+- `47d81049` bumped mic/globe buttons 34→44px (+20px total), tipping the flex overflow.
+
+### Rules
+
+1. **Never remove `minWidth: 0`** from the ChatInput input. `tests/components/ChatInput.flex-shrink.test.mjs` enforces this with a source-reading assertion — any PR that drops it fails CI.
+2. **Don't grow ChatInput buttons past their current 44px** without re-checking the overflow math. Even with the guard, an extreme button-width bump could re-introduce layout surprises.
+
+---
+
+## Root overflow clip — both axes (Phase 33 UAT-4 — load-bearing)
+
+`html, body { overflow: hidden }` is load-bearing on BOTH axes. Body is never the right place for app scroll. Every screen owns its own `overflow: auto` scroll container.
+
+**Why horizontal clip:** The `SwipeTabContainer` strip is **500vw wide** (5 slots × 100vw). Without clip the document becomes horizontally scrollable. On Android WebView, keyboard open on a focused input inside an off-center slot triggers Chromium's `scrollIntoView`, shifting `document.scrollLeft` — app visibly drifts left, not recovered on close.
+
+**Why vertical clip:** `body { min-height: 100vh }` uses `vh` which does NOT shrink with the keyboard (unlike `dvh`). When the keyboard opens, `SwipeTabContainer` slots shrink (100dvh) but body stays at the initial viewport height → body becomes vertically scrollable. That creates a **second scroll container nested outside** every screen's own `overflow: auto`, producing:
+- Classic elastic-bounce direction-change blocking on AskScreen + keyboard (every swipe-direction change needs two gestures — the first is absorbed by the outer body handoff).
+- Body scroll drags the entire AskScreen including ChatInput off-screen behind the keyboard.
+
+Three layers of defense:
+
+1. **`html, body { overflow: hidden }`** in `app/src/index.css` — primary structural fix.
+2. **`overflowX: 'hidden'`** on the App root div (`app/src/App.tsx`) — React-layer belt for horizontal.
+3. **`document.scrollingElement.scrollLeft = 0`** in `SwipeTabContainer.onFocusOut` — recovery path for any horizontal drift that slipped past 1+2.
+
+### Rules
+
+1. **Don't remove `html, body { overflow: hidden }` from index.css.** `tests/layout/root-horizontal-clip.test.mjs` enforces all three layers.
+2. **Don't add a scrolling region outside SwipeTabContainer** at the page root. The clip applies globally; put scrollers inside their own `overflow: auto` container.
+3. **Don't remove `overflowX: 'hidden'`** from the App root div or the `scrollLeft = 0` reset in `onFocusOut`. Same test.
+4. **Never rely on body scroll** — no `window.scrollTo`, `document.body.scrollTop`, etc. Use the screen's inner scroll container. Zero callers do this today (verified via grep); keep it that way.
+
+## SwipeTabContainer resize + keyboard handling (Phase 33 UAT-4 — load-bearing)
+
+`app/src/components/SwipeTabContainer.tsx` owns the 5-wide horizontal strip's `translateX` (`stripX`). Two invariants are load-bearing:
+
+1. **`resync()` gates on width change.** The handler reads `getScreenWidth()`, compares to `screenWidthRef.current`, and **returns early if unchanged**. Height-only resize events (keyboard open/close) must be no-ops. Android WebView fires `visualViewport.resize` events repeatedly during keyboard animations and `window.innerWidth` can transiently report pixel-ratio-adjusted values — unconditional re-snap would drift the active slot mid-animation.
+2. **Focus-out forces a re-snap** (deferred one frame so the close-resize finishes first) AND resets `document.scrollingElement.scrollLeft` (see "Root horizontal overflow clip" above). Defense-in-depth recovery path.
+
+### Rules
+
+1. **Don't remove the `newWidth === screenWidthRef.current` early-return in `resync()`.** `tests/components/SwipeTabContainer.resize-guard.test.mjs` enforces it.
+2. **Don't remove the `onFocusOut` re-snap or scrollLeft reset.** Same test + the root-horizontal-clip test.
+3. **Don't install `@capacitor/keyboard` with `resize: 'none'`** as a workaround — users rely on the default `adjustResize` so the input scrolls above the keyboard. Fix layout bugs at the stripX level, not by disabling resize.
 
 ---
 
@@ -175,6 +272,63 @@ If you add a new classification path or a new anchor-creation site, route the `a
 ### Existing wrong-named anchors
 
 Anchors created BEFORE `b2061554` keep their old question-paraphrase names. There is **no migration** — operator can manually rename or Clear-All-Data + re-classify. Document this if/when a migration becomes needed.
+
+---
+
+## Classification dedup — embedding pre-check (Phase 33 UAT-4 — load-bearing)
+
+The by-layer classification pipeline in `canonical-knowledge.service.ts` (step 1 branch → step 2 cluster → step 3 anchor) was an intentional token-saving pivot for large mindmaps, so the LLM never sees the full graph. But that design has a **structural flaw for cross-cutting concepts**: the LLM commits to a branch at step 1 based on branch names only, before it can see which anchors exist elsewhere. A concept like "Spaced Repetition" plausibly fits Cognitive Science OR Educational Technology; once the LLM picks one, it's locked into that subtree and cannot reach a matching anchor living elsewhere → duplicate anchors across branches.
+
+The fix is an **O(N_anchors) cosine pre-check BEFORE the tree descent** in `classifyAndAnchorIncremental`:
+
+1. **Pre-check (structural):** Embed the question's content. Compare against every existing anchor's `embeddingVector`. If cosine similarity ≥ `ANCHOR_PRE_CHECK_SIMILARITY_THRESHOLD` (0.82), reuse that anchor AND adopt its `branchLabel` + `clusterLabel`. Skip the tree descent entirely. **Zero LLM tokens on the match path.**
+2. **Opportunistic backfill:** Anchors created before this feature have no `embeddingVector`. Backfill up to `ANCHOR_BACKFILL_PER_CLASSIFICATION` (8) per call — embed `anchor.title`, persist via `questionService.patchQuestion`. Converges in a few Q&As without adding perceptible latency.
+3. **Normalize anchor lookup on BOTH sides** in `commitClassificationResult`. Previously only `result.anchorName` was normalized; stored `q.title` was compared raw. Pre-b2061554 un-normalized titles now match.
+4. **Case-insensitive NEW coercion at step 1 + step 2.** If the LLM returns `{"index":"NEW","name":"psychology"}` and "Psychology" already exists, coerce to selection. Prevents case/whitespace duplicates.
+
+### Rules
+
+1. **Don't remove the pre-check from `classifyAndAnchorIncremental`.** `tests/services/classification-dedup.test.mjs` enforces it runs BEFORE `buildStepPrompt('branch')`.
+2. **Don't raise the threshold above 0.95 or drop it below 0.75.** Same test enforces the band. Too high misses legitimate near-duplicates; too low false-positive merges unrelated concepts.
+3. **Don't bypass `normalizeAnchorName` on either side of the anchor lookup.** Both `result.anchorName` (normalized at line ~657) AND `q.title` (normalized inline in the comparison) must pass through it.
+4. **Don't remove the LLM-NEW coercion guards at step 1/step 2.** They catch weak-model behavior where the LLM ignores the reuse bias.
+5. **Threshold tuning is empirical, not mathematical.** If users report missed dedup opportunities, lower to 0.78 first. If they report wrongly-merged concepts, raise to 0.85.
+
+---
+
+## Ask-chat system prompt — byte-stable across turns (Phase 35 — load-bearing)
+
+`app/src/state/useQuestions.ts:askStreaming` constructs its system prompt as a **byte-stable** string (identity directive + safety directive + `WEB_SEARCH_TOOL_PROMPT` only — no per-turn dynamic content). The per-turn `formatCandidateContextPack(candidatePack)` output lives in a **tail-position assistant message** placed AFTER `...historyMessages` and BEFORE the new user turn:
+
+```typescript
+[
+  { role: 'system', content: systemPrompt },                       // byte-stable across turns
+  ...historyMessages,                                              // append-only history
+  { role: 'assistant', content: assistantContextMessage },         // dynamic per-turn graph context
+  { role: 'user', content },                                       // current turn
+]
+```
+
+Pass 2 (web-search) reuses the SAME `assistantContextMessage` closure variable in the same position, so Pass 1's prefix is still warm in the provider cache when Pass 2 fires moments later.
+
+### Why this exists
+
+Provider KV-cache (Anthropic, OpenAI, Gemini all support automatic prefix caching with a 5-minute TTL) is keyed on the byte prefix of the request. The previous shape interpolated `formatCandidateContextPack(candidatePack)` directly into the system prompt — the candidate pack changes every turn (new question → new neighbor set), which moved the cache-break boundary to the FIRST byte after the static `WEB_SEARCH_TOOL_PROMPT`. Every Ask turn paid full re-attention on the entire prior conversation history.
+
+Moving the dynamic candidate context out of the system role and into a tail-position assistant message keeps the system + history prefix byte-stable across turns. The cache now covers everything up to the per-turn context message, which is exactly what we want.
+
+Public framing for this fix landed in `LabPresentation/SCRIPTS.md` slide 4.7. Phase 35 was the close-out of that disclosure.
+
+The message shape is `user → assistant → user` alternation in the tail position (specifically: `..., user(USER_ACK_BEFORE_GRAPH_CONTEXT), assistant(assistantContextMessage), user(content)`), NOT `assistant → user`. The intermediate `USER_ACK_BEFORE_GRAPH_CONTEXT = 'Here is the knowledge graph context for this turn:'` constant exists because chat templates that strictly require user/assistant alternation (Qwen 3.5 via LM Studio's OpenAI-compatible proxy was the prompting incident — its jinja template throws `"No user query found in messages"` on the bare `assistant → user` shape; smaller Llama variants likely also affected) need a user message before the assistant context message to render the prompt at all. The constant is byte-stable across turns, so KV-cache benefit is preserved (the cache prefix now covers `[system, ...history, user(ack)]` instead of `[system, ...history]` — both stable, same per-turn cache-break boundary). Major providers (Anthropic, OpenAI, Gemini) tolerate both shapes; the strict-alternation shape is a strict superset.
+
+### Rules
+
+1. **Never re-introduce dynamic content into the system prompt of `useQuestions.ts:askStreaming`.** `tests/state/useQuestions-system-prompt-stability.test.mjs` enforces this with a source-reading negative assertion — any PR that puts `formatCandidateContextPack` (or any other per-turn value) inside a string assigned to a `role: 'system'` element fails CI.
+2. **Don't drop the assistant-tail context message either.** The same test asserts `formatCandidateContextPack` IS referenced inside a `role: 'assistant'` content in BOTH chatStream calls (Pass 1 + Pass 2). The graph-grounded context is load-bearing for relevant cross-Q&A continuity — moving it didn't make it dead code.
+3. **Pass 1 and Pass 2 must reuse the SAME `assistantContextMessage` AND `USER_ACK_BEFORE_GRAPH_CONTEXT` closure values.** Constructing them twice (or recomputing the assistant context for Pass 2) breaks the Pass 1 → Pass 2 prefix-cache continuity. Single declaration each, two references each. The user-ack constant (Phase 35 UAT-1 gap closure) must NOT be inlined as a literal string in either chatStream call — keep the named constant so the source-reading test catches drift.
+4. **Don't bypass `applyLocaleDirective`'s expectations.** `app/src/providers/llm/locale-directive.ts` merges `Respond in {locale}.` into the FIRST `role: 'system'` message. The new static `systemPrompt` must remain that first message — don't swap it for a different element type or invent a pre-system message.
+5. **The 5-minute provider TTL is an inherent limit, not a Phase 35 bug.** Long-idle conversations still pay full re-attention on the next turn. Phase 35 fixes per-turn cache breaks WITHIN a 5-minute window; longer-session caching is not in scope and may need explicit `cache_control` markers (Anthropic-only) in a future phase.
+6. **The other one-shot LLM call sites (`concept-feed`, `planner`, `podcast`, `post-essay`, `post-context-qa`, `flashcard`, `canonical-knowledge` non-descent paths, `AskScreen.tsx:86` session-title) intentionally still interpolate dynamic content into their system prompts.** They have no multi-turn history → no prefix to preserve → no benefit from Phase 35 discipline. See `35-VERIFICATION.md` for the audit. Don't "consistency-fix" them; the cost-benefit doesn't justify the test-and-refactor.
 
 ---
 

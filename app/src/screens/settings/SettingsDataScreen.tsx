@@ -69,6 +69,76 @@ export function SettingsDataScreen() {
     });
   };
 
+  // Phase 36 GAP-D Fix B (dev-only): roll the post-queue date back to yesterday
+  // so the next /home mount runs the cold-start warm-start path. Lets us verify
+  // the warm-start guard (Plan 36-06) + durable yesterday snapshot (Plan 36-09)
+  // without waiting for an actual midnight rollover.
+  // See .planning/debug/cold-start-warm-start-fragile.md for full context.
+  const handleForceNewDay = () => {
+    try {
+      const raw = localStorage.getItem('echolearn_post_queue');
+      if (!raw) {
+        toast('No post queue to roll back. Generate some posts first.', 'info');
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      // Set date to yesterday so the next loadQueue() detects the mismatch
+      // and (a) snapshots the current payload to STORAGE_KEY_YESTERDAY
+      // (Plan 36-09); (b) rehydrates _state.posts from parsed.posts
+      // (Plan 36-11) so yesterday's UNSERVED queue auto-populates today's
+      // feed. See round-3 sub-issue (b cause #1) and Plan 36-11.
+      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+      parsed.date = yesterday;
+      localStorage.setItem('echolearn_post_queue', JSON.stringify(parsed));
+      postQueueService.loadQueue();
+      // Phase 36-15 (round-4 sub-issue b storage): also mutate the served-
+      // posts cache key. Plan 36-11's loadCache() rejection fires only when
+      // `parsed.date !== today()` — but the dev button cannot advance the
+      // wall clock. So `today()` returns real-today before AND after this
+      // handler runs; if we leave the served-posts cache untouched, it
+      // still equals today(), loadCache() returns truthy, getDailyPosts()
+      // hits its cache-hit branch (concept-feed.service.ts ~1530), and
+      // dequeue()-of-rehydrated-state never runs. The rehydrated _state.posts
+      // from Plan 36-11 sits unreachable. Mirror the same date mutation here
+      // so loadCache()'s rejection fires symmetrically — same logic as the
+      // queue mutation above, applied to the second date-stamped cache key.
+      // This is the wall-clock-asymmetry pattern: services that gate self-
+      // reset on today() comparisons cannot fire when the dev button doesn't
+      // (and shouldn't) advance the clock — the handler must mimic each
+      // mutation that natural midnight rollover would have triggered.
+      // Plan 36-13 reverted this mutation calling it a "redundant dual-
+      // cache hack"; round-4 UAT proved the reversion broke sub-issue (b).
+      // Plan 36-14 owns the runtime consequence (HomeScreen falls back to
+      // postQueueService.getYesterdayQueue() when getCachedDailyPosts()
+      // returns []) — without that re-fallback effect, this storage
+      // mutation alone produces an empty feed. The two plans are
+      // complementary, not duplicative.
+      // See .planning/debug/feed-not-auto-populating-after-force-new-day.md.
+      const dailyRaw = localStorage.getItem('echolearn_daily_posts');
+      if (dailyRaw) {
+        try {
+          const dailyParsed = JSON.parse(dailyRaw);
+          dailyParsed.date = yesterday;
+          localStorage.setItem('echolearn_daily_posts', JSON.stringify(dailyParsed));
+        } catch {
+          // Malformed cache — leave it; loadCache() will reject on parse failure anyway.
+        }
+      }
+      // Reset vine progress (echolearn_daily_read). On a real midnight,
+      // dailyReadService.loadState() self-resets via the parsed.date !==
+      // today() check, but the dev button cannot advance today() — so the
+      // service still sees parsed.date === today() (real today) and never
+      // resets. Manually mimic the midnight reset here. See round-3
+      // sub-issue (a) and daily-read.service.ts:36.
+      dailyReadService.reset();
+      toast('Queue + daily-posts cache rolled back; vine progress reset. Navigating to /home.', 'success');
+      navigate('/home');
+    } catch (err) {
+      console.warn('[SettingsDataScreen] force-new-day failed:', err);
+      toast('Force new day failed. Check console.', 'error');
+    }
+  };
+
   const refreshTokenUsage = () => setTokenUsage(tokenUsageReporter.getByService());
 
   const handleClearTokenUsage = () => {
@@ -143,6 +213,20 @@ export function SettingsDataScreen() {
         <p style={{ fontSize: '0.72rem', color: 'var(--muted-foreground)', marginTop: '-8px', marginBottom: '16px', lineHeight: 1.4 }}>
           {t('settings.descriptions.trellisDevModeHint')}
         </p>
+        {/* Strings hardcoded English: this button is gated by import.meta.env.DEV
+            and never reaches production users, so the i18n workflow's "all 4 bundles
+            per UI string" rule does NOT apply. See CLAUDE.md i18n workflow exemption
+            reasoning. */}
+        {import.meta.env.DEV && (
+          <SettingRow
+            label="Force new day (dev)"
+            description="Sets the post queue date to yesterday and reloads, so the next /home mount runs the cold-start warm-start path. Dev builds only — never visible in production. See .planning/debug/cold-start-warm-start-fragile.md for context."
+          >
+            <Button variant="secondary" size="sm" onClick={handleForceNewDay}>
+              Roll back date
+            </Button>
+          </SettingRow>
+        )}
         <SettingRow label={t('settings.fields.postRetention')}>
           <SelectInput
             value={settings.feed?.postRetentionDays === null ? 'all' : String(settings.feed?.postRetentionDays ?? FEED_DEFAULTS.postRetentionDays)}
@@ -187,7 +271,7 @@ export function SettingsDataScreen() {
         </SettingRow>
         <SettingRow label={t('settings.fields.sendFeedback')}>
           <a
-            href="mailto:huanfuli4408@gmail.com?subject=EchoLearn%20Feed%20Feedback"
+            href="mailto:huanfuli4408@gmail.com?subject=Trellis%20Feedback"
             style={{ color: 'var(--primary-40)', fontSize: '14px', textDecoration: 'underline' }}
           >
             {t('settings.fields.sendFeedback')}

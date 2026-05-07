@@ -1,10 +1,10 @@
 import { chatCompletion, chatStream } from '../providers/llm/index.ts';
-import type { ChatSession, DailyPost, PostNarrativeMode, PostOriginContext, PostSnapshot, PresentationStyle, Question } from '../types';
+import type { ChatSession, DailyPost, PostNarrativeMode, PostOriginContext, PostSnapshot, PresentationStyle, Question, WebSearchResult } from '../types';
 import { today } from '../lib/date.ts';
 import { eventBus } from '../lib/event-bus.ts';
 import { settingsService, FEED_DEFAULTS } from './settings.service.ts';
 import { plannerService } from './planner.service.ts';
-import { youtubeService } from './youtube.service';
+import { youtubeService, type YouTubeSearchResult } from './youtube.service';
 import { webSearch } from './web-search.service';
 import { questionService } from './question.service';
 import { postQueueService } from './post-queue.service';
@@ -14,11 +14,43 @@ import { assignStyles, reassignFailures, type ApiAvailability } from './style-as
 import { computeLeafState } from './trellis-state.service';
 import { hasSeenVideoId, addSeenVideoId } from './concept-feed-dedup';
 import { STARTER_POST_IDS, filterDecayedStarters } from './starter-posts-decay';
+import {
+  markYoutubeQuotaExhausted,
+  markTavilyQuotaExhausted,
+  isYoutubeRuntimeAvailable,
+  isTavilyRuntimeAvailable,
+} from './api-availability';
+// Phase 36 GAP-4 — spread helpers extracted to a leaf module so node --test can
+// import them without hitting the i18n JSON-import-attribute chain. Both functions
+// mutate `posts` in place; this module re-exports them too so existing callers
+// (and downstream tests that import from here) keep working.
+import { spreadByStyle, spreadByConcept } from './feed-spread';
+export { spreadByStyle, spreadByConcept };
+import { createPromiseMutex } from './refill-mutex';
 
 const STORAGE_KEY = 'echolearn_daily_posts';
 const CONNECTION_POSTS_KEY = 'echolearn_connection_posts';
 const MAX_POSTS = 4;
 const CONTEXT_LIMIT = 10;
+
+/**
+ * Produce a globally-unique post ID with a semantic prefix.
+ *
+ * Phase 33 gap fix (2026-04-20): replaces the prior deterministic ID scheme
+ * `post-${date}-${type}-${conceptId}-${cycleStamp}` which had two failure modes:
+ *   1. Intra-cycle collision when one concept got multiple video/short/news
+ *      assignments in the same refill (two posts share same id, two React cards
+ *      bound to same state → clicking one starts both iframes).
+ *   2. Cross-batch collision via state drift (localStorage clear, cache trim,
+ *      forgotten incrementCycle) — cycleStamp is only as monotonic as queue state.
+ *
+ * The semantic prefix (date, kind, conceptId) is preserved for debuggability
+ * (`grep post-2026-04-20-video-concept123` still finds that concept's videos).
+ * The UUID suffix guarantees uniqueness regardless of any application state.
+ */
+function makePostId(date: string, kind: string, conceptId: string): string {
+  return `post-${date}-${kind}-${conceptId}-${crypto.randomUUID()}`;
+}
 
 interface PlannerSignals {
   activeThreads: string[];
@@ -55,10 +87,10 @@ const VALID_SOURCE_TYPES = new Set<DailyPost['sourceType']>(['recent', 'related'
 export const STARTER_POSTS: DailyPost[] = [
   makeStarterPost(
     'starter-welcome',
-    'Welcome to EchoLearn',
+    'Welcome to Trellis',
     'Your AI learning companion',
-    'Ask any question and watch your knowledge grow. EchoLearn uses AI to create personalized learning paths.',
-    '# Welcome to EchoLearn\n\nEchoLearn is your AI-powered learning companion. Here\'s how to get started:\n\n1. **Ask a question** — Tap the Ask tab and type any question. The AI will answer it and save it to your knowledge graph.\n2. **Review what you learn** — Your answers become flashcards. Review them to build lasting memory.\n3. **Explore your feed** — This feed brings you fresh content based on what you\'re learning.\n\nStart by asking your first question!',
+    'Ask any question and watch your knowledge grow. Trellis uses AI to create personalized learning paths.',
+    '# Welcome to Trellis\n\nTrellis is your AI-powered learning companion. Here\'s how to get started:\n\n1. **Ask a question** — Tap the Ask tab and type any question. The AI will answer it and save it to your knowledge graph.\n2. **Review what you learn** — Your answers become flashcards. Review them to build lasting memory.\n3. **Explore your feed** — This feed brings you fresh content based on what you\'re learning.\n\nStart by asking your first question!',
     'Getting Started',
   ),
   makeStarterPost(
@@ -66,7 +98,7 @@ export const STARTER_POSTS: DailyPost[] = [
     'How your knowledge grows',
     'From questions to mastery',
     'Every question you ask becomes part of your knowledge graph. Review flashcards to strengthen your memory.',
-    '# How Your Knowledge Grows\n\nEchoLearn follows a proven learning loop:\n\n1. **Ask** — Ask questions about anything you\'re curious about.\n2. **Connect** — Your questions are organized into a knowledge graph by topic.\n3. **Review** — Flashcards are generated automatically. Spaced repetition helps you remember.\n4. **Grow** — As you master topics, your trellis tree blooms and bears fruit.\n\nThe more you review, the stronger your knowledge becomes.',
+    '# How Your Knowledge Grows\n\nTrellis follows a proven learning loop:\n\n1. **Ask** — Ask questions about anything you\'re curious about.\n2. **Connect** — Your questions are organized into a knowledge graph by topic.\n3. **Review** — Flashcards are generated automatically. Spaced repetition helps you remember.\n4. **Grow** — As you master topics, your trellis tree blooms and bears fruit.\n\nThe more you review, the stronger your knowledge becomes.',
     'How It Works',
   ),
   makeStarterPost(
@@ -99,7 +131,7 @@ function makeStarterPost(
     presentationStyle: 'text-art' as PresentationStyle,
     sourceQuestionIds: [],
     sourceQuestionTitles: [],
-    keywords: ['echolearn', 'getting-started'],
+    keywords: ['trellis', 'getting-started'],
     generatedAt: Date.now(),
     origin: 'ai',
     whyCare: '',
@@ -143,6 +175,14 @@ function loadCache(): CachedDailyPosts | null {
     ) {
       return null;
     }
+    // Phase 36-11: stale cache rejection. The served-posts cache must NOT
+    // carry across midnight — yesterday's served posts have already been
+    // shown to the user and should not render as "today's feed". This is the
+    // symmetric counterpart to post-queue.service.ts's load() rehydration.
+    // See .planning/phases/36-.../36-UAT.md round-3 sub-issue (b cause #2)
+    // and (d) — second Force-New-Day was rendering the previous-state served
+    // posts because of this missing date check.
+    if (parsed.date !== today()) return null;
 
     const posts = parsed.posts.filter(isValidDailyPost);
     if (posts.length === 0) return null;
@@ -386,12 +426,70 @@ interface ParsedGeneration {
   connectionCards: ConnectionCardData[];
 }
 
+/**
+ * Walk a JSON array and return every top-level {...} object that balanced
+ * successfully. Tolerant to truncation: if the tail is cut mid-object, only
+ * that final object is dropped — everything before it survives.
+ *
+ * 2026-04-21 fix. Root cause: the 'posts' batch LLM call was asked for N
+ * text-style posts (N could be 20+) but completion was capped at maxTokens
+ * 4096, which a Gemma-4 reply routinely overruns around post ~25. The raw
+ * response arrived truncated mid-string. The old two-tier parser in
+ * parseGeneratedPosts ran `JSON.parse(arrMatch[0])` on the whole truncated
+ * array — which threw — then the catch silently returned `{posts: []}`.
+ * Result: every text-style post (including all 'image' and 'suggestion'
+ * assignments) was dropped, while video/short/news (generated out-of-band)
+ * survived. Explains the "zero image posts over 50+" symptom exactly.
+ */
+function extractPartialJsonArrayObjects(raw: string): Array<Record<string, unknown>> {
+  let s = raw.trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```\s*$/, '');
+  const start = s.indexOf('[');
+  if (start === -1) return [];
+  s = s.slice(start + 1);
+
+  const results: Array<Record<string, unknown>> = [];
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  let objStart = -1;
+
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (escape) { escape = false; continue; }
+    if (inString) {
+      if (ch === '\\') { escape = true; continue; }
+      if (ch === '"') { inString = false; continue; }
+      continue;
+    }
+    if (ch === '"') { inString = true; continue; }
+    if (ch === '{') {
+      if (depth === 0) objStart = i;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0 && objStart !== -1) {
+        const objStr = s.slice(objStart, i + 1);
+        try {
+          results.push(JSON.parse(objStr) as Record<string, unknown>);
+        } catch { /* skip malformed individual object, keep scanning */ }
+        objStart = -1;
+      } else if (depth < 0) {
+        // Outer ']' — end of array
+        break;
+      }
+    }
+  }
+
+  return results;
+}
+
 function parseGeneratedPosts(
   raw: string,
   questions: Question[],
   date: string,
   candidates: Array<{ source: Question; target: Question; score: number }> = [],
-  indexOffset = 0,
   maxPosts = MAX_POSTS,
 ): ParsedGeneration {
   // Try object format first: {"posts": [...], "connectionCards": [...]}
@@ -401,7 +499,7 @@ function parseGeneratedPosts(
       const parsed = JSON.parse(objMatch[0]) as { posts?: unknown; connectionCards?: unknown };
       if (Array.isArray(parsed.posts)) {
         return {
-          posts: extractPosts(parsed.posts as Array<Record<string, unknown>>, questions, date, indexOffset, maxPosts),
+          posts: extractPosts(parsed.posts as Array<Record<string, unknown>>, questions, date, maxPosts),
           connectionCards: parseConnectionCards(parsed.connectionCards, candidates),
         };
       }
@@ -412,22 +510,35 @@ function parseGeneratedPosts(
 
   // Fall back to plain array format
   const arrMatch = raw.match(/\[[\s\S]*\]/);
-  if (!arrMatch) return { posts: [], connectionCards: [] };
-  try {
-    const parsed = JSON.parse(arrMatch[0]) as Array<Record<string, unknown>>;
-    return { posts: extractPosts(parsed, questions, date, indexOffset, maxPosts), connectionCards: [] };
-  } catch {
-    return { posts: [], connectionCards: [] };
+  if (arrMatch) {
+    try {
+      const parsed = JSON.parse(arrMatch[0]) as Array<Record<string, unknown>>;
+      return { posts: extractPosts(parsed, questions, date, maxPosts), connectionCards: [] };
+    } catch {
+      // fall through to tolerant partial-parse
+    }
   }
+
+  // Final tier: tolerant partial parse — recovers all complete objects from
+  // a truncated array response. See extractPartialJsonArrayObjects for the
+  // full rationale (link: 2026-04-21 fix for dropped text-style posts).
+  const partial = extractPartialJsonArrayObjects(raw);
+  if (partial.length > 0) {
+    if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
+      console.info(`[parseGeneratedPosts] recovered ${partial.length} posts from truncated JSON`);
+    }
+    return { posts: extractPosts(partial, questions, date, maxPosts), connectionCards: [] };
+  }
+
+  return { posts: [], connectionCards: [] };
 }
 
-function extractPosts(parsed: Array<Record<string, unknown>>, questions: Question[], date: string, indexOffset = 0, maxPosts = MAX_POSTS): DailyPost[] {
+function extractPosts(parsed: Array<Record<string, unknown>>, questions: Question[], date: string, maxPosts = MAX_POSTS): DailyPost[] {
   const byId = new Map(questions.map((question) => [question.id, question]));
 
   return parsed
     .slice(0, maxPosts)
-    .map((item, index) => {
-      const idIndex = index + indexOffset;
+    .map((item) => {
       const sourceQuestionIds = Array.isArray(item.sourceQuestionIds)
         ? item.sourceQuestionIds.filter((value): value is string => typeof value === 'string' && byId.has(value)).slice(0, 4)
         : [];
@@ -446,7 +557,7 @@ function extractPosts(parsed: Array<Record<string, unknown>>, questions: Questio
       if (!teaserHook || !teaserPreview || !title) return null;
 
       const post: DailyPost = {
-        id: `post-${date}-${idIndex}-${sourceQuestionIds.join('-') || 'general'}`,
+        id: makePostId(date, 'text', sourceQuestionIds[0] ?? 'general'),
         date,
         title,
         teaser: { hook: teaserHook, preview: teaserPreview },
@@ -497,41 +608,10 @@ function _persistStylesToCache(styledPosts: DailyPost[]): void {
   saveCache(cachedNow);
 }
 
-/**
- * Spread posts so no two adjacent items share the same presentationStyle.
- * Groups by style, then round-robin interleaves. Mutates in place.
- */
-function spreadByStyle(posts: DailyPost[]): void {
-  if (posts.length <= 2) return;
-  const byStyle = new Map<string, DailyPost[]>();
-  for (const p of posts) {
-    const key = p.presentationStyle ?? 'unknown';
-    const arr = byStyle.get(key) ?? [];
-    arr.push(p);
-    byStyle.set(key, arr);
-  }
-  const buckets = Array.from(byStyle.values()).sort((a, b) => b.length - a.length);
-  const result: DailyPost[] = [];
-  let lastStyle = '';
-  while (result.length < posts.length) {
-    let placed = false;
-    for (const bucket of buckets) {
-      if (bucket.length === 0) continue;
-      const style = bucket[0].presentationStyle ?? '';
-      if (style === lastStyle && buckets.some(b => b.length > 0 && (b[0].presentationStyle ?? '') !== lastStyle)) continue;
-      result.push(bucket.shift()!);
-      lastStyle = style;
-      placed = true;
-      break;
-    }
-    if (!placed) {
-      const remaining = buckets.find(b => b.length > 0);
-      if (remaining) { result.push(remaining.shift()!); lastStyle = result[result.length - 1].presentationStyle ?? ''; }
-      else break;
-    }
-  }
-  for (let i = 0; i < result.length; i++) posts[i] = result[i];
-}
+// spreadByStyle (Phase 31, rewritten 2026-04-21) and spreadByConcept (Phase 36
+// GAP-4) live in ./feed-spread.ts (leaf module — see import block at top of
+// file). Re-exported above for downstream callers/tests that import from this
+// service.
 
 // assignPresentationStyles removed in Phase 31 — replaced by pre-style assignment via style-assignment.ts (D-18)
 
@@ -668,7 +748,7 @@ function buildConceptBatch(questions: Question[]): string[] {
     if (!isImportant) {
       try {
         const leaf = computeLeafState(anchor, children);
-        isImportant = leaf === 'yellow' || leaf === 'falling' || leaf === 'fallen';
+        isImportant = leaf === 'dying' || leaf === 'falling' || leaf === 'dead';
       } catch { /* non-critical — default to not important */ }
     }
     const count = isImportant ? BASE_ENTRIES_PER_CONCEPT * 2 : BASE_ENTRIES_PER_CONCEPT;
@@ -705,13 +785,34 @@ function buildYoutubeQuery(conceptName: string, cycleNumber: number, isShort: bo
 }
 
 /**
+ * Per-refill cache of external API results. Populated by the pre-validation pass
+ * in refillQueue and consumed by generatePostBatch's video/short/news loops so
+ * each YouTube/Tavily query is executed at most ONCE per refill cycle instead of
+ * twice (pre-validation + actual fetch). Cuts YouTube quota burn ~50%.
+ *
+ * Cache key for YouTube: `${conceptId}:${style}` where style is 'video'|'short'
+ * (both styles may fetch for the same concept in one cycle with different modifiers).
+ * Cache key for Tavily: `conceptId` (news is a single style per concept).
+ */
+interface PreFetchCache {
+  youtube: Map<string, YouTubeSearchResult[]>;  // key: `${conceptId}:${style}`
+  news: Map<string, WebSearchResult>;           // key: conceptId
+}
+
+/**
  * Generate a batch of posts from pre-assigned style assignments.
  * Reuses the existing LLM generation prompt for text-style posts,
  * fetches from YouTube/Tavily for video/news, and generates text-art content.
+ *
+ * If `preFetched` is provided, the video/short/news loops consume cached
+ * API results instead of issuing fresh calls (Phase 33 quota-burn fix
+ * 2026-04-20). When absent (legacy callers / session-post path), loops
+ * fall back to calling the APIs directly.
  */
 async function generatePostBatch(
   questions: Question[],
   assignments: import('./style-assignment').StyleAssignment[],
+  preFetched?: PreFetchCache,
 ): Promise<DailyPost[]> {
   const date = today();
   const byId = new Map(questions.map(q => [q.id, q]));
@@ -732,12 +833,44 @@ async function generatePostBatch(
   // auto-clear on day boundary.
 
   const posts: DailyPost[] = [];
-  const existingPosts = loadCache()?.posts ?? [];
-  const indexOffset = existingPosts.length;
 
-  // Generate text-style posts via LLM (text-art, image, suggestion)
-  if (textStyleAssignments.length > 0 && settings.preferences.aiConsentGiven && settings.llm.isConfigured) {
-    const textQuestions = textStyleAssignments
+  // Generate text-style posts via LLM (text-art, image, suggestion).
+  //
+  // Batch-size cap (2026-04-21): the LLM emits ~200 tokens per post; default
+  // maxTokens is 4096. Requesting large batches routinely overran that ceiling
+  // and the response arrived truncated mid-JSON. Cap + bump + tolerant parser
+  // work together — 20 posts × 200 tokens ≈ 4000, well under the 8192 ceiling,
+  // and the partial-array parser at `extractPartialJsonArrayObjects` recovers
+  // any residual truncation gracefully. Extra text-style assignments beyond
+  // the cap roll into subsequent refill cycles.
+  //
+  // Priority ordering (2026-04-21 fix #2): image and suggestion are the RARE
+  // minority styles (10% and 5% weight). If the LLM under-generates or the
+  // slice cap trims the tail, whatever's at the end gets silently dropped by
+  // the index-based style mapping at line ~960. With random assignment order,
+  // a rare-style assignment at position 18 or 19 of the batch evaporates
+  // whenever the LLM returns fewer posts than requested — this is exactly
+  // the "9 image assignments but 0 image posts served" regression reported
+  // in the 2026-04-21 DevTools log. Moving image + suggestion to the front
+  // makes text-art the tail-sacrifice, which is harmless (there's always an
+  // abundance of text-art).
+  const TEXT_BATCH_CAP = 20;
+  const rarityRank: Record<string, number> = { image: 0, suggestion: 1, 'text-art': 2 };
+  const sortedTextStyle = [...textStyleAssignments].sort(
+    (a, b) => (rarityRank[a.style] ?? 3) - (rarityRank[b.style] ?? 3),
+  );
+  const textBatch = sortedTextStyle.slice(0, TEXT_BATCH_CAP);
+  if (import.meta.env?.DEV) {
+    console.info(
+      `[generatePostBatch] text branch entry: textBatch=${textBatch.length} ` +
+      `(image=${textBatch.filter(a => a.style === 'image').length} ` +
+      `suggestion=${textBatch.filter(a => a.style === 'suggestion').length} ` +
+      `text-art=${textBatch.filter(a => a.style === 'text-art').length}) ` +
+      `aiConsent=${settings.preferences.aiConsentGiven} llmConfigured=${settings.llm.isConfigured}`,
+    );
+  }
+  if (textBatch.length > 0 && settings.preferences.aiConsentGiven && settings.llm.isConfigured) {
+    const textQuestions = textBatch
       .map(a => byId.get(a.conceptId))
       .filter((q): q is Question => Boolean(q));
 
@@ -756,16 +889,37 @@ async function generatePostBatch(
                   'Return only valid JSON.',
                 ].join('\n'),
               },
-              { role: 'user', content: buildGenerationPrompt(date, context, [], textStyleAssignments.length) },
+              { role: 'user', content: buildGenerationPrompt(date, context, [], textBatch.length) },
             ],
             settings.llm,
-            { serviceName: 'posts' },
+            { serviceName: 'posts', maxTokens: 8192 },
           );
-          const parsed = parseGeneratedPosts(raw, questions, date, [], indexOffset, textStyleAssignments.length);
+          const parsed = parseGeneratedPosts(raw, questions, date, [], textBatch.length);
+          // Dev-mode: flag when LLM returns fewer posts than text-style assignments
+          // requested — any 'image' / 'suggestion' assignment past parsed.posts.length
+          // is silently dropped by the loop below. Surfaces the "10% image weight but
+          // 0 image posts in 50+" regression class. (Console.info so it appears at
+          // default log level — console.debug is hidden unless "Verbose" is toggled.)
+          if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
+            const styleCounts: Record<string, number> = {};
+            for (const a of textBatch) styleCounts[a.style] = (styleCounts[a.style] ?? 0) + 1;
+            console.info(
+              `[generatePostBatch] text branch: requested=${textBatch.length} parsed=${parsed.posts.length} assignments=`,
+              styleCounts,
+            );
+            if (parsed.posts.length < textBatch.length) {
+              const dropped: Record<string, number> = {};
+              for (let i = parsed.posts.length; i < textBatch.length; i++) {
+                const s = textBatch[i].style;
+                dropped[s] = (dropped[s] ?? 0) + 1;
+              }
+              console.warn('[generatePostBatch] LLM under-generated; dropped assignments:', dropped);
+            }
+          }
           // Apply pre-assigned styles to generated posts
-          for (let i = 0; i < parsed.posts.length && i < textStyleAssignments.length; i++) {
+          for (let i = 0; i < parsed.posts.length && i < textBatch.length; i++) {
             if (!parsed.posts[i]) continue;
-            const assignment = textStyleAssignments[i];
+            const assignment = textBatch[i];
             parsed.posts[i].presentationStyle = assignment.style;
 
             // L1 — Provenance from assignment, not LLM. Mirrors the video/short/news pattern
@@ -839,19 +993,30 @@ Return ONLY a JSON array of 4 strings, nothing else. Example: ["What is X?", "Ho
             }
           }
           posts.push(...parsed.posts);
-        } catch {
-          // LLM generation failed — skip text posts for this batch
+        } catch (err) {
+          // LLM generation failed — skip text posts for this batch. Was silently
+          // swallowed prior to 2026-04-21; now log so "0 text-style posts in
+          // feed" regressions surface the actual error (timeout, disconnect,
+          // rate-limit, OOM, etc.) instead of a trace-free empty cycle.
+          console.warn(
+            '[generatePostBatch] text-style LLM call failed:',
+            err instanceof Error ? err.message : String(err),
+          );
         }
+      } else if (import.meta.env?.DEV) {
+        console.warn(
+          '[generatePostBatch] text branch skipped: context empty ' +
+          `(recent=${context.recent.length} resurfaced=${context.resurfaced.length})`,
+        );
       }
+    } else if (import.meta.env?.DEV) {
+      console.warn('[generatePostBatch] text branch skipped: 0 textQuestions after byId lookup');
     }
   }
 
-  // Cycle-stamp video/short/news IDs so each refill produces a fresh post-id.
-  // Without this, the deterministic `post-${date}-{type}-${conceptId}` pattern collides
-  // across refill cycles for the same anchor; enqueue dedup blocks within a queue snapshot
-  // but not against already-served IDs in seenPostIds, so the user saw "only 1 post per
-  // swipe" because dedup filtered repeated IDs at loadNextBatch (Bug A, 2026-04-19).
-  const cycleStamp = `c${postQueueService.getCycleNumber()}`;
+  // Post IDs are produced by `makePostId` (UUID-suffixed) — see helper definition.
+  // Bug A's cycleStamp is obsolete under the new scheme; kept `cycleNumber` below
+  // because the YouTube query modifier rotation (Bug 6) still uses it.
 
   // Generate video posts from YouTube (with cross-cycle dedup via concept-feed-dedup helper).
   // Query modifier rotates per cycleNumber and pool widened to YOUTUBE_FETCH_POOL_SIZE so
@@ -861,14 +1026,24 @@ Return ONLY a JSON array of 4 strings, nothing else. Example: ["What is X?", "Ho
     try {
       const concept = byId.get(a.conceptId);
       const conceptName = concept?.title ?? concept?.content?.slice(0, 50) ?? a.conceptId;
-      const query = buildYoutubeQuery(conceptName, cycleNumber, false);
-      const searchResult = await youtubeService.searchVideos(query, YOUTUBE_FETCH_POOL_SIZE);
-      if (searchResult.success && searchResult.data) {
-        const freshVideo = searchResult.data.find(v => !hasSeenVideoId(v.videoId));
+      // Phase 33 quota-burn fix (2026-04-20): prefer cached pre-fetch result so
+      // the same YouTube search isn't issued twice per cycle (pre-validation + here).
+      const cacheKey = `${a.conceptId}:video`;
+      const cached = preFetched?.youtube.get(cacheKey);
+      let data: YouTubeSearchResult[] | undefined;
+      if (cached) {
+        data = cached;
+      } else {
+        const query = buildYoutubeQuery(conceptName, cycleNumber, false);
+        const searchResult = await youtubeService.searchVideos(query, YOUTUBE_FETCH_POOL_SIZE);
+        data = searchResult.success ? searchResult.data : undefined;
+      }
+      if (data && data.length > 0) {
+        const freshVideo = data.find(v => !hasSeenVideoId(v.videoId));
         if (freshVideo) {
           addSeenVideoId(freshVideo.videoId);
           posts.push({
-            id: `post-${date}-video-${a.conceptId}-${cycleStamp}`,
+            id: makePostId(date, 'video', a.conceptId),
             date,
             title: freshVideo.title || conceptName,
             teaser: { hook: freshVideo.title || conceptName, preview: freshVideo.description?.slice(0, 170) || '' },
@@ -897,14 +1072,23 @@ Return ONLY a JSON array of 4 strings, nothing else. Example: ["What is X?", "Ho
     try {
       const concept = byId.get(a.conceptId);
       const conceptName = concept?.title ?? concept?.content?.slice(0, 50) ?? a.conceptId;
-      const query = buildYoutubeQuery(conceptName, cycleNumber, true);
-      const searchResult = await youtubeService.searchVideos(query, YOUTUBE_FETCH_POOL_SIZE);
-      if (searchResult.success && searchResult.data) {
-        const freshShort = searchResult.data.find(v => !hasSeenVideoId(v.videoId));
+      // Phase 33 quota-burn fix (2026-04-20): prefer cached pre-fetch result.
+      const cacheKey = `${a.conceptId}:short`;
+      const cached = preFetched?.youtube.get(cacheKey);
+      let data: YouTubeSearchResult[] | undefined;
+      if (cached) {
+        data = cached;
+      } else {
+        const query = buildYoutubeQuery(conceptName, cycleNumber, true);
+        const searchResult = await youtubeService.searchVideos(query, YOUTUBE_FETCH_POOL_SIZE);
+        data = searchResult.success ? searchResult.data : undefined;
+      }
+      if (data && data.length > 0) {
+        const freshShort = data.find(v => !hasSeenVideoId(v.videoId));
         if (freshShort) {
           addSeenVideoId(freshShort.videoId);
           posts.push({
-            id: `post-${date}-short-${a.conceptId}-${cycleStamp}`,
+            id: makePostId(date, 'short', a.conceptId),
             date,
             title: freshShort.title || conceptName,
             teaser: { hook: freshShort.title || conceptName, preview: freshShort.description?.slice(0, 170) || '' },
@@ -933,11 +1117,20 @@ Return ONLY a JSON array of 4 strings, nothing else. Example: ["What is X?", "Ho
     try {
       const concept = byId.get(a.conceptId);
       const conceptName = concept?.title ?? concept?.content?.slice(0, 50) ?? a.conceptId;
-      const searchResult = await webSearch(conceptName + ' latest research findings', { maxResults: 1 });
-      if (searchResult.success && searchResult.data?.results.length) {
-        const result = searchResult.data.results[0];
+      // Phase 33 quota-burn fix (2026-04-20): prefer cached pre-fetch result.
+      const cached = preFetched?.news.get(a.conceptId);
+      let result: WebSearchResult | undefined;
+      if (cached) {
+        result = cached;
+      } else {
+        const searchResult = await webSearch(conceptName + ' latest research findings', { maxResults: 1 });
+        if (searchResult.success && searchResult.data?.results.length) {
+          result = searchResult.data.results[0];
+        }
+      }
+      if (result) {
         posts.push({
-          id: `post-${date}-news-${a.conceptId}-${cycleStamp}`,
+          id: makePostId(date, 'news', a.conceptId),
           date,
           title: result.title || conceptName,
           teaser: { hook: result.title || conceptName, preview: result.content?.slice(0, 170) || '' },
@@ -975,7 +1168,19 @@ Return ONLY a JSON array of 4 strings, nothing else. Example: ["What is X?", "Ho
   return enrichedPosts;
 }
 
-let _queueRefillRunning = false;
+// Phase 36-12: Promise-based mutex (was boolean).
+// Multiple callers can race after Force-New-Day or rapid swipes; the
+// boolean version made `await refillQueue()` callers silently no-op when
+// a refill was already in flight, leaving generateMorePosts to dequeue
+// against an unchanged empty queue. The Promise reference lets in-flight
+// callers await the same Promise, see it resolve, then dequeue from the
+// now-populated queue. Single LLM body per cycle preserved.
+//
+// The mutex itself lives in `refill-mutex.ts` (a leaf module — zero deps
+// on the i18n chain) so node --test can import + exercise the mutex
+// semantics directly without crashing on en.json import attributes.
+// See .planning/phases/36-.../36-UAT.md round-3 sub-issue (e).
+const _refillMutex = createPromiseMutex();
 
 /**
  * Refill the post queue using the pre-style assignment pipeline (D-21).
@@ -983,40 +1188,110 @@ let _queueRefillRunning = false;
  * reassigns failures, generates posts, and enqueues results.
  */
 export async function refillQueue(questions: Question[]): Promise<void> {
-  if (_queueRefillRunning) return;
+  // Cheap pre-check: skip the mutex entirely if a refill isn't needed.
+  // (The mutex's run() also short-circuits if a body is in-flight.)
   if (!postQueueService.needsRefill()) return;
-  _queueRefillRunning = true;
 
-  try {
+  // Mutex.run captures the in-flight Promise; concurrent callers receive
+  // the SAME Promise and await this exact execution. The mutex's internal
+  // try/finally clears the in-flight reference in BOTH success AND error
+  // paths so a failed refill does not permanently lock subsequent callers.
+  return _refillMutex.run(async () => {
     const settings = settingsService.getSync();
-    // D-38: check daily generation cap.
-    // G1 / UAT-31-13 fix (Phase 32.1-02): floor dueConcepts.length at 3 so users
-    // with only 1 due concept don't exhaust the queue after one batch
-    // (multiplier=5 × 1 = 5 saturated immediately, refillQueue early-returned forever).
-    // Floor is a *minimum*, not a ceiling — users with many due concepts still get
-    // unlimited multiplier × N.
-    const dueConcepts = questions.filter(q => q.isAnchorNode);
-    const maxPosts = (settings.feed?.dailyGenerationCapMultiplier ?? FEED_DEFAULTS.dailyGenerationCapMultiplier) * Math.max(dueConcepts.length, 3);
-    if (postQueueService.getTotalGenerated() >= maxPosts) return;
+    // Daily generation cap — gate only applies AFTER the vine is finished.
+    //
+    // Phase 33 gap fix (2026-04-19): the cap was previously unconditional at this
+    // point, which caused a "vine unfinished but No more posts" regression — the
+    // cap counted totalGenerated (feed supply) while VineProgress counts
+    // exploredAnchors (user progress). The two counters drifted apart whenever
+    // the user swiped through posts without opening them, so the cap could fire
+    // while buildConceptBatch still had unexplored anchors to generate for.
+    //
+    // Fix (Option B): bypass the cap until allExplored. Once the vine is finished,
+    // the bonus-post regime takes over (see `allExplored` gate in generateMorePosts
+    // below) and the cap becomes a meaningful safety rail again.
+    //
+    // Trellis is local-first OSS where users provide their own LLM/YouTube/Tavily
+    // keys, so unbounded generation during the pre-finished window is NOT a cost
+    // concern for the project. If a commercial / key-brokered mode ships later,
+    // revisit this gate and reintroduce a pre-finished cap (e.g., scale with
+    // `unexploredAnchors.length` so the cap shrinks as the user reads).
+    //
+    // Previous context: D-38 + G1 / UAT-31-13 (Phase 32.1-02) added the `max(N, 3)`
+    // floor so 1-concept users didn't saturate after one batch. That floor is
+    // retained below for when the gate does eventually fire.
+    const anchors = questions.filter(q => q.isAnchorNode);
+    const exploredIds = new Set(dailyReadService.getExploredAnchors());
+    const allExplored = anchors.length > 0 && anchors.every(a => exploredIds.has(a.id));
+    const maxPosts = (settings.feed?.dailyGenerationCapMultiplier ?? FEED_DEFAULTS.dailyGenerationCapMultiplier) * Math.max(anchors.length, 3);
+    if (allExplored && postQueueService.getTotalGenerated() >= maxPosts) return;
 
-    // Step 1: Build concept batch for this cycle
-    const conceptIds = buildConceptBatch(questions);
+    // Step 1: Build concept batch + append-only persist + cyclic walk
+    // (Phase 36 GAP-1 + GAP-2). buildConceptBatch still filters explored anchors
+    // (Phase 33 gap fix line ~798 — DO NOT remove that filter; it gates fresh
+    // appends). The derived list is now PERSISTED in QueueState and grows
+    // append-only across refill cycles within the same day; the walker resumes
+    // from saved cyclePosition rather than restarting from index 0 each time.
+    //
+    // Removal-on-read is LAZY: walkDerivedList skips conceptIds in `exploredIds`
+    // (already computed at line ~1199). Physical splice would corrupt the walker's
+    // index — see RESEARCH § Pitfall 1.
+    const dueConceptIds = buildConceptBatch(questions);
+    postQueueService.appendToDerivedList(dueConceptIds);
+    // Walk batchSize entries — large enough to refill the queue past REFILL_THRESHOLD
+    // (12) up toward MAX_QUEUE_SIZE (32). 16 leaves room for downgrades + spread.
+    const conceptIds = postQueueService.walkDerivedList(16, exploredIds);
     if (conceptIds.length === 0) return;
 
-    // Step 2: Pre-check API keys — validate non-empty strings (D-20, D-21 step 1)
+    // Step 2: Pre-check API keys — validate non-empty strings (D-20, D-21 step 1).
+    // Phase 33 quota-burn fix (2026-04-20): also honor the runtime availability
+    // circuit breaker. If a 403/quotaExceeded response flipped the flag earlier
+    // today, keep that key "unavailable" for the rest of the day so assignStyles
+    // redirects weight to text-art instead of burning more calls on a dead quota.
+    const youtubeKeyPresent = typeof settings.youtube?.apiKey === 'string' && settings.youtube.apiKey.trim().length > 0;
+    const tavilyKeyPresent = typeof settings.webSearch?.tavilyApiKey === 'string' && settings.webSearch.tavilyApiKey.trim().length > 0;
+    // Phase 33 UAT-4 fix (2026-04-20): honor EITHER image-gen key. imageGeneration.bootstrap.ts
+    // registers the Gemini provider when only geminiApiKey is set (no nanoBanana key), so
+    // image generation IS possible — but assignStyles would skip the 'image' style weight
+    // because this check was nanoBanana-only. Result: no image posts despite a working key.
+    const nanoBananaKeyPresent = typeof settings.imageGeneration?.nanoBananaApiKey === 'string' && settings.imageGeneration.nanoBananaApiKey.trim().length > 0;
+    const geminiImageKeyPresent = typeof settings.imageGeneration?.geminiApiKey === 'string' && settings.imageGeneration.geminiApiKey.trim().length > 0;
+    // 2026-04-21: honor the `enabled` toggle in hasImageGenKey so assignStyles
+    // and InfoFlow's per-card gate agree. Prior mismatch: assignStyles checked
+    // only key presence (so it kept assigning 'image' even when the toggle was
+    // off), while InfoFlow.tsx:113 short-circuited on !enabled before calling
+    // generateImage — resulting in silent text-art fallback at line 159 with
+    // zero observable "I assigned image but nothing rendered" signal.
+    const imageGenEnabled = settings.imageGeneration?.enabled !== false;
     const availability: ApiAvailability = {
-      hasYoutubeKey: typeof settings.youtube?.apiKey === 'string' && settings.youtube.apiKey.trim().length > 0,
-      hasTavilyKey: typeof settings.webSearch?.tavilyApiKey === 'string' && settings.webSearch.tavilyApiKey.trim().length > 0,
-      hasImageGenKey: typeof settings.imageGeneration?.nanoBananaApiKey === 'string' && settings.imageGeneration.nanoBananaApiKey.trim().length > 0,
+      hasYoutubeKey: youtubeKeyPresent && isYoutubeRuntimeAvailable(),
+      hasTavilyKey: tavilyKeyPresent && isTavilyRuntimeAvailable(),
+      hasImageGenKey: imageGenEnabled && (nanoBananaKeyPresent || geminiImageKeyPresent),
     };
 
     // Step 3: Assign styles before generation (D-18)
     let assignments = assignStyles(conceptIds, availability);
 
-    // Step 4: Pre-validate YouTube/Tavily in parallel (D-21 step 2, D-20 fallback)
+    // Step 4: Pre-validate YouTube/Tavily in parallel AND cache results for reuse
+    // by the generation loops (D-21 step 2, D-20 fallback + Phase 33 quota-burn fix 2026-04-20).
+    //
+    // Before: pre-validation called searchVideos/webSearch with maxResults=1; the
+    // generation loops RE-called the same query with maxResults=15 — 2× the YouTube
+    // quota burn per assignment (200 units each at 100 units/search). After my
+    // cap-bypass fix (003b8e32) removed the implicit ~2-cycle cap, this doubled
+    // burn exhausted the user's 10,000-unit/day YouTube quota in ~10 cycles.
+    //
+    // Now: pre-validation fetches at full pool size (YOUTUBE_FETCH_POOL_SIZE for
+    // YouTube, maxResults:1 for Tavily since news loop picks results[0]) and
+    // stores the result in preFetched. Generation loops read from the cache.
+    // Halves YouTube calls per cycle; also halves Tavily calls.
     const videoAssigns = assignments.filter(a => a.style === 'video' || a.style === 'short');
     const newsAssigns = assignments.filter(a => a.style === 'news');
     const failedIds = new Set<string>();
+    const preFetched: PreFetchCache = {
+      youtube: new Map<string, YouTubeSearchResult[]>(),
+      news: new Map<string, WebSearchResult>(),
+    };
 
     const getConceptName = (id: string) => {
       const q = questions.find(q => q.id === id);
@@ -1031,9 +1306,16 @@ export async function refillQueue(questions: Question[]): Promise<void> {
         try {
           const conceptName = getConceptName(a.conceptId);
           const query = buildYoutubeQuery(conceptName, validationCycle, a.style === 'short');
-          const searchResult = await youtubeService.searchVideos(query, 1);
+          const searchResult = await youtubeService.searchVideos(query, YOUTUBE_FETCH_POOL_SIZE);
           if (!searchResult.success || !searchResult.data?.length) {
+            // Phase 33 quota-burn fix (2026-04-20): on quota-exhausted, flip the
+            // circuit breaker so subsequent cycles skip YouTube entirely.
+            if (searchResult.error?.code === 'API_QUOTA_EXCEEDED') {
+              markYoutubeQuotaExhausted();
+            }
             failedIds.add(a.conceptId);
+          } else {
+            preFetched.youtube.set(`${a.conceptId}:${a.style}`, searchResult.data);
           }
         } catch {
           failedIds.add(a.conceptId);
@@ -1042,9 +1324,18 @@ export async function refillQueue(questions: Question[]): Promise<void> {
       ...newsAssigns.map(async (a) => {
         try {
           const conceptName = getConceptName(a.conceptId);
-          const results = await webSearch(conceptName + ' latest', { maxResults: 1 });
+          const results = await webSearch(conceptName + ' latest research findings', { maxResults: 1 });
           if (!results.success || !results.data?.results.length) {
+            // Tavily doesn't distinguish a dedicated quota code today, but if the
+            // error message indicates 403/auth failure, treat as quota-exhausted
+            // for the rest of the day to stop burning calls on a dead key.
+            const msg = results.error?.message?.toLowerCase() ?? '';
+            if (msg.includes('403') || msg.includes('quota') || msg.includes('unauthorized')) {
+              markTavilyQuotaExhausted();
+            }
             failedIds.add(a.conceptId);
+          } else {
+            preFetched.news.set(a.conceptId, results.data.results[0]);
           }
         } catch {
           failedIds.add(a.conceptId);
@@ -1055,19 +1346,76 @@ export async function refillQueue(questions: Question[]): Promise<void> {
     // Step 5: Reassign failures to text-art (D-20, D-21 step 3)
     assignments = reassignFailures(assignments, failedIds);
 
-    // Step 6: Generate posts with pre-assigned styles (D-21 step 4)
-    const posts = await generatePostBatch(questions, assignments);
+    // Step 6: Generate posts with pre-assigned styles (D-21 step 4).
+    // Pass the pre-fetched cache so YouTube/Tavily loops reuse validated results
+    // instead of issuing a second call per assignment.
+    const posts = await generatePostBatch(questions, assignments, preFetched);
 
-    // Step 6b: Spread styles to prevent clustering (D-17 weighted round-robin)
-    spreadByStyle(posts);
+    // Step 6b: Pre-generate images for image-styled posts so the queue buffer
+    // is ACTUALLY pre-warmed (2026-04-21 architectural fix). Any post whose
+    // image generation FAILS gets its presentationStyle downgraded to 'text-art'
+    // BEFORE enqueue — so the queue only contains "ready" posts. InfoFlow
+    // never has to retry at mount time, no late-arriving images popping in,
+    // no duplicate-log racing. The queue promise is: "if it's in the queue,
+    // it's renderable right now."
+    const imagePosts = posts.filter((p) => p.presentationStyle === 'image');
+    if (imagePosts.length > 0) {
+      const { imageGenerationService } = await import('./imageGeneration.service');
+      const { inferImageStyle, buildImagePrompt } = await import('./postFormatting.service');
+      if (import.meta.env?.DEV) {
+        console.info(`[refillQueue] pre-generating ${imagePosts.length} image(s) before enqueue`);
+      }
+      const results = await Promise.allSettled(
+        imagePosts.map((p) => {
+          const style = inferImageStyle(p);
+          const prompt = buildImagePrompt(p);
+          return imageGenerationService.generateImage(p.id, prompt, style);
+        }),
+      );
+      // Downgrade any post whose image-gen failed so the queue never serves
+      // a post that would immediately fall back to text-art at render time.
+      // Mutation is safe here — these DailyPost objects haven't been enqueued
+      // or cached yet, so we're the only owner.
+      let downgraded = 0;
+      for (let i = 0; i < imagePosts.length; i++) {
+        const r = results[i];
+        const ok = r.status === 'fulfilled' && r.value.success;
+        if (!ok) {
+          imagePosts[i].presentationStyle = 'text-art';
+          downgraded++;
+        }
+      }
+      if (import.meta.env?.DEV && downgraded > 0) {
+        console.info(`[refillQueue] downgraded ${downgraded}/${imagePosts.length} image post(s) to text-art after pre-gen failure`);
+      }
+    }
 
-    // Step 7: Persist to history (D-33) and enqueue
+    // Step 6c + 7: Interleave styles ACROSS the unserved queue tail + this
+    // fresh batch (2026-04-21). Previously spreadByStyle ran on `posts` only,
+    // then enqueue concatenated — so cross-batch clustering was possible: a
+    // user popping 4 posts could slice entirely across one batch's tail or
+    // another batch's head, landing in a single-style run. enqueueInterleaved
+    // does dedup + combines queue-tail-with-new-batch + runs the mixer over
+    // the full combined list before writing back, so every refill re-mixes
+    // the pending queue with the new arrivals.
     for (const p of posts) { try { postHistoryService.addPost(p); } catch { /* non-critical */ } }
-    postQueueService.enqueue(posts);
+    if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
+      const batchStyles: Record<string, number> = {};
+      for (const p of posts) {
+        const k = p.presentationStyle ?? 'unknown';
+        batchStyles[k] = (batchStyles[k] ?? 0) + 1;
+      }
+      console.info('[refillQueue] batch styles:', batchStyles, 'batch size:', posts.length);
+    }
+    // Phase 36 GAP-4 — run concept-axis spread BEFORE style-axis spread so
+    // dominant anchors (important / overdue with 2× entries) don't cluster
+    // in the served window. See spreadByConcept JSDoc + RESEARCH § Pattern 3.
+    postQueueService.enqueueInterleaved(posts, (combined) => {
+      spreadByConcept(combined);
+      spreadByStyle(combined);
+    });
     postQueueService.incrementCycle();
-  } finally {
-    _queueRefillRunning = false;
-  }
+  });
 }
 
 export const conceptFeedService = {
@@ -1400,7 +1748,7 @@ export const conceptFeedService = {
       );
 
       const existingIds = new Set(existingPosts.map(p => p.id));
-      let newPosts = parseGeneratedPosts(raw, allQuestions, date, [], existingPosts.length, 6).posts
+      let newPosts = parseGeneratedPosts(raw, allQuestions, date, [], 6).posts
         .filter(p => !existingIds.has(p.id));
       newPosts = newPosts.slice(0, 6);
 
@@ -1433,7 +1781,9 @@ export const conceptFeedService = {
       const availability: ApiAvailability = {
         hasYoutubeKey: !!(settings2.youtube?.apiKey),
         hasTavilyKey: !!(settings2.webSearch?.tavilyApiKey),
-        hasImageGenKey: !!(settings2.imageGeneration?.nanoBananaApiKey),
+        // Phase 33 UAT-4 fix: either image-gen key counts (nanoBanana OR gemini).
+        hasImageGenKey: settings2.imageGeneration?.enabled !== false
+          && (!!(settings2.imageGeneration?.nanoBananaApiKey) || !!(settings2.imageGeneration?.geminiApiKey)),
       };
       const sessionAssignments = assignStyles(
         newPosts.map(p => p.sourceQuestionIds[0] ?? p.id),

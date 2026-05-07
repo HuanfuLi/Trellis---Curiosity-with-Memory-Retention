@@ -65,17 +65,21 @@ describe('postQueueService', () => {
     assert.equal(postQueueService.size(), 6);
   });
 
-  it('needsRefill returns true when size < 8, false when >= 8', () => {
+  it('needsRefill returns true when size < 16, false when >= 16 (Phase 36-12)', () => {
     assert.equal(postQueueService.needsRefill(), true);
-    const posts = Array.from({ length: 8 }, (_, i) => makePost(`r${i}`));
+    const posts = Array.from({ length: 16 }, (_, i) => makePost(`r${i}`));
     postQueueService.enqueue(posts);
     assert.equal(postQueueService.needsRefill(), false);
   });
 
-  it('loadQueue with date mismatch resets to empty queue, cycle 0', () => {
-    postQueueService.enqueue([makePost('x')]);
+  it('loadQueue with date mismatch rehydrates posts + cycleNumber, resets totals, snapshots to STORAGE_KEY_YESTERDAY', () => {
+    // Phase 36-11: load() now rehydrates _state.posts (and derivedList +
+    // cyclePosition) from yesterday's parsed.posts on date mismatch, AFTER
+    // snapshotting to STORAGE_KEY_YESTERDAY. Counters (totalGenerated +
+    // totalServed) reset to 0; cycleNumber inherits.
+    postQueueService.enqueue([makePost('x'), makePost('y')]);
     postQueueService.incrementCycle();
-    assert.equal(postQueueService.size(), 1);
+    assert.equal(postQueueService.size(), 2);
     assert.equal(postQueueService.getCycleNumber(), 1);
 
     // Overwrite localStorage with a stale date
@@ -84,8 +88,13 @@ describe('postQueueService', () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(raw));
 
     postQueueService.loadQueue();
-    assert.equal(postQueueService.size(), 0);
-    assert.equal(postQueueService.getCycleNumber(), 0);
+    // Rehydrated: posts + cycleNumber preserved
+    assert.equal(postQueueService.size(), 2, 'posts rehydrated from yesterday');
+    assert.equal(postQueueService.getCycleNumber(), 1, 'cycleNumber inherited');
+    // Snapshot written
+    const yest = JSON.parse(localStorage.getItem('echolearn_post_queue_yesterday'));
+    assert.equal(yest.date, '1999-01-01');
+    assert.equal(yest.posts.length, 2);
   });
 
   it('loadQueue with same date preserves queue contents', () => {
@@ -144,36 +153,40 @@ describe('postQueueService', () => {
     assert.deepEqual(yesterday, [], 'same-day state should not be treated as yesterday');
   });
 
-  it('getYesterdayQueue returns stored posts when stored date is different (simulated yesterday)', () => {
-    // Write a stale-dated state directly to localStorage WITHOUT calling loadQueue()
-    // (loadQueue would wipe it via freshState on date mismatch).
-    const staleState = {
+  it('getYesterdayQueue returns stored posts when snapshot key holds them (Phase 36 GAP-D Fix A)', () => {
+    // Phase 36 GAP-D Fix A (2026-05-07): getYesterdayQueue now reads from
+    // STORAGE_KEY_YESTERDAY (the durable snapshot), NOT the live STORAGE_KEY.
+    // Write directly to the snapshot key to simulate a prior cold-start of the
+    // new day having taken its snapshot. Comprehensive snapshot-lifecycle
+    // coverage lives in tests/services/post-queue-yesterday-snapshot.test.mjs;
+    // this test only exercises the read-from-snapshot-key contract.
+    const STORAGE_KEY_YESTERDAY = 'echolearn_post_queue_yesterday';
+    const snapshotPayload = {
       date: '1999-01-01',
       posts: [makePost('y1'), makePost('y2'), makePost('y3')],
-      cycleNumber: 2,
-      totalGenerated: 12,
-      totalServed: 4,
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(staleState));
+    localStorage.setItem(STORAGE_KEY_YESTERDAY, JSON.stringify(snapshotPayload));
 
     const yesterday = postQueueService.getYesterdayQueue();
-    assert.equal(yesterday.length, 3, 'should return all 3 stored yesterday posts');
+    assert.equal(yesterday.length, 3, 'should return all 3 yesterday posts from the snapshot key');
     assert.equal(yesterday[0].id, 'y1');
     assert.equal(yesterday[1].id, 'y2');
     assert.equal(yesterday[2].id, 'y3');
   });
 
-  it('getYesterdayQueue returns [] when stale state has no posts field', () => {
-    // Defensive: `parsed.posts || []` handles missing posts key.
-    const staleState = { date: '1999-01-01', cycleNumber: 0, totalGenerated: 0, totalServed: 0 };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(staleState));
+  it('getYesterdayQueue returns [] when snapshot has no posts field', () => {
+    // Defensive: Array.isArray(parsed.posts) handles missing posts key.
+    const STORAGE_KEY_YESTERDAY = 'echolearn_post_queue_yesterday';
+    const snapshotPayload = { date: '1999-01-01' };
+    localStorage.setItem(STORAGE_KEY_YESTERDAY, JSON.stringify(snapshotPayload));
 
     const yesterday = postQueueService.getYesterdayQueue();
     assert.deepEqual(yesterday, []);
   });
 
   it('getYesterdayQueue returns [] gracefully on malformed JSON', () => {
-    localStorage.setItem(STORAGE_KEY, '{not-valid-json}');
+    const STORAGE_KEY_YESTERDAY = 'echolearn_post_queue_yesterday';
+    localStorage.setItem(STORAGE_KEY_YESTERDAY, '{not-valid-json}');
     const yesterday = postQueueService.getYesterdayQueue();
     assert.deepEqual(yesterday, [], 'malformed JSON should be caught and return empty array');
   });

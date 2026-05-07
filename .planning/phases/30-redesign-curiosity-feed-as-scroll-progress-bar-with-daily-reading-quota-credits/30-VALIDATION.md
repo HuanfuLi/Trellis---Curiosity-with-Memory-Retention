@@ -1,10 +1,12 @@
 ---
 phase: 30
 slug: redesign-curiosity-feed-as-scroll-progress-bar-with-daily-reading-quota-credits
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-04-17
+validated: 2026-04-25
+re_audited: 2026-04-25
 ---
 
 # Phase 30 — Validation Strategy (v2)

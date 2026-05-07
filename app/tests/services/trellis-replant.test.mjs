@@ -133,8 +133,8 @@ test('replant does not modify flashcard records', async () => {
   assert.equal(afterStore.length, initialStoreLength, 'replant must not add or remove questions');
 });
 
-// D-14 (voided): replant emits CLASSIFICATION_COMPLETED so useTrellisData recomputes
-test('replant emits CLASSIFICATION_COMPLETED event', async () => {
+// D-14 (voided) — Phase 32.1 D-W3-02 consolidated CLASSIFICATION_COMPLETED into GRAPH_UPDATED. Tests now assert the consolidated event with no payload.
+test('replant emits GRAPH_UPDATED event (Phase 32.1 D-W3-02 rename)', async () => {
   storage.clear();
   const { _resetStore } = await import('./_actions-mock-question.mjs');
   const { eventBus } = await import('../../src/lib/event-bus.ts');
@@ -142,12 +142,11 @@ test('replant emits CLASSIFICATION_COMPLETED event', async () => {
   _resetStore([anchor]);
 
   const events = [];
-  const unsub = eventBus.subscribe('CLASSIFICATION_COMPLETED', (e) => events.push(e));
+  const unsub = eventBus.subscribe('GRAPH_UPDATED', (e) => events.push(e));
 
   const { trellisActionsService } = await import('../../src/services/trellis-actions.service.ts');
   trellisActionsService.replant('anchor-evt', anchor, []);
   unsub();
 
-  assert.equal(events.length, 1, 'must emit exactly one CLASSIFICATION_COMPLETED');
-  assert.equal(events[0].payload.anchorId, 'anchor-evt');
+  assert.equal(events.length, 1, 'must emit exactly one GRAPH_UPDATED');
 });

@@ -94,7 +94,7 @@ export function ChatInput({ onSend, placeholder, disabled, webSearchEnabled, onT
             padding: '12px 16px',
             backgroundColor: 'var(--surface-variant)',
             borderRadius: 'var(--radius-pill)',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            boxShadow: 'var(--shadow-2)',
             border: isRecording ? '1.5px solid var(--primary-40)' : '1.5px solid transparent',
             transition: 'border-color 0.2s',
           }}
@@ -107,8 +107,8 @@ export function ChatInput({ onSend, placeholder, disabled, webSearchEnabled, onT
             title={isRecording ? t('chatInput.stopRecordingTitle') : t('chatInput.voiceInputTitle')}
             style={{
               flexShrink: 0,
-              width: '34px',
-              height: '34px',
+              width: '44px',
+              height: '44px',
               borderRadius: '50%',
               backgroundColor: isRecording ? 'var(--primary-40)' : 'transparent',
               color: isRecording ? 'white' : 'var(--muted-foreground)',
@@ -135,8 +135,8 @@ export function ChatInput({ onSend, placeholder, disabled, webSearchEnabled, onT
               title={webSearchEnabled ? t('chatInput.webSearchOn') : t('chatInput.webSearchOff')}
               style={{
                 flexShrink: 0,
-                width: '34px',
-                height: '34px',
+                width: '44px',
+                height: '44px',
                 borderRadius: '50%',
                 backgroundColor: webSearchEnabled ? 'var(--primary-40)' : 'transparent',
                 color: webSearchEnabled ? 'white' : 'var(--muted-foreground)',
@@ -159,6 +159,14 @@ export function ChatInput({ onSend, placeholder, disabled, webSearchEnabled, onT
             disabled={disabled}
             style={{
               flex: 1,
+              // Phase 33 UAT-4 fix (2026-04-20): minWidth: 0 is load-bearing.
+              // Without it, the input's flex-basis: auto defaults to intrinsic
+              // content width, which Android WebView refuses to shrink below.
+              // The flexShrink:0 send button then overflows off-screen. This
+              // regressed twice — once when position:fixed → flex-column
+              // (d45c228c), again when mic/globe grew 34→44px (47d81049).
+              // Do NOT remove without replacing the flex-shrink guarantee.
+              minWidth: 0,
               background: 'transparent',
               color: 'var(--foreground)',
             }}
