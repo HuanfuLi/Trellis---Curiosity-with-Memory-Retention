@@ -1,10 +1,10 @@
 ---
-status: diagnosed
+status: resolved
 phase: 36-gap-closure-on-curiosity-feed-randomness-and-weights
 source: [36-09-SUMMARY.md, 36-10-SUMMARY.md, "follow-up commit 6a90224a"]
 round: 3
 started: 2026-05-07T01:00:00Z
-updated: 2026-05-07T02:00:00Z
+updated: 2026-05-07T10:30:00Z
 ---
 
 ## Current Test
@@ -65,7 +65,7 @@ blocked: 1
 ## Gaps
 
 - truth: "After Force New Day, vine progress chip on /home resets to 0/N (matching real-midnight behavior where dailyReadService.loadState detects date mismatch and returns freshState)."
-  status: failed
+  status: resolved
   reason: "User reported: vine progress bar seems not cleared after Force New Day."
   severity: major
   test: 1
@@ -82,7 +82,7 @@ blocked: 1
     - "Plan 36-13 — handleForceNewDay must call dailyReadService.reset() after rolling back the queue date"
 
 - truth: "Cold-start of a new day automatically populates the feed with UNSERVED posts from yesterday's queue snapshot (no manual swipe needed). Empty state appears only on first-ever launch."
-  status: failed
+  status: resolved
   reason: "User reported: cold-start state showing empty feed; user must swipe-for-more manually. Design intent: yesterday's UNSERVED queue posts (already generated, not yet shown) should auto-populate; SERVED posts in echolearn_daily_posts should NOT carry across midnight."
   severity: major
   test: 1
@@ -100,7 +100,7 @@ blocked: 1
     - "Plan 36-11 Task 2 — load() rehydrates _state.posts (and derivedList + cyclePosition) from parsed.posts on date mismatch, AFTER snapshotting"
 
 - truth: "Cold-start feed style mix is balanced (text-art plurality, image/video/short/news minorities) immediately on first render."
-  status: failed
+  status: resolved
   reason: "User reported: video → news → video → news pattern visible on cold-start; only normalises after next swipe-for-more triggers a fresh refill."
   severity: major
   test: 1
@@ -114,7 +114,7 @@ blocked: 1
     - "Plan 36-11 Task 3 — after rehydration, run spreadByConcept then spreadByStyle on _state.posts to re-balance the cold-start window"
 
 - truth: "Repeated Force-New-Day taps on the same new day each show consistent unserved-queue cold-start (no regression to served-posts state)."
-  status: failed
+  status: resolved
   reason: "User reported: After first Force New Day, second Force New Day returned to previous state showing served posts, then emptied feed and showed unserved queued posts."
   severity: major
   test: 1
@@ -128,7 +128,7 @@ blocked: 1
     - "Plan 36-11 Task 1 (same fix as sub-issue b cause #2)"
 
 - truth: "After dequeue, the queue auto-tops-up by triggering an LLM call when size drops below REFILL_THRESHOLD; user does not encounter an empty-state followed by a wait."
-  status: failed
+  status: resolved
   reason: "User reported: After Force New Day + first swipe, no LLM call to top up the queue. Second swipe shows 'no more posts' AND THEN starts an LLM call. Wait → queue fills → can swipe again."
   severity: major
   test: 1
