@@ -2,6 +2,11 @@
 // Stores a daily queue of DailyPost items, auto-resets on new day (date mismatch).
 
 import type { DailyPost } from '../types/index.ts';
+// Phase 36-11: rehydration on date-mismatch re-interleaves yesterday's leftover
+// queue via spreadByConcept + spreadByStyle. These are leaf functions in
+// feed-spread.ts (zero transitive deps on settings/locales chains, so this
+// import is safe under node --test).
+import { spreadByConcept, spreadByStyle } from './feed-spread.ts';
 
 const STORAGE_KEY = 'echolearn_post_queue';
 // Phase 36 GAP-D Fix A (2026-05-07): durable yesterday snapshot key. The live
@@ -63,11 +68,12 @@ function load(): QueueState {
     const parsed = JSON.parse(raw) as Partial<QueueState>;
     if (parsed.date !== today()) {
       // Date mismatch — snapshot yesterday's payload to a separate key BEFORE
-      // returning freshState. This makes getYesterdayQueue() durable across
-      // multiple cold-start mounts of the new day; without it, the very first
-      // save() of today's queue (in enqueue/markServed/etc.) overwrites the
-      // live STORAGE_KEY with {date: today, ...} and yesterday's posts are lost.
-      // See .planning/debug/cold-start-warm-start-fragile.md and CLAUDE.md
+      // rehydrating today's _state. This makes getYesterdayQueue() durable
+      // across multiple cold-start mounts of the new day (Plan 36-09 contract);
+      // without it, the very first save() of today's queue (in
+      // enqueue/markServed/etc.) overwrites the live STORAGE_KEY with
+      // {date: today, ...} and yesterday's posts are lost. See
+      // .planning/debug/cold-start-warm-start-fragile.md and CLAUDE.md
       // "Numeric defaults" for the durable-snapshot rationale.
       try {
         if (Array.isArray(parsed.posts) && parsed.posts.length > 0) {
@@ -79,7 +85,30 @@ function load(): QueueState {
       } catch (err) {
         console.warn('[postQueueService] yesterday snapshot failed:', err);
       }
-      return freshState();
+      // Phase 36-11: rehydrate today's _state from yesterday's UNSERVED queue.
+      // Yesterday's snapshot contains posts that were generated but never popped
+      // by the user — they remain valid content and should auto-populate today's
+      // feed (no manual swipe needed, no LLM-pipeline wait). Counters reset to 0
+      // (new day's totals start fresh). cycleNumber inherits for continuity.
+      // After rehydrating, re-interleave by spreadByConcept + spreadByStyle to
+      // balance the style mix — yesterday's leftover is style-biased toward
+      // minority styles (text-art was popped first as plurality), so renders
+      // as video → news → video → news without re-interleave. See round-3
+      // sub-issue (c). The mixers mutate the array in place.
+      const rehydrated: DailyPost[] = Array.isArray(parsed.posts) ? parsed.posts : [];
+      if (rehydrated.length > 0) {
+        spreadByConcept(rehydrated);
+        spreadByStyle(rehydrated);
+      }
+      return {
+        date: today(),
+        posts: rehydrated,
+        cycleNumber: typeof parsed.cycleNumber === 'number' ? parsed.cycleNumber : 0,
+        totalGenerated: 0,
+        totalServed: 0,
+        derivedList: Array.isArray(parsed.derivedList) ? parsed.derivedList : [],
+        cyclePosition: typeof parsed.cyclePosition === 'number' ? parsed.cyclePosition : 0,
+      };
     }
     // Phase 36 GAP-1 — defensive read for users on the prior schema.
     // localStorage payloads written before 2026-05-06 lack derivedList +
