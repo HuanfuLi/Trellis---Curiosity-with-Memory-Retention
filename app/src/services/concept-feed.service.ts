@@ -26,6 +26,7 @@ import {
 // (and downstream tests that import from here) keep working.
 import { spreadByStyle, spreadByConcept } from './feed-spread';
 export { spreadByStyle, spreadByConcept };
+import { createPromiseMutex } from './refill-mutex';
 
 const STORAGE_KEY = 'echolearn_daily_posts';
 const CONNECTION_POSTS_KEY = 'echolearn_connection_posts';
@@ -1174,8 +1175,12 @@ Return ONLY a JSON array of 4 strings, nothing else. Example: ["What is X?", "Ho
 // against an unchanged empty queue. The Promise reference lets in-flight
 // callers await the same Promise, see it resolve, then dequeue from the
 // now-populated queue. Single LLM body per cycle preserved.
+//
+// The mutex itself lives in `refill-mutex.ts` (a leaf module — zero deps
+// on the i18n chain) so node --test can import + exercise the mutex
+// semantics directly without crashing on en.json import attributes.
 // See .planning/phases/36-.../36-UAT.md round-3 sub-issue (e).
-let _refillInFlight: Promise<void> | null = null;
+const _refillMutex = createPromiseMutex();
 
 /**
  * Refill the post queue using the pre-style assignment pipeline (D-21).
@@ -1183,16 +1188,15 @@ let _refillInFlight: Promise<void> | null = null;
  * reassigns failures, generates posts, and enqueues results.
  */
 export async function refillQueue(questions: Question[]): Promise<void> {
-  // In-flight: return the same promise so concurrent callers await it,
-  // not a no-op (which would cause silent dequeue-empty in generateMorePosts).
-  if (_refillInFlight) return _refillInFlight;
+  // Cheap pre-check: skip the mutex entirely if a refill isn't needed.
+  // (The mutex's run() also short-circuits if a body is in-flight.)
   if (!postQueueService.needsRefill()) return;
 
-  // Capture the in-flight Promise so concurrent callers await this exact
-  // execution. The Promise must clear in BOTH success AND error paths so
-  // a failed refill does not permanently lock subsequent callers.
-  _refillInFlight = (async () => {
-    try {
+  // Mutex.run captures the in-flight Promise; concurrent callers receive
+  // the SAME Promise and await this exact execution. The mutex's internal
+  // try/finally clears the in-flight reference in BOTH success AND error
+  // paths so a failed refill does not permanently lock subsequent callers.
+  return _refillMutex.run(async () => {
     const settings = settingsService.getSync();
     // Daily generation cap — gate only applies AFTER the vine is finished.
     //
@@ -1411,11 +1415,7 @@ export async function refillQueue(questions: Question[]): Promise<void> {
       spreadByStyle(combined);
     });
     postQueueService.incrementCycle();
-    } finally {
-      _refillInFlight = null;
-    }
-  })();
-  return _refillInFlight;
+  });
 }
 
 export const conceptFeedService = {
