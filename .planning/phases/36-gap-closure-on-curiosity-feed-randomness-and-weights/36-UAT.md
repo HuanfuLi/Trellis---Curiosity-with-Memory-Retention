@@ -77,9 +77,20 @@ blocked: 0
   reason: "User reported: 'It's in the new day but the app is not showing cold start? Also, should add a dev feature in Settings page to force a new day so that we can debug this without actually waiting for a new day.'"
   severity: major
   test: 1
-  root_cause: ""
-  artifacts: []
+  root_cause: "post-queue.service.ts:221-231 getYesterdayQueue() reads from the SAME localStorage key (echolearn_post_queue) that the live queue uses. The function returns parsed.posts only when parsed.date !== today(). On cold-start of a new day this works ONCE — module-init's load() sees the date mismatch and returns freshState() in-memory without calling save(), so localStorage still holds yesterday's payload when HomeScreen's useState initializer runs. But the very first save() of the new day (triggered by enqueue/markServed/appendToDerivedList/etc., usually within the first refillQueue cycle the useEffect kicks off) writes {date: today, ...} to localStorage and PERMANENTLY destroys yesterday's snapshot. From that moment forward, getYesterdayQueue() returns [] because parsed.date === today() matches. If the user closes and re-opens the app a second time on the same new day, the warm-start path renders empty. The 'recovery' the user observed during Test 2 was actually the 8-second delayed refreshFeed() (HomeScreen.tsx:159-161) populating today's queue from the now-completed refillQueue — not warm-start working, just today's content arriving on the natural async timer. Plan 36-06's HomeScreen.warm-start-guard.test.mjs (4/4 GREEN) verified the React-side guards correctly but assumed getYesterdayQueue() would reliably return yesterday's posts — which is single-shot, not durable."
+  phase_36_regression: false
+  artifacts:
+    - path: app/src/services/post-queue.service.ts
+      lines: 221-231
+      issue: "getYesterdayQueue() reads from the same key as the live queue, so the first save() of the new day overwrites yesterday's snapshot"
+    - path: app/src/services/post-queue.service.ts
+      lines: 50-76
+      issue: "load()'s date-mismatch branch returns freshState() but does NOT snapshot yesterday's payload to a separate key first"
+    - path: app/src/screens/HomeScreen.tsx
+      lines: 38-47
+      issue: "useState initializer correctly calls getYesterdayQueue() but its result is non-deterministic across multiple mounts of the same new day (single-shot semantics from upstream)"
   missing:
-    - "Dev affordance: Settings > Developer/Data screen needs a 'Force new day' button that simulates date rollover by (a) snapshotting the current echolearn_post_queue state into a yesterday slot, (b) calling postQueueService.resetForNewDay() (or equivalent), (c) re-rendering HomeScreen so the cold-start useEffect path runs against a non-empty getYesterdayQueue. Without this, GAP-A is non-deterministic to verify in dev."
-    - "Investigate: with the dev affordance in place, is HomeScreen's useState initializer at lines 38-47 actually receiving non-empty posts from getYesterdayQueue() on the simulated cold start? Or does some part of the date-rollover detection still bypass warm-start?"
-  debug_session: ""
+    - "Fix A (durable yesterday snapshot): in post-queue.service.ts load(), when date-mismatch detected and parsed.posts.length > 0, copy {date, posts} to a NEW localStorage key (echolearn_post_queue_yesterday) BEFORE returning freshState(). Update getYesterdayQueue() to read from that key. Idempotent across multiple cold-start mounts."
+    - "Fix B (dev affordance): add a 'Force new day' button to Settings > Data screen (or dev-only section) that mutates localStorage.echolearn_post_queue.date to yesterday's date, calls postQueueService.loadQueue() to reload in-memory state, and optionally navigates to /home. Gated behind import.meta.env.DEV so it doesn't ship in production. Enables deterministic GAP-A verification without waiting for midnight."
+    - "Source-reading regression test: assert post-queue.service.ts load() writes to STORAGE_KEY_YESTERDAY when date mismatch + non-empty posts; assert getYesterdayQueue() reads from STORAGE_KEY_YESTERDAY and is independent of subsequent save() calls."
+  debug_session: .planning/debug/cold-start-warm-start-fragile.md
