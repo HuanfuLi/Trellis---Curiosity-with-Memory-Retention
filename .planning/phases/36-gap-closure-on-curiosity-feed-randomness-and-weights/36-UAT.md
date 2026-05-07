@@ -73,7 +73,7 @@ blocked: 0
 ## Gaps
 
 - truth: "On a new day, the cold-start path serves yesterday's leftover posts immediately via getYesterdayQueue(), with no empty-flicker and no 'Check your API keys' error UI."
-  status: failed
+  status: resolved
   reason: "User reported: 'It's in the new day but the app is not showing cold start? Also, should add a dev feature in Settings page to force a new day so that we can debug this without actually waiting for a new day.'"
   severity: major
   test: 1

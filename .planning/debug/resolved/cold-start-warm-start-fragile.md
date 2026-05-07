@@ -1,7 +1,9 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "On real new-day rollover (2026-05-07), the warm-start path didn't visibly engage. Spontaneously recovered later — looked like cold-start was working, but actually the 8-second delayed refresh was firing."
 created: 2026-05-07
+resolved: 2026-05-07
+resolved_by: "Phase 36 plans 36-09 (durable STORAGE_KEY_YESTERDAY snapshot) + 36-10 (dev Force-new-day affordance)"
 phase: 36
 gap_id: GAP-D
 confidence: high (95% — code-traced; live behavior matches the trace)
