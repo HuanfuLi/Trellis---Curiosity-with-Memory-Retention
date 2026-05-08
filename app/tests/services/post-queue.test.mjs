@@ -33,7 +33,7 @@ function makePost(id, overrides = {}) {
   };
 }
 
-const STORAGE_KEY = 'echolearn_post_queue';
+const STORAGE_KEY = 'trellis_post_queue';
 
 // Fresh import per describe block is not needed since we clear localStorage
 // and call loadQueue() before each test.
@@ -92,7 +92,7 @@ describe('postQueueService', () => {
     assert.equal(postQueueService.size(), 2, 'posts rehydrated from yesterday');
     assert.equal(postQueueService.getCycleNumber(), 1, 'cycleNumber inherited');
     // Snapshot written
-    const yest = JSON.parse(localStorage.getItem('echolearn_post_queue_yesterday'));
+    const yest = JSON.parse(localStorage.getItem('trellis_post_queue_yesterday'));
     assert.equal(yest.date, '1999-01-01');
     assert.equal(yest.posts.length, 2);
   });
@@ -160,7 +160,7 @@ describe('postQueueService', () => {
     // new day having taken its snapshot. Comprehensive snapshot-lifecycle
     // coverage lives in tests/services/post-queue-yesterday-snapshot.test.mjs;
     // this test only exercises the read-from-snapshot-key contract.
-    const STORAGE_KEY_YESTERDAY = 'echolearn_post_queue_yesterday';
+    const STORAGE_KEY_YESTERDAY = 'trellis_post_queue_yesterday';
     const snapshotPayload = {
       date: '1999-01-01',
       posts: [makePost('y1'), makePost('y2'), makePost('y3')],
@@ -176,7 +176,7 @@ describe('postQueueService', () => {
 
   it('getYesterdayQueue returns [] when snapshot has no posts field', () => {
     // Defensive: Array.isArray(parsed.posts) handles missing posts key.
-    const STORAGE_KEY_YESTERDAY = 'echolearn_post_queue_yesterday';
+    const STORAGE_KEY_YESTERDAY = 'trellis_post_queue_yesterday';
     const snapshotPayload = { date: '1999-01-01' };
     localStorage.setItem(STORAGE_KEY_YESTERDAY, JSON.stringify(snapshotPayload));
 
@@ -185,7 +185,7 @@ describe('postQueueService', () => {
   });
 
   it('getYesterdayQueue returns [] gracefully on malformed JSON', () => {
-    const STORAGE_KEY_YESTERDAY = 'echolearn_post_queue_yesterday';
+    const STORAGE_KEY_YESTERDAY = 'trellis_post_queue_yesterday';
     localStorage.setItem(STORAGE_KEY_YESTERDAY, '{not-valid-json}');
     const yesterday = postQueueService.getYesterdayQueue();
     assert.deepEqual(yesterday, [], 'malformed JSON should be caught and return empty array');

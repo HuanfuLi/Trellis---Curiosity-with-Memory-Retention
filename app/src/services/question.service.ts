@@ -14,7 +14,7 @@ import {
 } from './canonical-knowledge.service.ts';
 import { evaluateQuestion as filterQuestion, type QuestionFilterContext } from './question-filter.service.ts';
 
-const STORAGE_KEY = 'echolearn_questions';
+const STORAGE_KEY = 'trellis_questions';
 
 // ─── SQLite write-through helpers ────────────────────────────────────────────
 // DDL lives in db.service.ts (_runMigrations / init). These helpers only do DML.

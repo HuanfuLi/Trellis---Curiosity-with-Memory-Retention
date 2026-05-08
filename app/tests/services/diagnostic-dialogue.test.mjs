@@ -101,7 +101,7 @@ function mergeSignals(primary, fallback) {
 // We create a testable version of the service that accepts injected dependencies
 
 const MAX_TURNS = 3;
-const STORAGE_KEY = 'echolearn_diagnostic_session';
+const STORAGE_KEY = 'trellis_diagnostic_session';
 
 function createDiagnosticDialogueService(deps) {
   const { localStorage: ls, chatCompletion, settingsService } = deps;

@@ -4,8 +4,8 @@ import { toast } from '../lib/toast';
 import i18n from '../locales';
 import { conceptFeedService } from './concept-feed.service';
 
-const SESSIONS_KEY = 'echolearn_sessions';
-const ACTIVE_ID_KEY = 'echolearn_active_session';
+const SESSIONS_KEY = 'trellis_sessions';
+const ACTIVE_ID_KEY = 'trellis_active_session';
 
 let idCounter = Date.now();
 function newId(): string {

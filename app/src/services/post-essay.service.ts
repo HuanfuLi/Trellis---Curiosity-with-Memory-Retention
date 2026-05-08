@@ -187,7 +187,7 @@ async function* generateTextArtEssay(post: DailyPost, questions: Question[], opt
  * Checks daily cache, video cache, news cache, and shorts cache.
  */
 export function patchPostEssayInCache(postId: string, essay: EssayContent): void {
-  const cacheKeys = ['echolearn_daily_posts', 'echolearn_video_cache', 'echolearn_news_posts', 'echolearn_short_posts'];
+  const cacheKeys = ['trellis_daily_posts', 'trellis_video_cache', 'trellis_news_posts', 'trellis_short_posts'];
   for (const key of cacheKeys) {
     try {
       const raw = localStorage.getItem(key);

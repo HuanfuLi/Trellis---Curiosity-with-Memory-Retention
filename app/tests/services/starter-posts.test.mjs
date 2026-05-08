@@ -41,7 +41,7 @@ function makeStarterPost(id, title, hook, preview, bodyMarkdown, contextLabel) {
     presentationStyle: 'text-art',
     sourceQuestionIds: [],
     sourceQuestionTitles: [],
-    keywords: ['echolearn', 'getting-started'],
+    keywords: ['trellis', 'getting-started'],
     generatedAt: Date.now(),
     origin: 'ai',
     whyCare: '',

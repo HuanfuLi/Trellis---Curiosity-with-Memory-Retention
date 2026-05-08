@@ -31,6 +31,10 @@ class SQLiteBackend implements DBBackend {
     // isConnection to reuse across hot reloads, createConnection otherwise.
     const { CapacitorSQLite, SQLiteConnection } = await import('@capacitor-community/sqlite');
     const sqlite = new SQLiteConnection(CapacitorSQLite);
+    // SQLite connection name kept as 'echolearn' for backwards compat with
+    // existing native installs — renaming would orphan the on-disk DB file
+    // and force a data wipe. User-facing brand is Trellis; this internal
+    // handle is never visible.
     const existing = await sqlite.isConnection('echolearn', false);
     this.db = existing.result
       ? await sqlite.retrieveConnection('echolearn', false)
@@ -81,7 +85,7 @@ class SQLiteBackend implements DBBackend {
 
 // ─── localStorage Backend (Web fallback) ─────────────────────────────────────
 
-const PREFIX = 'echolearn_db_';
+const PREFIX = 'trellis_db_';
 
 class LocalStorageBackend implements DBBackend {
   // We simulate a table as a JSON blob keyed by tableName.

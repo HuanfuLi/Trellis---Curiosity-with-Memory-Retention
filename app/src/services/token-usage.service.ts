@@ -5,7 +5,7 @@
 // Replace `tokenUsageReporter` export with a remote implementation for
 // server-side tracking without touching call sites.
 
-const STORAGE_KEY = 'echolearn_token_usage';
+const STORAGE_KEY = 'trellis_token_usage';
 const MAX_RECORDS = 500;
 
 // ─── Types ────────────────────────────────────────────────────────────────────

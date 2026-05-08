@@ -1,4 +1,4 @@
-package com.echolearn.app;
+package com.trellis.app;
 
 import android.Manifest;
 import android.content.pm.PackageManager;

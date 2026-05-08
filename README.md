@@ -1,31 +1,36 @@
-# EchoLearn: AI-Powered Personalized Learning
+# 🌿 Trellis
 
-EchoLearn is a serverless, privacy-first mobile knowledge management application built with **React 19**, **TypeScript**, **Vite**, and **Capacitor 8**. It helps users transform fragmented information into a structured knowledge base using AI-driven contextual Q&A, interactive mind maps, auto-generated flashcards, and spaced repetition.
+**Trellis** (formerly EchoLearn) is a privacy-first, serverless mobile knowledge engine that transforms fragmented information into a living, growing garden of knowledge. Built with **React 19**, **TypeScript**, **Vite**, and **Capacitor 8**, it bridges the gap between passive consumption and active, long-term learning through AI-driven Q&A, visual mapping, and spaced repetition.
 
-## Key Features
+## 🍃 The Knowledge Garden
+Trellis reimagines your personal knowledge base as a dynamic ecosystem. Every concept you explore becomes a plant on your **Trellis Tree**, where its visual health reflects your engagement and retention.
 
-- **Web-Augmented Q&A:** Ask questions with optional web search — the LLM autonomously decides when to search or users can force it via a globe toggle. Responses include inline citation tags and a sources section with links.
-- **Rich Concept Feed:** AI-generated posts with multiple visual styles — image cards, text-art typography, YouTube video embeds, short video portraits, and newspaper-style news cards from daily web headlines.
-- **Cluster-Aware Knowledge Graph:** Mind maps organized into aggregated cluster nodes and anchors for navigating complex domains.
-- **Intelligent Planner:** Auto-suggests optimal learning actions based on trajectory data, weak areas, and check-in context.
-- **Contextual Q&A Threading:** Multi-turn session history for continuous learning without redundant context.
-- **Token Optimization Tracking:** Real-time LLM cost analytics per service in Developer settings.
-- **Spaced Repetition (SRS):** Automated flashcard generation, scheduling, and targeted cluster reviews.
-- **Persistent Sessions:** Ask screen preserves conversation state across navigation — no lost sessions mid-stream.
+- **Dynamic States:** Leaves evolve from `bud` to `green`, `blossom`, and finally `fruit` as you master them. Neglected concepts turn `dying` or `dead`, signaling a need for review.
+- **Botanical Actions:** Maintain your garden with `Heal` (reviewing overdue nodes), `Re-plant` (refreshing context), or `Prune` (archiving outdated concepts).
+- **Harvest Mechanics:** Collecting ripe `fruit` from your tree awards credits, turning learning into a tangible "harvest" of expertise.
+
+## ✨ Key Features
+
+- **🌐 Web-Augmented "Ask":** Deep Q&A with an LLM that autonomously decides when to use the `web_search` tool for real-time grounding. Features include inline citations, source links, and a persistent session state that stays mounted across navigation.
+- **📱 Discovery Feed:** A social-media-style feed of AI-generated "Concept Cards." Uses a weighted mix of visual styles: image-forward cards, creative text-art typography, YouTube video embeds, portrait-format Shorts, and daily newspaper-style news summaries.
+- **📊 Cluster-Aware Knowledge Graph:** Interactive mind maps powered by **Mind Elixir**, organizing thousands of nodes into academic anchors and distinct concept clusters.
+- **🎙️ Daily Podcast:** Automatically generates a personalized learning podcast summarizing your day's reviews and new discoveries.
+- **⚡ Token Analytics:** Real-time observability dashboard for tracking LLM cost and performance per service.
+- **🛠️ Intelligent Planner:** A "Signal-Aware" priority engine that suggests optimized learning actions (Review, Explore, Deep Dive) based on your unique learning trajectory.
 
 ## 🏗️ Architecture & Technology Stack
 
-- **Frontend:** React 19 (Hooks-based), React Router 7, Tailwind 4.
-- **Native Bridge:** Capacitor 8 (Cross-platform Android/iOS/Web).
-- **Persistence:** Local-first SQLite (`capacitor-community/sqlite`) plus localStorage fallbacks.
-- **Animations:** Custom CSS keyframes and Framer Motion context layouts.
-- **AI Providers:** Modular wrappers for OpenAI, Claude, Gemini, Local models (LM Studio), and image-generation endpoints.
+- **Frontend:** React 19 (Hooks-based), React Router 7, Tailwind CSS 4.
+- **Native Bridge:** Capacitor 8 (High-performance Android/iOS/Web).
+- **Persistence:** Local-first SQLite (`capacitor-community/sqlite`) with localStorage fallbacks.
+- **Animations:** Organic "ambient sway" and tactile feedback using **Framer Motion** and **Capacitor Haptics**.
+- **AI Ecosystem:** Modular providers for OpenAI, Claude, Gemini, and Local LLMs (LM Studio/Ollama), plus Nano Banana for image generation.
 
 ## 📂 Project Structure
 
-- `/app/src/components`: UI components and shared structures.
-- `/app/src/services`: Business logic (Ask, Review, Planner, Podcast, Web Search, News, Token Tracker).
-- `/app/src/providers`: LLM, STT, TTS, Images, and Embedding.
+- `/app/src/components`: Atomic UI components and feature-specific structures.
+- `/app/src/services`: Business logic (Ask, Review, Trellis Tree, Planner, YouTube, News).
+- `/app/src/providers`: LLM, STT, TTS, Images, and Embedding connectors.
 - `.planning`: Active roadmaps, phase specifications, and milestone logs.
 - `Documents`: Validation logs, UAT testing scripts, and historic change logs.
 
@@ -42,10 +47,11 @@ npm install         # Install dependencies
 npm run dev         # Start web development server
 npm run build       # Build for production
 npx cap sync        # Sync web build to native platforms
+npx cap open android # Open Android Studio
 ```
 
-## Roadmap
-The project has shipped **v1.1 (Engagement & Discovery Iteration)** and continued through Phases 17–19 adding YouTube video integration, text-art/short video feed redesign, and web search capabilities. Phase 20 (Orchestration Strategy & Diagnostic Dialogue) is planned next.
+## 🗺️ Roadmap
+Trellis has successfully shipped **v1.3 (Milestone: Trellis Visuals & i18n)**. Current efforts are focused on **Milestone 2: Dynamic Learning Orchestration**, including the `LearningOrchestrator` and advanced Socratic diagnostic dialogues.
 
 See [ROADMAP.md](ROADMAP.md) for macro-level planning or `.planning/ROADMAP.md` for granular phase tracking.
 

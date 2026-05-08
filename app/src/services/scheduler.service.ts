@@ -27,9 +27,9 @@ import i18n from '../locales';
 
 // ── Daily execution flags (localStorage) ─────────────────────────────────────
 
-const PODCAST_DONE_KEY = 'echolearn_scheduler_podcast_done';
-const PLANNER_DONE_KEY = 'echolearn_scheduler_planner_done';
-const REVIEW_DONE_KEY = 'echolearn_scheduler_review_done';
+const PODCAST_DONE_KEY = 'trellis_scheduler_podcast_done';
+const PLANNER_DONE_KEY = 'trellis_scheduler_planner_done';
+const REVIEW_DONE_KEY = 'trellis_scheduler_review_done';
 
 function isDoneToday(key: string): boolean {
   return localStorage.getItem(key) === today();

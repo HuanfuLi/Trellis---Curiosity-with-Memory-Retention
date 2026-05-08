@@ -837,7 +837,7 @@ async function commitClassificationResult(
       isClusterNode: true,
       qaCount: 0,
     };
-    const CLUSTER_STORAGE_KEY = 'echolearn_questions';
+    const CLUSTER_STORAGE_KEY = 'trellis_questions';
     try {
       const storedRaw = localStorage.getItem(CLUSTER_STORAGE_KEY);
       const store: Question[] = storedRaw ? JSON.parse(storedRaw) as Question[] : [];
@@ -915,7 +915,7 @@ async function commitClassificationResult(
       };
 
       // Save anchor directly to localStorage (same storage key as questionService)
-      const ANCHOR_STORAGE_KEY = 'echolearn_questions';
+      const ANCHOR_STORAGE_KEY = 'trellis_questions';
       try {
         const storedRaw = localStorage.getItem(ANCHOR_STORAGE_KEY);
         const store: Question[] = storedRaw ? JSON.parse(storedRaw) as Question[] : [];
@@ -1399,8 +1399,8 @@ export function buildReflectionTree(questions: Question[]): Array<{
 
 // ─── Mindmap Reorganization ──────────────────────────────────────────────────
 
-const REORG_SNAPSHOT_KEY = 'echolearn_reorg_snapshot';
-const STORAGE_KEY = 'echolearn_questions';
+const REORG_SNAPSHOT_KEY = 'trellis_reorg_snapshot';
+const STORAGE_KEY = 'trellis_questions';
 
 // Module-level state so reorganization status persists across navigation
 let _reorgInProgress = false;

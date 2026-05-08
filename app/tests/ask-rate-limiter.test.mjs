@@ -35,7 +35,7 @@ test('getRateLimitStatus with limit=0 returns unlimited (canAsk true, no reset d
 
 test('getRateLimitStatus with count at 80% of limit returns nearLimit true', () => {
   // Set count to 8 with limit 10 => 80%
-  store.set('echolearn_ask_rate_limit', JSON.stringify({ count: 8, yearMonth: currentYearMonth() }));
+  store.set('trellis_ask_rate_limit', JSON.stringify({ count: 8, yearMonth: currentYearMonth() }));
   const status = getRateLimitStatus(10);
   assert.equal(status.count, 8);
   assert.equal(status.canAsk, true);
@@ -44,7 +44,7 @@ test('getRateLimitStatus with count at 80% of limit returns nearLimit true', () 
 });
 
 test('getRateLimitStatus with count at limit returns canAsk false', () => {
-  store.set('echolearn_ask_rate_limit', JSON.stringify({ count: 10, yearMonth: currentYearMonth() }));
+  store.set('trellis_ask_rate_limit', JSON.stringify({ count: 10, yearMonth: currentYearMonth() }));
   const status = getRateLimitStatus(10);
   assert.equal(status.count, 10);
   assert.equal(status.canAsk, false);
@@ -52,7 +52,7 @@ test('getRateLimitStatus with count at limit returns canAsk false', () => {
 });
 
 test('getRateLimitStatus with count below 80% returns nearLimit false', () => {
-  store.set('echolearn_ask_rate_limit', JSON.stringify({ count: 5, yearMonth: currentYearMonth() }));
+  store.set('trellis_ask_rate_limit', JSON.stringify({ count: 5, yearMonth: currentYearMonth() }));
   const status = getRateLimitStatus(10);
   assert.equal(status.count, 5);
   assert.equal(status.canAsk, true);
@@ -65,13 +65,13 @@ test('incrementAskCount increments count from 0 to 1', () => {
 });
 
 test('incrementAskCount with stale yearMonth resets to 1', () => {
-  store.set('echolearn_ask_rate_limit', JSON.stringify({ count: 42, yearMonth: '2020-01' }));
+  store.set('trellis_ask_rate_limit', JSON.stringify({ count: 42, yearMonth: '2020-01' }));
   incrementAskCount();
   assert.equal(getAskCount(), 1);
 });
 
 test('getRateLimitStatus with stale yearMonth resets count to 0', () => {
-  store.set('echolearn_ask_rate_limit', JSON.stringify({ count: 99, yearMonth: '2020-01' }));
+  store.set('trellis_ask_rate_limit', JSON.stringify({ count: 99, yearMonth: '2020-01' }));
   const status = getRateLimitStatus(10);
   assert.equal(status.count, 0);
   assert.equal(status.canAsk, true);

@@ -27,22 +27,22 @@ export function SettingsFeaturesScreen() {
 
   // Planner state
   const [plannerRefreshEnabled, setPlannerRefreshEnabled] = useState(() => {
-    const stored = localStorage.getItem('echolearn_planner_refresh_enabled');
+    const stored = localStorage.getItem('trellis_planner_refresh_enabled');
     return stored !== null ? stored === 'true' : true;
   });
   const [plannerRefreshTime, setPlannerRefreshTime] = useState(() => {
-    return localStorage.getItem('echolearn_planner_refresh_time') ?? '08:00';
+    return localStorage.getItem('trellis_planner_refresh_time') ?? '08:00';
   });
   const [isRefreshingPlanner, setIsRefreshingPlanner] = useState(false);
 
   const savePlannerRefreshEnabled = (value: boolean) => {
     setPlannerRefreshEnabled(value);
-    localStorage.setItem('echolearn_planner_refresh_enabled', String(value));
+    localStorage.setItem('trellis_planner_refresh_enabled', String(value));
   };
 
   const savePlannerRefreshTime = (value: string) => {
     setPlannerRefreshTime(value);
-    localStorage.setItem('echolearn_planner_refresh_time', value);
+    localStorage.setItem('trellis_planner_refresh_time', value);
   };
 
   return (

@@ -1,6 +1,6 @@
 import type { AppPreferences, AppSettings, ServiceResult, SupportedLocale } from '../types';
 
-const STORAGE_KEY = 'echolearn_settings';
+const STORAGE_KEY = 'trellis_settings';
 
 export const FEED_DEFAULTS = {
   postRetentionDays: 7 as number | null,

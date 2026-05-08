@@ -1,7 +1,8 @@
-# EchoLearn Roadmap (v2.0 Path)
+# Trellis Roadmap (v2.0 Path)
 
 - [x] [Milestone 1.0: Learning Loop Foundation](.planning/milestones/v1.0-ROADMAP.md) - Shipped 2026-03-25.
 - [x] [Milestone 1.1: Engagement & Discovery Iteration](.planning/ROADMAP.md) - Shipped 2026-04-02. Phases 7–16: image-forward feeds, intelligent planner auto-suggestions, cluster-aware anchor graphs, portal navigation, and LLM token pipeline optimizations.
+- [x] [Milestone 1.3: Trellis Visuals & i18n](Documents/CHANGELOG_4_16.md) - Shipped 2026-04-16. Phases 17–26: YouTube integration, weighted feed styles, web search with citations, and the SVG-based "Trellis" knowledge tree.
 
 ## Milestone 1.1+ (Continued Iteration)
 

@@ -11,8 +11,8 @@ import { questionService } from './question.service.ts';
 
 // ── Persistence ────────────────────────────────────────────────────────────
 
-const CHUNKS_KEY = 'echolearn_planner_chunks';
-const CHECKINS_KEY = 'echolearn_planner_checkins';
+const CHUNKS_KEY = 'trellis_planner_chunks';
+const CHECKINS_KEY = 'trellis_planner_checkins';
 
 function loadJson<T>(key: string, fallback: T): T {
   try {
@@ -331,7 +331,7 @@ function findLinkedConceptIds(signal: string): string[] {
 
 // ── Post lookup (avoids circular import with concept-feed.service) ─────────
 
-const POSTS_STORAGE_KEY = 'echolearn_daily_posts';
+const POSTS_STORAGE_KEY = 'trellis_daily_posts';
 
 function findClosestCachedPost(conceptIds: string[], connectionOnly: boolean): string | null {
   try {

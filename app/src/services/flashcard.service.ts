@@ -8,7 +8,7 @@ import { chatCompletion } from '../providers/llm/index.ts';
 import { questionService } from './question.service.ts';
 // Projected flashcards removed (D-02 revised: only LLM-extracted flashcards shown)
 
-const STORAGE_KEY = 'echolearn_flashcards';
+const STORAGE_KEY = 'trellis_flashcards';
 
 // Seed cards shown on first launch so the Info Flow has content before
 // any LLM sessions are processed.

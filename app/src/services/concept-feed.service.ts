@@ -28,8 +28,8 @@ import { spreadByStyle, spreadByConcept } from './feed-spread';
 export { spreadByStyle, spreadByConcept };
 import { createPromiseMutex } from './refill-mutex';
 
-const STORAGE_KEY = 'echolearn_daily_posts';
-const CONNECTION_POSTS_KEY = 'echolearn_connection_posts';
+const STORAGE_KEY = 'trellis_daily_posts';
+const CONNECTION_POSTS_KEY = 'trellis_connection_posts';
 const MAX_POSTS = 4;
 const CONTEXT_LIMIT = 10;
 
@@ -1499,7 +1499,7 @@ export const conceptFeedService = {
     if (connectionPost) return connectionPost;
     // Check video cache
     try {
-      const videoRaw = localStorage.getItem('echolearn_video_cache');
+      const videoRaw = localStorage.getItem('trellis_video_cache');
       if (videoRaw) {
         const videoCache = JSON.parse(videoRaw) as { posts?: DailyPost[] };
         const videoPost = videoCache.posts?.find((p: DailyPost) => p.id === id);
@@ -1508,7 +1508,7 @@ export const conceptFeedService = {
     } catch { /* ignore */ }
     // Check news cache
     try {
-      const newsRaw = localStorage.getItem('echolearn_news_posts');
+      const newsRaw = localStorage.getItem('trellis_news_posts');
       if (newsRaw) {
         const newsCache = JSON.parse(newsRaw) as { posts?: DailyPost[] };
         const newsPost = newsCache.posts?.find((p: DailyPost) => p.id === id);
@@ -1517,7 +1517,7 @@ export const conceptFeedService = {
     } catch { /* ignore */ }
     // Check shorts cache
     try {
-      const shortsRaw = localStorage.getItem('echolearn_short_posts');
+      const shortsRaw = localStorage.getItem('trellis_short_posts');
       if (shortsRaw) {
         const shortsCache = JSON.parse(shortsRaw) as { posts?: DailyPost[] };
         const shortsPost = shortsCache.posts?.find((p: DailyPost) => p.id === id);

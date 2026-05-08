@@ -14,10 +14,10 @@ describe('post-essay.service', () => {
     const fs = await import('node:fs');
     const source = fs.readFileSync(new URL('../../src/services/post-essay.service.ts', import.meta.url), 'utf-8');
     assert.ok(source.includes('patchPostEssayInCache'), 'post-essay.service.ts should export patchPostEssayInCache');
-    assert.ok(source.includes('echolearn_daily_posts'), 'should patch main cache');
-    assert.ok(source.includes('echolearn_video_cache'), 'should patch video cache');
-    assert.ok(source.includes('echolearn_news_posts'), 'should patch news cache');
-    assert.ok(source.includes('echolearn_short_posts'), 'should patch shorts cache');
+    assert.ok(source.includes('trellis_daily_posts'), 'should patch main cache');
+    assert.ok(source.includes('trellis_video_cache'), 'should patch video cache');
+    assert.ok(source.includes('trellis_news_posts'), 'should patch news cache');
+    assert.ok(source.includes('trellis_short_posts'), 'should patch shorts cache');
   });
 
   // POST-02: PostDetailScreen imports and calls generatePostEssay from post-essay.service

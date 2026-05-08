@@ -10,7 +10,7 @@ globalThis.localStorage = {
   clear() { this._store.clear(); },
 };
 
-const STORAGE_KEY = 'echolearn_post_queue';
+const STORAGE_KEY = 'trellis_post_queue';
 const { postQueueService } = await import('../../src/services/post-queue.service.ts');
 
 describe('derived list (GAP-1 + GAP-2)', () => {

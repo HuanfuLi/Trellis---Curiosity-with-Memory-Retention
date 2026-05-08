@@ -27,7 +27,7 @@ Object.defineProperty(globalThis, 'localStorage', {
   writable: true,
 });
 store.set(
-  'echolearn_settings',
+  'trellis_settings',
   JSON.stringify({ youtube: { apiKey: 'test-key' } }),
 );
 

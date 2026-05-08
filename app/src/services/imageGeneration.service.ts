@@ -35,7 +35,7 @@ const DEFAULT_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 // Image binary data (base64 strings) is stored in IndexedDB, not localStorage,
 // to avoid the ~5 MB localStorage cap on iOS Safari.
 
-const IDB_NAME = 'echolearn_images';
+const IDB_NAME = 'trellis_images';
 const IDB_STORE = 'images';
 const IDB_VERSION = 1;
 

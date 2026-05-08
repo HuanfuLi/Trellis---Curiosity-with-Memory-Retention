@@ -4,7 +4,7 @@
 import type { DailyPost } from '../types/index.ts';
 import { settingsService } from './settings.service.ts';
 
-const STORAGE_KEY = 'echolearn_post_history';
+const STORAGE_KEY = 'trellis_post_history';
 
 function loadPosts(): DailyPost[] {
   try {

@@ -19,7 +19,7 @@
 //
 // Zero transitive deps on i18n / locales — safe to import from any service.
 
-const POST_HISTORY_DAY_KEY = 'echolearn_api_availability_day';
+const POST_HISTORY_DAY_KEY = 'trellis_api_availability_day';
 
 // Persistence so flags survive page reload within the same day.
 // Uses localStorage directly (no postHistoryService import) to keep this

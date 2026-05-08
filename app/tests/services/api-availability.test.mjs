@@ -71,7 +71,7 @@ describe('api-availability circuit breaker', () => {
     // Seed localStorage with yesterday's day stamp.
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const yKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
-    localStorage.setItem('echolearn_api_availability_day', JSON.stringify({
+    localStorage.setItem('trellis_api_availability_day', JSON.stringify({
       day: yKey,
       youtubeDisabled: true,
       tavilyDisabled: true,

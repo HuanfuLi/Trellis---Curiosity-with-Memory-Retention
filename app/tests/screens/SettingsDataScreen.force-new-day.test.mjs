@@ -68,12 +68,12 @@ describe('SettingsDataScreen force-new-day dev affordance (Phase 36 GAP-D Fix B)
     );
   });
 
-  it('handler mutates echolearn_daily_posts.date so loadCache rejection fires symmetrically with queue rehydration', () => {
+  it('handler mutates trellis_daily_posts.date so loadCache rejection fires symmetrically with queue rehydration', () => {
     // Phase 36-15 inverts the negative regression assertion that Plan 36-13
     // added (and that round-4 UAT proved wrong). Plan 36-11's loadCache
     // date-rejection only fires on REAL midnight (where today() advances).
     // The dev button cannot advance the wall clock, so today() returns the
-    // SAME value before and after this handler runs. If echolearn_daily_posts
+    // SAME value before and after this handler runs. If trellis_daily_posts
     // is left untouched, its stored .date still equals today(), loadCache()
     // returns truthy, getDailyPosts() hits its cache-hit branch and returns
     // yesterday's served posts — the rehydrated _state.posts from
@@ -84,7 +84,7 @@ describe('SettingsDataScreen force-new-day dev affordance (Phase 36 GAP-D Fix B)
     // comparisons cannot fire when the dev button doesn't (and shouldn't)
     // advance the clock — so the handler must explicitly mutate every
     // date-stamped cache key that natural midnight rollover would have
-    // tripped. echolearn_post_queue and echolearn_daily_posts are SYMMETRIC,
+    // tripped. trellis_post_queue and trellis_daily_posts are SYMMETRIC,
     // not redundant.
     //
     // The runtime consequence (feed auto-populating from yesterday's queue
@@ -105,8 +105,8 @@ describe('SettingsDataScreen force-new-day dev affordance (Phase 36 GAP-D Fix B)
     const handlerBody = source.slice(start, next);
     assert.match(
       handlerBody,
-      /localStorage\.setItem\(['"]echolearn_daily_posts['"]/,
-      'handleForceNewDay must call localStorage.setItem(\'echolearn_daily_posts\', ...) to mutate the served-posts cache date to yesterday. Without this, loadCache()\'s parsed.date !== today() rejection (Plan 36-11) does not fire under the dev button (today() does not advance), and getDailyPosts() returns yesterday\'s served posts instead of dequeueing the rehydrated _state.posts. See round-4 sub-issue (b).',
+      /localStorage\.setItem\(['"]trellis_daily_posts['"]/,
+      'handleForceNewDay must call localStorage.setItem(\'trellis_daily_posts\', ...) to mutate the served-posts cache date to yesterday. Without this, loadCache()\'s parsed.date !== today() rejection (Plan 36-11) does not fire under the dev button (today() does not advance), and getDailyPosts() returns yesterday\'s served posts instead of dequeueing the rehydrated _state.posts. See round-4 sub-issue (b).',
     );
   });
 });

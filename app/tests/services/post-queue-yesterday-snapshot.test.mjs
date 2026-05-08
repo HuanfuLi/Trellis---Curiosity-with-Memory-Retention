@@ -23,8 +23,8 @@ globalThis.localStorage = {
   clear() { this._store.clear(); },
 };
 
-const STORAGE_KEY = 'echolearn_post_queue';
-const STORAGE_KEY_YESTERDAY = 'echolearn_post_queue_yesterday';
+const STORAGE_KEY = 'trellis_post_queue';
+const STORAGE_KEY_YESTERDAY = 'trellis_post_queue_yesterday';
 
 // Helper: today's date string in the same YYYY-MM-DD format the service uses.
 function todayStr() {

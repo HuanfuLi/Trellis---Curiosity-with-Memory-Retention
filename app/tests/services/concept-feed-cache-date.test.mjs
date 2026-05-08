@@ -1,6 +1,6 @@
 // Phase 36-11 — loadCache() rejects stale daily-posts cache.
 //
-// Validates that the served-posts cache (echolearn_daily_posts) does NOT carry
+// Validates that the served-posts cache (trellis_daily_posts) does NOT carry
 // across midnight. Yesterday's served posts have already been shown to the user;
 // rendering them again on the new day creates the round-3 sub-issue (d) where a
 // second Force-New-Day showed the previous-state served posts.

@@ -12,7 +12,7 @@ import { flashcardService } from './flashcard.service.ts';
 
 // ── Cache ──────────────────────────────────────────────────────────────────
 
-const SIGNAL_CACHE_KEY = 'echolearn_trajectory_signals';
+const SIGNAL_CACHE_KEY = 'trellis_trajectory_signals';
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 interface CachedSignals {
@@ -43,7 +43,7 @@ function isCacheValid(cached: CachedSignals): boolean {
 
 // ── Feed engagement tracking ───────────────────────────────────────────────
 
-const FEED_VIEWS_KEY = 'echolearn_feed_views';
+const FEED_VIEWS_KEY = 'trellis_feed_views';
 
 interface FeedViewEntry {
   questionId: string;

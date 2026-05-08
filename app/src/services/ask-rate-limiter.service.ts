@@ -1,6 +1,6 @@
 import { currentIntlLocale } from '../lib/date.ts';
 
-const STORAGE_KEY = 'echolearn_ask_rate_limit';
+const STORAGE_KEY = 'trellis_ask_rate_limit';
 
 interface RateLimitStore {
   count: number;

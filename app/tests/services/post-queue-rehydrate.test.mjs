@@ -25,8 +25,8 @@ globalThis.localStorage = {
   clear() { this._store.clear(); },
 };
 
-const STORAGE_KEY = 'echolearn_post_queue';
-const STORAGE_KEY_YESTERDAY = 'echolearn_post_queue_yesterday';
+const STORAGE_KEY = 'trellis_post_queue';
+const STORAGE_KEY_YESTERDAY = 'trellis_post_queue_yesterday';
 
 function todayStr() {
   const d = new Date();

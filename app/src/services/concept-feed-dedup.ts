@@ -5,7 +5,7 @@
 //
 // Persistence (added 2026-04-19, supersedes the original D-02 in-memory-only choice):
 //   - On first access in a session, lazily backfill the seen-set from videoIds present
-//     in echolearn_post_history (already persisted by postHistoryService). This makes
+//     in trellis_post_history (already persisted by postHistoryService). This makes
 //     the dedup survive page reloads and app restarts on Capacitor Android, fixing the
 //     "same YouTube video keeps reappearing on swipe-for-more" symptom.
 //   - We deliberately do NOT import postHistoryService here — that would pull
@@ -20,7 +20,7 @@
 // This module has zero transitive deps on i18n / locales bundles, so it can be
 // imported directly from `node --test` without the JSON-import-attribute chain.
 
-const POST_HISTORY_KEY = 'echolearn_post_history';
+const POST_HISTORY_KEY = 'trellis_post_history';
 
 let _seenVideoIds = new Set<string>();
 let _trackedDay: string = currentDay();
@@ -53,7 +53,7 @@ function maybeResetForNewDay(): void {
 }
 
 /**
- * Lazy backfill from echolearn_post_history. Runs once per session/day.
+ * Lazy backfill from trellis_post_history. Runs once per session/day.
  * Only seeds today's videoIds — older entries don't block today's pool.
  * Tolerates missing localStorage (node --test) and corrupted JSON.
  */

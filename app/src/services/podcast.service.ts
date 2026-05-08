@@ -7,7 +7,7 @@ import { questionService } from './question.service';
 import { chatCompletion } from '../providers/llm';
 import { synthesize } from '../providers/tts';
 
-const STORAGE_KEY = 'echolearn_podcasts';
+const STORAGE_KEY = 'trellis_podcasts';
 const audioBlobUrls = new Map<string, string>();
 
 let podcastIdCounter = Date.now();
@@ -19,7 +19,7 @@ function newPodcastId(): string {
 // Audio blobs are stored in IndexedDB instead of localStorage to avoid the
 // ~5 MB localStorage quota. IndexedDB allows hundreds of MB.
 
-const IDB_NAME = 'echolearn_audio';
+const IDB_NAME = 'trellis_audio';
 const IDB_STORE = 'blobs';
 const IDB_VERSION = 1;
 

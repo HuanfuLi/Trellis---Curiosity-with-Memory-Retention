@@ -38,8 +38,8 @@ class TestImageCacheService {
   constructor(storageImpl = new MockStorage(), maxCacheSize = 50) {
     this.storage = storageImpl;
     this.maxCacheSize = maxCacheSize;
-    this.cachePrefix = 'echolearn_image_cache_';
-    this.indexKey = 'echolearn_image_cache_index';
+    this.cachePrefix = 'trellis_image_cache_';
+    this.indexKey = 'trellis_image_cache_index';
   }
 
   async getImage(postId, style) {
@@ -192,7 +192,7 @@ test('ImageCache: cache hit updates lastAccessed timestamp', async () => {
   await cache.setImage('post-1', 'photo', testImage);
 
   const storage = cache.storage;
-  const key = 'echolearn_image_cache_post-1_photo';
+  const key = 'trellis_image_cache_post-1_photo';
   const before = JSON.parse(storage.getItem(key)).lastAccessed;
 
   // Small delay to ensure timestamp difference
@@ -273,7 +273,7 @@ test('ImageCache: handles corrupted cache entries gracefully', async () => {
   const storage = new MockStorage();
   const cache = new TestImageCacheService(storage);
 
-  const key = 'echolearn_image_cache_post-1_photo';
+  const key = 'trellis_image_cache_post-1_photo';
   storage.setItem(key, 'not valid json');
 
   const result = await cache.getImage('post-1', 'photo');

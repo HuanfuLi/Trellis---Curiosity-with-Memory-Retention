@@ -22,8 +22,8 @@ import { eventBus } from '../lib/event-bus';
 
 // ── Storage ────────────────────────────────────────────────────────────────
 
-const MOVES_KEY = 'echolearn_planned_moves';
-const LAST_REFRESH_KEY = 'echolearn_suggestions_last_refresh';
+const MOVES_KEY = 'trellis_planned_moves';
+const LAST_REFRESH_KEY = 'trellis_suggestions_last_refresh';
 
 const DAILY_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const MIN_KG_NODES = 5;

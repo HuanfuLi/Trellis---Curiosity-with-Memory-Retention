@@ -8,7 +8,7 @@ import type { DailyPost } from '../types/index.ts';
 // import is safe under node --test).
 import { spreadByConcept, spreadByStyle } from './feed-spread.ts';
 
-const STORAGE_KEY = 'echolearn_post_queue';
+const STORAGE_KEY = 'trellis_post_queue';
 // Phase 36 GAP-D Fix A (2026-05-07): durable yesterday snapshot key. The live
 // STORAGE_KEY is overwritten by the very first save() of today's queue, so a
 // single-key implementation of getYesterdayQueue() is destroyed within
@@ -17,7 +17,7 @@ const STORAGE_KEY = 'echolearn_post_queue';
 // freshState, making the warm-start path durable across multiple cold-start
 // mounts of the new day. See .planning/debug/cold-start-warm-start-fragile.md
 // and the CLAUDE.md "Numeric defaults" bullet for the durable-snapshot rationale.
-const STORAGE_KEY_YESTERDAY = 'echolearn_post_queue_yesterday';
+const STORAGE_KEY_YESTERDAY = 'trellis_post_queue_yesterday';
 // 2026-04-21 bump: refill threshold 8 → 12. refillQueue now pre-generates
 // images before enqueue (moved from pop-time to enqueue-time), so each
 // refill cycle takes longer. Triggering refill earlier (at 12 remaining

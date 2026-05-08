@@ -50,13 +50,13 @@ export function SettingsDataScreen() {
 
   const handleClearAllData = () => {
     if (!confirm(t('settings.confirm.clearAllData'))) return;
-    // Clear all echolearn_ keys from localStorage (except settings)
-    const keys = Object.keys(localStorage).filter((k) => k.startsWith('echolearn_') && k !== 'echolearn_settings');
+    // Clear all trellis_ keys from localStorage (except settings)
+    const keys = Object.keys(localStorage).filter((k) => k.startsWith('trellis_') && k !== 'trellis_settings');
     for (const k of keys) localStorage.removeItem(k);
     // Explicitly set an empty array so flashcardService doesn't auto-re-seed on next load
-    localStorage.setItem('echolearn_flashcards', '[]');
+    localStorage.setItem('trellis_flashcards', '[]');
     // Clear sessionStorage (connection post cache, etc.)
-    const sessionKeys = Object.keys(sessionStorage).filter((k) => k.startsWith('echolearn_'));
+    const sessionKeys = Object.keys(sessionStorage).filter((k) => k.startsWith('trellis_'));
     for (const k of sessionKeys) sessionStorage.removeItem(k);
     // Clear the concept feed post cache
     conceptFeedService.clearCache();
@@ -76,7 +76,7 @@ export function SettingsDataScreen() {
   // See .planning/debug/cold-start-warm-start-fragile.md for full context.
   const handleForceNewDay = () => {
     try {
-      const raw = localStorage.getItem('echolearn_post_queue');
+      const raw = localStorage.getItem('trellis_post_queue');
       if (!raw) {
         toast('No post queue to roll back. Generate some posts first.', 'info');
         return;
@@ -89,7 +89,7 @@ export function SettingsDataScreen() {
       // feed. See round-3 sub-issue (b cause #1) and Plan 36-11.
       const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
       parsed.date = yesterday;
-      localStorage.setItem('echolearn_post_queue', JSON.stringify(parsed));
+      localStorage.setItem('trellis_post_queue', JSON.stringify(parsed));
       postQueueService.loadQueue();
       // Phase 36-15 (round-4 sub-issue b storage): also mutate the served-
       // posts cache key. Plan 36-11's loadCache() rejection fires only when
@@ -114,17 +114,17 @@ export function SettingsDataScreen() {
       // mutation alone produces an empty feed. The two plans are
       // complementary, not duplicative.
       // See .planning/debug/feed-not-auto-populating-after-force-new-day.md.
-      const dailyRaw = localStorage.getItem('echolearn_daily_posts');
+      const dailyRaw = localStorage.getItem('trellis_daily_posts');
       if (dailyRaw) {
         try {
           const dailyParsed = JSON.parse(dailyRaw);
           dailyParsed.date = yesterday;
-          localStorage.setItem('echolearn_daily_posts', JSON.stringify(dailyParsed));
+          localStorage.setItem('trellis_daily_posts', JSON.stringify(dailyParsed));
         } catch {
           // Malformed cache — leave it; loadCache() will reject on parse failure anyway.
         }
       }
-      // Reset vine progress (echolearn_daily_read). On a real midnight,
+      // Reset vine progress (trellis_daily_read). On a real midnight,
       // dailyReadService.loadState() self-resets via the parsed.date !==
       // today() check, but the dev button cannot advance today() — so the
       // service still sees parsed.date === today() (real today) and never

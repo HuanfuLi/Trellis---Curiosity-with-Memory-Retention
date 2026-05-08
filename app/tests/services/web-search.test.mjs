@@ -114,10 +114,10 @@ describe('webSearch', () => {
 
   it('returns NOT_CONFIGURED error when webSearch settings key is missing', async () => {
     // Store settings without webSearch key
-    localStorage.setItem('echolearn_settings', JSON.stringify({ llm: {} }));
+    localStorage.setItem('trellis_settings', JSON.stringify({ llm: {} }));
     const result = await webSearch('test query');
     assert.equal(result.success, false);
     assert.equal(result.error?.code, 'NOT_CONFIGURED');
-    localStorage.removeItem('echolearn_settings');
+    localStorage.removeItem('trellis_settings');
   });
 });

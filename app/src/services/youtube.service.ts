@@ -24,7 +24,7 @@ interface VideoCacheEntry {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const VIDEO_CACHE_KEY = 'echolearn_video_cache';
+const VIDEO_CACHE_KEY = 'trellis_video_cache';
 
 // Quota cost: 100 units per search call (YouTube Data API v3).
 // Keep this in mind when calling searchVideos in batch.
