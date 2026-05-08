@@ -1,745 +1,274 @@
-# Feature Landscape: EchoLearn v1.1 Engagement & Discovery
+# Feature Research: Curiosity Feed v2 (Trellis v1.5)
 
-**Domain:** AI-powered personalized learning platform with social engagement elements
-**Researched:** March 2026
-**Confidence:** MEDIUM (current social/mobile UX patterns with learning-specific adaptation)
-
-## Executive Summary
-
-EchoLearn v1.1 adds four high-impact engagement features: Rednote-style image-first posts, infinite scroll feed, auto-generated Planner suggestions, and visual variety in milestone cards. These features follow proven patterns from TikTok, Rednote, Instagram, and Pinterest—but applied to learning contexts where the goal is **knowledge retention and discovery**, not viral engagement.
-
-The key insight: **Successful learning feeds balance discovery (algorithmic freshness) with signal (relevance to user trajectory)**. Image-first design improves engagement metrics by 40-60% in social apps; infinite scroll reduces friction; auto-recommendations work best when tied to learning progress, not algorithmic surprise. Visual variety prevents "design fatigue" that causes users to ignore repeated UI patterns.
-
-For v1.1, the critical path is: **Image generation → Post redesign → Infinite scroll → Auto-suggestions**. Trying to launch all simultaneously risks performance degradation and unclear feature attribution.
+**Domain:** AI-powered personalized learning feed — masonry layout, engagement signals, source diversity
+**Researched:** 2026-05-08
+**Confidence:** HIGH (verified against current library docs, 2026 UX research, Tavily API docs)
 
 ---
 
-## Table Stakes vs Differentiators vs Out-of-Scope
+## Context
 
-### Table Stakes (Must Have)
-Features users expect from a modern learning app. Missing these = product feels dated or incomplete.
+This replaces the v1.1 FEATURES.md. The existing feed (v1.4) is a single-column infinite-scroll pipeline driven by a 3-list architecture (daily concept list → derived list → 32-max cyclic queue). v1.5 adds four orthogonal capability layers on top of that foundation without replacing the pipeline.
 
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| **Image-first post display** | Social learning apps (Rednote, TikTok, Instagram) set user expectations for visual-forward design | Medium | Users won't read long text-only posts; images drive 3-5x more engagement |
-| **Infinite scroll (scroll-to-load)** | Standard mobile UX since 2010s; explicitly requested in v1.1 roadmap to replace "More" button | Low | Reduces friction; improves perceived app smoothness |
-| **Post title/description with emoji** | Rednote, TikTok, and modern learning platforms use emoji as visual hooks and tone setters | Low | Emoji = 30% better scannability in mobile feed |
-| **Spaced repetition of card designs** | Users ignore repeated UI patterns after ~5 exposures (design habituation). Milestone cards need variety | Medium | Without variety, users stop noticing milestone progress |
-| **Basic retry/regenerate button** | Users expect to reject AI suggestions and get alternatives without complex workflows | Low | Essential for maintaining trust in auto-recommendations |
+**What already exists — do not re-research, do not re-architect:**
+- 3-list pipeline: append-only derived list, cyclic walker, stratified style allocation, spreadByConcept + spreadByStyle mixers
+- 6 post styles: image / text-art / video / short / news / suggestion
+- Post-essay streaming: `post-essay.service.ts`, 150-250w LLM essays grounded on Tavily snippets
+- Exploration tracking: 3 in-feed detectors + Detector D (YouTube postMessage) + short tap-emit
+- Vine progress UI showing concepts explored today
 
-### Differentiators (Should Have)
-Features that set EchoLearn apart from competitors and deepen engagement.
+**The four v1.5 capability layers being researched:**
+1. Pinterest-style masonry feed layout
+2. Richer post body essays
+3. Source diversity in content generation
+4. Engagement signals (like / save / dismiss, local-only)
+
+---
+
+## Table Stakes (Users Expect These)
+
+Features users assume a 2026 content feed has. Missing these makes the product feel unfinished.
+
+| Feature | Why Expected | Complexity | Dependencies |
+|---------|--------------|------------|--------------|
+| **2-column masonry layout** | Pinterest, Instagram Explore, Google Discover all use variable-height 2-col grids. Single-column feels like a 2020 prototype in 2026. | MEDIUM | Replaces `InfoFlow.tsx` single-col render; must preserve all 6 post styles and scroll-position contract |
+| **Scroll-position restoration after detail view** | Standard expectation since Pinterest normalized it ca. 2018. Users tap a tile, read the detail, back-navigate, and expect to land at the same grid position — not the top. | MEDIUM | `PostDetailScreen.tsx` back-nav; always-mounted `HomeScreen.tsx` means the scroll container is never unmounted — restore scrollTop on Outlet close |
+| **Save / bookmark posts** | Rednote's "collect" gesture, Pinterest's "save to board" — users in 2026 expect to stash content for later without navigating away. Must work offline (local-first). | LOW-MEDIUM | New `savedPosts.service.ts` backed by localStorage (or SQLite); no server required |
+| **Dismiss / "not interested" per post** | TikTok, Instagram Reels, Google Discover all expose explicit dismissal. Without it, users have no recourse when a post is irrelevant; they churn silently. | LOW | Feeds into lazy-skip walker via new `dismissedPosts` set in `dailyReadService`; same mechanism as explored anchors |
+| **Loading skeleton for new tiles** | Skeleton tiles during refill prevent layout-shift jank in a variable-height masonry grid. Without them, columns reflow visibly as new items arrive. | LOW | Skeleton tiles must declare a fixed placeholder height to prevent reflow — use average tile height (220px) as placeholder |
+| **"End of content" state** | When all anchors explored, feed must surface a clear end-state rather than an empty column. Users need resolution, not confusion. Already partially handled by vine-finished path. | LOW | Connects to existing `allExplored` guard in `concept-feed.service.ts` |
+
+---
+
+## Differentiators (Competitive Advantage)
+
+Features that distinguish Trellis from generic content feeds. Aligned with the core value: structured knowledge through adaptive, privacy-preserving AI.
+
+### A. Masonry UX Patterns
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| **AI-generated images for posts** | Personalizes post imagery to user's concept (vs generic stock photos). Nano Banana or Gemini API integration | High | Image generation latency is critical; must cache. Pre-generation (daily batch) better than on-demand |
-| **Auto-generated Planner suggestions** | Algorithm recommends "next moves" based on knowledge graph growth, review gaps, and engagement patterns | High | Differentiator: Most learning apps require manual planning. Triggers on graph changes, not just time |
-| **Daily auto-refresh of suggestions** | Planner suggestions evolve as user learns; daily refresh keeps recommendations fresh without manual trigger | Medium | Requires background sync or scheduled generation; must not spam notifications |
-| **Emoji overlay on images** | Rednote signature: emoji text directly on images (not just title). Requires Canvas/image manipulation library | Medium-High | Complex but high visual impact; differentiates from traditional "title + image" design |
-| **Multi-card design system** | 3-5 distinct visual templates for milestone cards (not just color variations). Prevents design fatigue | Medium | Requires design taxonomy and template system |
-| **Smart retry patterns** | "Regenerate suggestions" with context (e.g., "different focus", "easier", "more challenging") | High | Differentiator: Context-aware regeneration > blind retry |
+| **Variable tile height reflecting content type** | Image posts taller (3:4 ratio), text-art posts shorter (1:1), suggestion cards fixed-height. Creates the "mosaic rhythm" that makes Pinterest grids feel alive vs uniform grids that feel like a spreadsheet. | MEDIUM | Height must be declared before render (masonry libraries need known heights to avoid reflow). Precompute height bucket per post type at queue-fill time. |
+| **Tap-to-expand in-place (overlay, not navigation)** | Opening a tile as a full-screen overlay with the feed frozen underneath preserves scroll position trivially — no restoration logic needed. Pinterest's actual pattern since 2022. | MEDIUM-HIGH | Conflicts with existing `PostDetailScreen.tsx` navigation model. Decision required: keep nav-based for sub-screen features (Detector A/B/C/D), or add overlay for feed-grid posts. Overlay is simpler for scroll preservation but means all detectors must work inside the overlay layer. |
+| **Smooth scroll-position restoration (nav-based fallback)** | If overlay is not chosen, save `scrollTop` in a ref on `HomeScreen` before navigating, restore it in the `[location.pathname]` useEffect that already fires on `/home` navigation (Phase 36-14 pattern). No library needed. | LOW | Simpler than overlay but user perceives a flash before restoration. Acceptable for v1.5 if overlay is deferred. |
+| **Pull-to-refresh gesture** | Standard on mobile feeds; triggers force-refill of the queue rather than a full rebuild. Gives user agency without disrupting the derived-list cycle position. | LOW-MEDIUM | Call `refillQueue()` behind `_refillMutex` (already guarded); reset visual state. Do NOT reset `derivedList` or `cyclePosition`. |
 
-### Out-of-Scope (Not Yet)
-Features to explicitly NOT build in v1.1.
+### B. Richer Post Body Essays
 
-| Out-of-Scope | Why Defer | What to Do Instead |
-|--------------|-----------|-------------------|
-| **User-generated posts** | Requires authentication, moderation, licensing agreements. v1.1 is AI-only. | Keep posts AI-generated; consider social in v2.0+ |
-| **Social sharing (external)** | Privacy-first app; users learn privately. Sharing complicates data sync and creates privacy issues | Enable local sharing via QR/export; external sharing post-v1.1 |
-| **Comments/likes/social signals** | Adds social features that compete with learning focus. Learning metrics (retention, mastery) are better signals | Use learning metrics (flashcard success rate, concept graph connections) as engagement signals |
-| **Algorithmic feed ranking** | Requires user engagement history, watch time, etc. v1.1 uses simpler deterministic ordering (graph-based) | Defer to v1.2+; focus on discovery via graph exploration |
-| **Personalized image styles** | "Generate images in Van Gogh style" requires fine-tuned models or advanced prompt engineering | Start with generic "educational illustration" style; iterate post-v1.1 |
-| **Real-time notifications** | Local-first app; no backend. Notifications would require sync. | Use local browser/OS notifications for daily Planner refresh only |
-| **A/B testing framework** | Requires server-side experimentation. Local-first makes this hard. | Collect usage metrics locally; analyze offline after each release |
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| **Progressive disclosure: 150w teaser → full essay on expand** | Research shows 150-250w is optimal for feed scan (30-45s read time). 500-1000w works for users who choose to go deeper. "Read more" expansion in-place (not navigation) matches how Substack, Medium, and Apple News work in 2026. | LOW | `post-essay.service.ts` already streams 150-250w. Add a `generateFullEssay(postId)` path that streams a follow-on 350-600w continuation, appended to `bodyMarkdown`. The detector-B 30s dwell timer already fires; repurpose as "expand offered" trigger. |
+| **Tighter Tavily source grounding** | Current news essay grounds on `sources[0].snippet`. Grounding on 2-3 snippets from different domains reduces hallucination and improves factual density. | LOW-MEDIUM | Pass `sources[0..2].snippet` joined with `---` separator into the essay prompt. No change to `refillQueue` news branch — Tavily already returns multiple results. |
+| **Citation render polish** | Numbered inline citations `[1]` linking to source URLs render inconsistently across the 4 locales and on narrow tiles. Needs a consistent superscript → tooltip or bottom-sheet pattern. | LOW | Pure UI work in `PostDetailScreen.tsx`; no pipeline touch. |
+| **Concept-connection sentence at essay end** | Each essay ends with 1 sentence linking the concept to an adjacent anchor in the user's own graph. Makes every post feel personally relevant. | MEDIUM | Requires passing `candidatePack` (graph neighbors) into the essay prompt — same context that `useQuestions.ts` uses for Ask. Adds ~100 tokens per essay call. |
 
----
+### C. Source Diversity
 
-## Rednote-Style Posts: Mechanics & Design Patterns
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| **Per-concept domain rotation** | When multiple Tavily calls are made for the same concept on different days/posts, exclude previously-seen domains using `exclude_domains` param. Prevents the same Wikipedia / Medium article from grounding every post. | LOW | Track `usedDomains: string[]` per anchor in localStorage (or SQLite). Passed as `exclude_domains` on the next Tavily call for that anchor. Tavily docs confirm `exclude_domains` is supported. |
+| **Media-type mixing within concept** | One concept gets: 1 image post (visual grounding), 1 news post (current application), 1 video (explains the mechanism), 1 text-art (pithy summary). Currently style assignment is random-stratified; intentionally balancing media types per concept reduces redundancy. | MEDIUM | Modify `appendToDerivedList` to track which styles have been used per conceptId. When same concept re-enters (via new question), prefer styles not yet seen. This is an annotation on the derived list entry, not a pipeline rebuild. |
+| **Source quality scoring (simple)** | Weight Tavily results by: (a) `score` field Tavily already returns, (b) domain not in a blocklist of low-quality aggregators. Use `search_depth='advanced'` (already returns reranked chunks). | LOW | Already free: Tavily `advanced` search depth reranks by relevance. Add `exclude_domains` blocklist for known aggregator-spam domains (listicle farms, content mills). |
+| **Near-duplicate detection across posts** | Two posts on the same concept from the same source URL produce nearly identical body text. Detect via title similarity before committing to queue. | MEDIUM | Compare `newsMeta.sources[0].url` before inserting to derived list. If same URL seen within same day for same concept, skip and re-query Tavily with `exclude_domains` extended. |
 
-### What Rednote Teaches Us
+### D. Engagement Signals (Local-Only)
 
-**Rednote** (小红书, Xiaohongshu) dominates engagement in China with a specific design language:
-- **Image prominence:** 80% of screen space to image; title/text as overlay
-- **Emoji text overlay:** Colored emoji + text directly on image (not separate title bar)
-- **Story-driven titles:** "5 concepts that blew my mind" vs generic "Concept Overview"
-- **Engagement signals:** Save/bookmark > like (Rednote users collect knowledge, not clout)
-
-**Pinterest influence:** Tall, narrow cards (1:1.3 aspect ratio) that encourage scrolling without stopping
-**Instagram Reels influence:** 15-30 second "hook" followed by depth (title → image → description layers)
-
-### EchoLearn's Adaptation
-
-For a learning app, the key is **discovery + retention**. Posts should:
-1. **Hook with image** (2-3 second visual scan)
-2. **Signal concept relevance** (emoji + title tells you if it's worth learning)
-3. **Invite engagement** (calls-to-action: "ASK more", "Add to review", "Generate image")
-
-### Recommended Layout
-
-```
-┌──────────────────────────┐
-│                          │
-│      [AI IMAGE]          │  ← 70% of card height
-│    with emoji overlay    │
-│                          │
-├──────────────────────────┤
-│ 🎯 Title (2-3 lines)     │  ← Emoji + title (table stakes)
-│ Subtitle or description  │
-├──────────────────────────┤
-│ [ASK] [Review] [Save]    │  ← Action buttons
-└──────────────────────────┘
-```
-
-### Engagement Metrics for Image-First Posts
-
-Based on social app research:
-- **Image load → click:** 3-5 seconds before user leaves (load images fast)
-- **Title scannability:** Emoji + 5-7 word titles get 40% higher engagement than titles >15 words
-- **Call-to-action (CTA):** Posts with explicit CTAs ("ASK about this", "Add to review") get 2-3x interaction
-- **Save over like:** Rednote shows saves > likes; for learning, saves = "I want to learn this later" (better signal than engagement vanity)
-
-### Visual Variety: Emoji Styles
-
-To prevent design fatigue, use 3-5 emoji "themes" that rotate:
-
-| Theme | Emoji Pattern | Best For | Example |
-|-------|--------------|----------|---------|
-| **Discovery** | 🔍🌟💡 | New concepts, unique connections | "🔍 3 Surprising Links Between Physics & Music" |
-| **Mastery** | 🎯📈🏆 | Progress, skill advancement | "🎯 10 Patterns Every Programmer Should Know" |
-| **Deep Dive** | 🌊🔬📚 | Technical depth, theory | "🌊 How Neural Networks Actually Learn" |
-| **Practical** | 🔧⚙️💻 | How-to, application, practice | "⚙️ Build a Markdown Parser in 15 mins" |
-| **Perspective** | 🤔🎨✨ | Philosophy, alternative views | "🤔 Why Simplicity Beats Complexity" |
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| **Like / heart per post** | Table stakes for any content feed in 2026. Signals "this was good" without triggering re-review. Stored locally in `savedPosts.service.ts`. Does NOT affect the SM-2 scheduling or the derived list. | LOW | localStorage key `trellis_liked_posts: Record<postId, timestamp>`. Heart icon on tile and detail view. Count is private (no social total displayed). |
+| **Save / collect post** | Higher-intent than like. Saved posts accessible in a dedicated "Saved" tab or shelf. Pinterest and Rednote showed that saves are the strongest implicit quality signal. | LOW-MEDIUM | `savedPosts.service.ts` persists full `DailyPost` objects (or IDs with re-fetch path). Accessible from a new screen or bottom-sheet. |
+| **Dismiss ("not interested")** | Explicit negative signal. Suppresses the concept from the feed for the rest of the day (same mechanism as `getExploredAnchors` lazy-skip in the walker). Long-press menu or swipe-left gesture reveals dismiss action. | LOW | Write conceptId to `dailyReadService.dismissedAnchors` (new field, parallel to `exploredAnchors`). Walker already lazy-skips by id — extend `walkDerivedList` to accept a second skip-set. |
+| **"Less of this" style signal** | User can signal "I get too many image posts" or "too many news posts." Adjusts `STYLE_WEIGHTS` in localStorage for future sessions. Graph-based: if user dismisses 3+ news posts in a row, reduce news weight by 10%, redistribute to other styles. | MEDIUM | New `feedPreferences.service.ts` persists per-style weight adjustments. `style-assignment.ts` reads from this service before running largest-remainder allocation. Keep base weights as floor (no style drops below 5%). |
+| **Graph-derived social proof** | Show "4 of your anchors connect to this concept" as a sub-label on tiles. This is deterministic from the local knowledge graph — no server needed. Gives "others like you" feeling authentically without any privacy risk. | LOW-MEDIUM | Compute connection count at queue-fill time using `candidatePack` neighbor resolution. Store as `connectionCount: number` on `DailyPost`. Render as micro-label "4 connections" below tile title. |
+| **"Trending in your graph" shelf** | A horizontal shelf above the feed showing 3-5 anchors with the most review activity this week. Entirely local: computed from `reviewHistory` in SQLite. Feels like social proof; is actually personal analytics. | MEDIUM | New `localTrending.service.ts` reads review history, groups by anchor, ranks by recency × frequency. Rendered as a horizontal chip row above the masonry grid. |
 
 ---
 
-## Infinite Scroll (Scroll-to-Load) Patterns
+## Anti-Features (Deliberately NOT Building)
 
-### How It Works
-
-Traditional pagination: User clicks "More" → loads next batch.
-**Infinite scroll:** User scrolls to 80% of visible area → automatically loads next batch.
-
-### UX Implementation
-
-**Current state (v1.0):** "Load More" button at bottom of feed.
-**v1.1 target:** Scroll to trigger load (no button).
-
-```typescript
-// Pseudocode
-const handleScroll = (event) => {
-  const scrollTop = event.target.scrollTop;
-  const scrollHeight = event.target.scrollHeight;
-  const clientHeight = event.target.clientHeight;
-  
-  // Trigger at 80% scroll depth
-  if (scrollTop + clientHeight > scrollHeight * 0.8) {
-    loadMorePosts();
-  }
-};
-```
-
-### Best Practices
-
-| Practice | Why | Implementation |
-|----------|-----|-----------------|
-| **Load at 80% scroll depth** (not 100%) | Gives buffer before user hits bottom; feels natural | Virtual scroll library like `react-window` or `tanstack/react-virtual` |
-| **Show loading skeleton** | Users see work happening; prevents "did anything load?" confusion | Skeleton card with blinking animation above fold |
-| **Batch size: 10-15 posts** | Balances UX responsiveness (faster loads) with server efficiency (fewer requests) | Document batch size in API contracts |
-| **Debounce scroll handler** | Scroll fires 10-20x/sec; prevent thrashing | `useCallback` with throttle/debounce utility |
-| **Preserve scroll position on back/forward** | User scrolls to post #47, taps post, goes back → should land near #47, not top | Use `key` on list items; consider scroll restoration lib |
-| **Avoid "scroll to top" on new content** | Common mistake: new posts load at top, push user down; disorienting | Always append to bottom; or preserve scroll position |
-
-### Common Pitfalls
-
-| Pitfall | Why It Happens | Prevention |
-|---------|----------------|-----------|
-| **Loading loop (endless load)** | Network throttled; fetch never completes; `useEffect` re-triggers | Add timeout; abort fetch on unmount; set loading state |
-| **Scroll jank** | Re-rendering entire list each load; forces layout recalculation | Use virtualization library; memoize post items |
-| **"Scroll to bottom on mobile" trap** | Mobile keyboard or OS chrome pushes scroll point; triggers load when shouldn't | Account for viewport height changes; test on actual devices |
-| **Missing fallback for old browsers** | Intersection Observer not supported everywhere | Polyfill or fallback to scroll listener |
-| **No "end of feed" signal** | Feed looks infinite; users don't know when they've seen everything | Show "You've learned all available content" after last batch |
-| **Performance degrades as list grows** | After 100+ items, re-renders slow on mid-range Android | Use `react-window` or similar; or implement server-side pagination with "page" tokens |
-
-### Recommended Library Stack
-
-For v1.1, choose **one** of:
-
-1. **`react-window` + custom scroll handler** (popular, lightweight)
-   - Pros: Small bundle, simple API, good for 100s of items
-   - Cons: Manual scroll detection; no built-in infinite scroll
-
-2. **`react-intersection-observer` + Intersection Observer API** (modern, native)
-   - Pros: Native browser API; performant; great mobile support
-   - Cons: IE11 needs polyfill (acceptable for v1.1)
-   - Best for: Responsive load triggers without manual scroll math
-
-3. **TanStack Query (React Query)** (full pagination/caching suite)
-   - Pros: Built-in caching, refetch logic, background updates
-   - Cons: Overkill for simple infinite scroll; adds bundle size
-   - Best for: Complex refresh scenarios or multi-source feeds
-
-**Recommendation for v1.1:** Use `react-intersection-observer` with a sentinel element at the bottom of the list:
-
-```tsx
-// In feed component
-const { ref: endRef } = useInView({
-  onInView: () => loadMore(), // Fires when sentinel becomes visible
-  threshold: 0.1,
-});
-
-return (
-  <div>
-    {posts.map(post => <PostCard key={post.id} post={post} />)}
-    {isLoading && <LoadingSkeleton />}
-    <div ref={endRef} /> {/* Sentinel element */}
-  </div>
-);
-```
+| Feature | Why Requested | Why Not | What to Do Instead |
+|---------|--------------|---------|-------------------|
+| **Engagement counts / social totals** | "Show how many people liked this" creates social-proof loops | Requires a backend and breaks local-first privacy. Also shifts focus from learning to performance anxiety. | Show only personal saves/likes. The "trending" shelf derives from the user's own graph, not a crowd. |
+| **Horizontal swipe to dismiss** | Familiar from Tinder / news apps | Trellis feed is inside a horizontal SwipeTabContainer strip. Horizontal swipe on a feed tile is **indistinguishable** from the inter-tab swipe gesture. This is the exact gesture conflict class that Phase 33 UAT-4 documented. Any horizontal swipe within the feed MUST be left to the tab strip. | Use long-press contextual menu for dismiss (Material Design pattern: swipe-to-reveal for dismiss in lists ONLY when the container is vertically-only, which the SwipeTabContainer is not). |
+| **Pull-to-top on new posts** | "Show newest first" is intuitive | Destroys the 3-list pipeline's derived-list append-only semantics and cyclePosition. Rebuilding derived list from scratch loses multiplicity weights and cycle state. | Pull-to-refresh should trigger `refillQueue` (adds to queue end) not rebuild. New posts surface naturally as the walker advances. |
+| **A/B testing style weights** | "What style mix performs best?" | Requires server-side experiment assignment and aggregated telemetry. Incompatible with local-first privacy. | Ship the `feedPreferences.service.ts` "less of this" adjustment. Let users self-select their mix over time. |
+| **Infinite "lazy load everything" tile heights** | CSS-only masonry with `grid-template-rows: masonry` | CSS Grid Lanes shipped in Safari 26 only as of May 2026; Chrome/Firefox behind flags. Not viable for Capacitor's embedded Chromium WebView (WebView version lags Chrome stable by weeks-months). | Use `masonic` (virtualized, interval-tree backed, ResizeObserver aware) or `react-masonry-css` (CSS columns fallback, no virtualization). |
+| **Runtime LLM translation of essay bodies** | "Translate this post to Japanese on tap" | Prohibited by CLAUDE.md (i18n rule: runtime LLM translation is prohibited). LLM essays are already generated in the user's locale via `applyLocaleDirective`. | Essays are already locale-directed at generation time. No translation layer needed. |
+| **Near-real-time "others explored" signals** | Social proof via server-aggregated signals | No backend, no server. Any "others explored" data would require exfiltrating user behavior, which violates the core privacy promise. | Use graph-derived local social proof ("4 of your anchors connect to this") and local trending from review history. |
+| **Engagement counts influencing SM-2 scheduling** | "If I liked a post, reduce its review interval" | Like/save on a post is not equivalent to recall success on a flashcard. Conflating the two would corrupt the SM-2 model that drives the daily concept list. | Likes and saves are purely personal annotations. Review performance exclusively controls SM-2. |
 
 ---
 
-## Auto-Generated Planner Suggestions: Workflow & Triggers
-
-### Current State
-In v1.0, Planner shows manual "moves" (chunks to learn, reviews to do). Users must manually plan.
-
-### v1.1 Target: Algorithmic Suggestions
-When knowledge graph grows, system auto-suggests "what to learn next" based on:
-- **Graph structure:** Isolated nodes (orphans) need connection moves
-- **Review gaps:** Concepts not reviewed in 7+ days (due for SRS)
-- **Learning trajectory:** Topics related to user's recent questions
-- **Time constraints:** Prioritize high-leverage concepts (those that enable many others)
-
-### Trigger Conditions
-
-| Trigger | Timing | Logic |
-|---------|--------|-------|
-| **On graph change** | Whenever user creates concept, link, or Q&A | Run suggestion algorithm; check if recommendations differ from previous batch |
-| **Daily refresh** (optional) | Once per 24 hours at app open or scheduled time | Keep suggestions fresh without requiring user action |
-| **On SRS gap** | When a card is due for review but user hasn't done it for 3+ days | Promote high-priority reviews to Planner |
-| **Post-ASK** | After user completes a Q&A session | Suggest related learning (e.g., "Learn concept X mentioned by your answer") |
-| **On review completion** | After user reviews a card with 80%+ confidence | Suggest progression (e.g., "Ready for advanced concept Y") |
-
-### Algorithm Sketch
-
-```pseudo
-// Executed whenever suggestions are triggered
-function generateSuggestions():
-  1. Identify graph structure:
-     - Orphan nodes (degree < 2) → "Connect concept X to your graph"
-     - Clusters (isolated subgraphs) → "Bridge concept Y to cluster Z"
-  
-  2. Prioritize by leverage:
-     - Sort by # of concepts that depend on this concept
-     - High leverage = teach this first
-  
-  3. Consider review due dates:
-     - Concepts due for SRS review today → promote to "Review" move
-     - Concepts due in 2-3 days → add to suggestion queue
-  
-  4. Diversify suggestions:
-     - Don't recommend all from one cluster
-     - Mix: 40% graph-based, 40% review-based, 20% exploration
-  
-  5. Limit output:
-     - Show 3-5 suggestions (too many = paralysis)
-     - Allow pagination (see more suggestions)
-```
-
-### Suggestion Types
-
-| Type | Example | When to Trigger |
-|------|---------|-----------------|
-| **Connection** | "Link 'React Hooks' to 'State Management'" | Orphan or low-connectivity node detected |
-| **Review** | "Review 'Async/Await' (due today)" | SRS due date reached |
-| **Explore** | "Discover 'Functional Programming' (related to your recent learns)" | User showed strong performance in related area |
-| **Deepen** | "Advanced: 'React Performance Optimization'" | User completed all basics; ready for depth |
-| **Catch-up** | "Review 'Callbacks' (not reviewed in 10 days)" | Decay threshold exceeded |
-
-### UI/UX: Suggestion Card Design
+## Feature Dependencies
 
 ```
-┌─────────────────────────────────┐
-│ 🎯 Your Next Move               │
-├─────────────────────────────────┤
-│ Connection                      │
-│ "Link 'State' to 'React'"       │  ← Emoji + suggestion title
-│                                 │
-│ Why: Closes gap in your graph  │  ← Brief reasoning (builds trust)
-│ Difficulty: Medium              │  ← Set expectations
-│                                 │
-│ [Start Learning] [Skip] [Why?]  │  ← Actions: engage, dismiss, explain
-├─────────────────────────────────┤
-│ 2 more suggestions available    │  ← Pagination hint
-└─────────────────────────────────┘
+[2-column masonry layout]
+    └──requires──> [Tile height declarations per post type] (at queue-fill time)
+    └──requires──> [Scroll-position restoration] (trivial if overlay chosen, ref-save if nav)
+
+[Dismiss ("not interested")]
+    └──requires──> [walkDerivedList skip-set extension] (already lazy-skip capable)
+    └──requires──> [dailyReadService.dismissedAnchors] (new field, parallel to exploredAnchors)
+
+["Less of this" style signal]
+    └──requires──> [feedPreferences.service.ts] (new leaf module)
+    └──requires──> [style-assignment.ts reads external weights] (currently uses STYLE_WEIGHTS constant)
+    └──enhances──> [Dismiss] (style dismissal = per-style weight adjustment)
+
+[Save / bookmark]
+    └──requires──> [savedPosts.service.ts] (new service)
+    └──enhances──> [Like / heart] (saves are a superset of likes in intent)
+
+[Graph-derived social proof]
+    └──requires──> [candidatePack neighbor count at queue-fill time]
+    └──enhances──> [2-column masonry layout] (micro-label on tile)
+
+["Trending in your graph" shelf]
+    └──requires──> [localTrending.service.ts] (new service reading SQLite review history)
+    └──enhances──> [Graph-derived social proof] (same "local analytics" framing)
+
+[Progressive disclosure: teaser → full essay]
+    └──requires──> [post-essay.service.ts continuation path] (new function, not new file)
+    └──enhances──> [Citation render polish] (full essay has more citations to render)
+
+[Per-concept domain rotation]
+    └──requires──> [usedDomains tracking per anchor] (new field in anchor metadata or localStorage)
+    └──enhances──> [Near-duplicate detection] (same URL check is simpler than domain rotation)
+
+[Tighter Tavily source grounding]
+    └──enhances──> [Richer essays] (more grounding = less hallucination)
+    └──conflicts──> [Per-concept domain rotation] (grounding on 2-3 snippets must respect exclude_domains)
+
+[Media-type mixing within concept]
+    └──requires──> [appendToDerivedList style-per-concept tracking] (new annotation on DerivedListEntry)
+    └──enhances──> [Stratified style allocation] (already guaranteed ±1 per style per N; this adds per-concept fairness)
 ```
 
-### Retry/Regenerate Patterns
+### Dependency Notes
 
-**User journey:**
-1. Sees suggestion "Learn React Hooks"
-2. Clicks [Skip] because they already know it
-3. App shows [Regenerate] button
-4. User clicks → API re-runs algorithm, excludes React Hooks
-5. New suggestion appears
-
-**Variants:**
-
-| Variant | When | UX |
-|---------|------|-----|
-| **Blind regenerate** | User clicks "Get different suggestion" | Algorithm re-runs; may return same suggestion (acceptable) |
-| **Context-aware regen** | User selects "Too easy", "Too hard", "Already know" | Algorithm applies constraint; next suggestion adjusts difficulty/familiarity |
-| **Defer suggestion** | User clicks "Show me in 3 days" | Suggestion hidden; re-surfaces in 3 days if still valid |
-| **Batch regenerate** | User clicks "Refresh all suggestions" | All 3-5 suggestions re-run simultaneously; partial refresh |
-
-**Recommendation:** Support context-aware regeneration to build trust. UI:
-
-```
-[Regenerate ▼]
-
- ▼ I already know this
-   ▼ Too easy
-   ▼ Too hard
-   ▼ Not interested right now
-```
-
-### Integration with Image Generation
-
-**Opportunity:** When suggesting "Learn X concept", auto-generate a visual preview:
-
-```
-Suggestion: "Learn Recursion"
-[AI-generated visual: tree diagram showing recursion depth]
-[ASK more] [Add to review] [Skip]
-```
-
-This bridges Post design (image-forward) with Planner (algorithmic).
+- **Masonry layout requires tile height declarations:** Unlike CSS Grid equal-height rows, masonry needs column heights to compute placement. Height must be knowable before render to avoid reflow. Each post type must map to a height bucket (image: tall, text-art: medium, suggestion: short). This is data at queue-fill time, not layout-time measurement.
+- **Dismiss requires walkDerivedList extension:** The walker already accepts `exploredIds: Set<string>`. Extending it to `skipIds: Set<string>` (union of explored + dismissed) is a one-line change with zero pipeline impact.
+- **"Less of this" style signal requires style-assignment.ts to read external weights:** Currently `STYLE_WEIGHTS` is a compile-time constant. Extracting the weights to a function that reads from `feedPreferences.service.ts` makes `style-assignment.ts` impure — the leaf module must be re-evaluated. Add the leaf module as a dependency injection parameter rather than a direct import to keep unit tests deterministic.
+- **Progressive disclosure must NOT disrupt the `bodyMarkdown: ''` invariant:** The existing CLAUDE.md invariant says `bodyMarkdown: ''` causes `PostDetailScreen` to invoke the streamer. The continuation path must check `bodyMarkdown.length > 0` before appending — it is a second-phase call, not a replacement of the first.
 
 ---
 
-## Milestone Card Design: Visual Variety System
+## MVP Definition for v1.5
 
-### Problem: Design Habituation
+### Launch With (must close before v1.5 ships)
 
-Users stop noticing repeated UI patterns after ~5 exposures. For milestone cards (progress celebrations), repetition kills impact. **Solution:** Design taxonomy with 3-5 distinct templates that rotate.
+- [ ] **2-column masonry layout with fixed tile height buckets** — visual foundation for everything else; without it the milestone's leading feature doesn't exist
+- [ ] **Scroll-position restoration (ref-save pattern)** — table stakes for any masonry grid; trivially implemented via the Phase 36-14 `[location.pathname]` useEffect already on `HomeScreen`
+- [ ] **Save / bookmark posts** — table stakes in 2026; `savedPosts.service.ts` + heart/bookmark icons on tile and detail
+- [ ] **Dismiss ("not interested")** — table stakes; extends existing `walkDerivedList` skip mechanism; no pipeline risk
+- [ ] **Teaser → full essay progressive disclosure** — differentiator; `post-essay.service.ts` continuation path; low risk
 
-### Card Design Templates
+### Add After Validation (v1.5.x)
 
-#### Template 1: "Progress Bar" (Linear progression)
-```
-┌────────────────────────┐
-│  🎓 Mastered: React    │
-│                        │
-│  ████████░░ 80%       │  ← Visual progress
-│  Completed 12/15      │
-│                        │
-│  [View Details]        │
-└────────────────────────┘
-```
-**Best for:** Tracking single concept mastery. **Emoji theme:** 🎯📈
+- [ ] **"Less of this" style signal** — needs `feedPreferences.service.ts` and style-assignment impurity; worth validating dismiss first
+- [ ] **Graph-derived social proof ("N connections" micro-label)** — differentiator; requires candidatePack at queue-fill time; validate masonry tile design first
+- [ ] **Per-concept domain rotation** — needs `usedDomains` tracking; validate essay quality improvement first
+- [ ] **Tighter Tavily source grounding (2-3 snippets)** — low risk change to essay prompt; add after validating existing stream path is stable
 
-#### Template 2: "Graph Burst" (Concept connections)
-```
-┌────────────────────────┐
-│    🌟 Connected!       │
-│                        │
-│    [React] ─── [State] │  ← Connection diagram
-│       └──────[Hooks]   │
-│                        │
-│  3 new relationships   │
-│     [Explore graph]    │
-└────────────────────────┘
-```
-**Best for:** Graph milestones (# of connections, new clusters). **Emoji theme:** 🌟🔗
+### Future Consideration (v1.6+)
 
-#### Template 3: "Time Capsule" (SRS milestone)
-```
-┌────────────────────────┐
-│   📚 Long-term Memory  │
-│                        │
-│   'REST APIs'          │
-│   First learned: 45d   │  ← Memory persistence
-│   Reviewed: 12 times   │
-│                        │
-│   [Review again]       │
-└────────────────────────┘
-```
-**Best for:** SRS milestones (X days since first learn, Y reviews completed). **Emoji theme:** 📚⏰
-
-#### Template 4: "Skill Tree" (Prerequisite unlocks)
-```
-┌────────────────────────┐
-│   🗝️ New Path Unlocked  │
-│                        │
-│   [Basics] ───→ [Next] │  ← Progression path
-│                        │
-│   You can now learn:   │
-│   • Advanced Closures  │
-│   • Composition        │
-│                        │
-│   [Explore]            │
-└────────────────────────┘
-```
-**Best for:** Learning path progression, prerequisite unlocks. **Emoji theme:** 🗝️🏆
-
-#### Template 5: "Insight" (Conceptual breakthrough)
-```
-┌────────────────────────┐
-│   💡 Insight Unlocked  │
-│                        │
-│   Connection found:    │
-│   Monads = Functors    │
-│   (via Haskell theory) │  ← Cross-domain insight
-│                        │
-│   [Learn more]         │
-└────────────────────────┘
-```
-**Best for:** Cross-domain connections, "aha" moments. **Emoji theme:** 💡✨
-
-### Rotation Strategy
-
-**Simple approach:** Cycle through templates in order: 1 → 2 → 3 → 4 → 5 → 1 → ...
-
-**Smart approach:** Match template to milestone type:
-- **Concept mastery** → Template 1 (Progress Bar)
-- **Graph growth** → Template 2 (Graph Burst)
-- **SRS milestone** → Template 3 (Time Capsule)
-- **Learning path** → Template 4 (Skill Tree)
-- **Cross-domain link** → Template 5 (Insight)
-
-**Code structure:**
-
-```typescript
-type MilestoneTemplate = 
-  | 'progress-bar'      // Single concept mastery
-  | 'graph-burst'       // Connection milestone
-  | 'time-capsule'      // SRS long-term memory
-  | 'skill-tree'        // Path progression
-  | 'insight';          // Cross-domain insight
-
-function getMilestoneTemplate(milestone: Milestone): MilestoneTemplate {
-  if (milestone.type === 'concept_mastery') return 'progress-bar';
-  if (milestone.type === 'connection_count') return 'graph-burst';
-  if (milestone.type === 'srs_long_term') return 'time-capsule';
-  if (milestone.type === 'path_progression') return 'skill-tree';
-  if (milestone.type === 'cross_domain_link') return 'insight';
-}
-```
+- [ ] **"Trending in your graph" shelf** — requires SQLite review history aggregation; valuable but not blocking
+- [ ] **Tap-to-expand overlay (vs nav-based detail)** — architectural change to PostDetailScreen navigation model; replaces 4 detectors; significant scope
+- [ ] **Media-type mixing within concept** — requires derived list annotation system; deferred until append-only semantics are proven stable across multi-week usage
+- [ ] **Citation render polish** — pure UI work; not blocking v1.5 launch
 
 ---
 
-## User Engagement Metrics: What Matters in Learning Apps
+## Feature Prioritization Matrix
 
-### Vanity Metrics to Ignore
-- Total posts viewed (doesn't mean learning happened)
-- Feed scroll time (users scroll mindlessly)
-- Total taps/clicks (high engagement ≠ learning)
-
-### Core Engagement Metrics to Track
-
-| Metric | Why It Matters | Healthy Target | Red Flag |
-|--------|---------------|----------------|----------|
-| **Post → ASK conversion** | Posts that lead to questions = active learning signal | 5-15% of posts viewed | <1%: posts not relevant |
-| **Post → Review add** | Users adding concepts to review = intention to learn | 8-12% of posts viewed | <2%: cards not trusted |
-| **ASK completion rate** | Users finishing Q&A sessions vs abandoning mid-session | 70-80% completion | <50%: questions too hard or UX friction |
-| **Review session length** | How many cards reviewed per session | 10-15 cards/session avg | <3: low motivation or cards too hard |
-| **Review performance (SR pass rate)** | % of reviews with "I knew this" response | 75-85% pass rate | <60%: card generation quality issue |
-| **Milestone celebration rate** | % of milestones actually viewed/acknowledged | 60-80% | <40%: milestones buried or not salient |
-| **Planner suggestion acceptance** | % of auto-suggestions user acts on | 30-50% | <10%: suggestions not relevant |
-| **Suggestion retry rate** | When user rejects suggestion, do they regenerate or skip? | 40-60% retry | >70% retry: suggestions missing nuance |
-| **Graph growth rate** | New concepts added per week | 2-5 new concepts/week | <1: app not driving discovery |
-| **Knowledge retention (SRS decay)** | Long-term recall success after 30+ days | >70% recall | <60%: review scheduling miscalibrated |
-
-### Secondary Metrics (Track But Don't Obsess)
-- **Session frequency** (days/week user opens app)
-- **Session duration** (avg time per session)
-- **Feature adoption** (% using Planner vs just ASK)
-- **Cross-feature usage** (users who use ASK + Review + Graph are stickier)
-
-### Engagement Signals by Feature
-
-| Feature | Key Metric | Acceptable | Concerning |
-|---------|-----------|-----------|-----------|
-| **Image-first posts** | View-to-click rate | 8-15% | <3% (image not compelling) |
-| **Infinite scroll** | Scroll depth (% reaching 80%) | 40-60% | <20% (feed fatigue) |
-| **Planner suggestions** | Acceptance rate | 30-50% | <10% (irrelevant) |
-| **Emoji overlays** | Title scannability (read time) | <2 sec | >3 sec (emoji distracting) |
-| **Milestone cards** | View rate | 70-90% | <50% (not salient) |
+| Feature | User Value | Implementation Cost | Priority |
+|---------|------------|---------------------|----------|
+| 2-column masonry layout | HIGH | MEDIUM | P1 |
+| Scroll-position restoration | HIGH | LOW | P1 |
+| Save / bookmark | HIGH | LOW | P1 |
+| Dismiss ("not interested") | HIGH | LOW | P1 |
+| Teaser → full essay | MEDIUM | LOW | P1 |
+| Tile height buckets (per post type) | HIGH | LOW | P1 (blocking masonry) |
+| Like / heart | MEDIUM | LOW | P2 |
+| Graph-derived social proof | MEDIUM | MEDIUM | P2 |
+| Per-concept domain rotation | MEDIUM | LOW | P2 |
+| Tighter Tavily grounding | MEDIUM | LOW | P2 |
+| "Less of this" style signal | MEDIUM | MEDIUM | P2 |
+| "Trending in your graph" shelf | LOW | MEDIUM | P3 |
+| Tap-to-expand overlay | HIGH | HIGH | P3 |
+| Media-type mixing within concept | MEDIUM | HIGH | P3 |
+| Citation render polish | LOW | LOW | P3 |
+| Pull-to-refresh | LOW | MEDIUM | P3 |
 
 ---
 
-## Feature Dependencies & Phasing
+## Engagement Signals: What Is Table Stakes vs Differentiator in 2026
 
-### Critical Path: What Must Ship First?
+Research confirms the following hierarchy as of 2026 (sources: platform algorithm documentation, 2026 UX trend reports):
 
-```
-Phase 1: Image Generation
-  ↓
-Phase 2: Post Redesign (image-first layout + emoji titles)
-  ↓
-Phase 3: Infinite Scroll
-  ↓
-Phase 4: Auto-Generated Suggestions
-  ↓
-Phase 5: Milestone Card Variety + Daily Refresh
-```
+**Ranking of signal quality (strongest → weakest):**
+1. **Save / bookmark** — strongest positive signal; indicates user wants to return (Pinterest, Rednote, LinkedIn all weight this above likes)
+2. **Dwell time / completion** — already tracked via Detector B (30s) and scroll-70% sentinel; no new infra needed
+3. **Follow-up action** (Q&A, review add) — already tracked via Detector C; highest-intent signal
+4. **Dismiss / "not interested"** — strongest negative signal; more actionable than absence of engagement
+5. **Like / heart** — weakest positive signal in 2026; algorithms de-weight it vs saves; still expected as table stakes
+6. **Explicit rating** (1-5 stars, thumbs up/down with reason) — differentiator for research/productivity apps; anti-feature for casual feeds (introduces friction before user decides to invest attention)
 
-### Why This Order?
+**Local-only social-proof approaches (ranked by authenticity vs engineering cost):**
 
-| Dependency | Reason | Risk If Out of Order |
-|------------|--------|---------------------|
-| **Image generation before post redesign** | Post redesign expects images; can't display without generation. Placeholder images look unfinished. | Spend weeks on UI; learn images can't be generated fast enough; redesign backwards |
-| **Post redesign before infinite scroll** | Infinite scroll logic is independent; but redesigned posts have different height/layout, affecting scroll math | Scroll triggers at wrong points; poor UX |
-| **Infinite scroll before auto-suggestions** | Suggestions appear in Planner (not feed); but feed redesign sets engagement baseline for measuring suggestion impact | Miss baseline; can't measure suggestion effectiveness |
-| **Suggestions before card variety** | Both improve engagement, but separate. Suggestions first; card variety can follow in v1.1.1 hotfix | Slight reordering OK; but suggestions have higher impact |
-
-### Minimal v1.1 MVP (Phase 1-3)
-- ✅ AI image generation (with caching)
-- ✅ Post redesign (image + emoji title + new layout)
-- ✅ Infinite scroll (scroll-to-load)
-- ⚠️ Planner suggestions (lower priority, but high impact)
-- ❌ Daily refresh (can add in v1.1.1)
-- ❌ Milestone card variety (visual polish, not core)
-
-### v1.1.1 Polish (Post-Launch)
-- ✅ Daily auto-refresh of suggestions
-- ✅ Context-aware regenerate (easy, too hard, already know)
-- ✅ Milestone card template variety (5 designs)
-- ✅ Emoji overlay on images (advanced, but high visual impact)
+1. **Graph-derived connection count** (e.g., "4 of your anchors connect to this concept") — computed from local knowledge graph, 100% accurate, zero privacy risk, medium engineering. RECOMMENDED.
+2. **Local trending from review history** ("You've revisited this concept 5 times this week") — computed from SQLite, personal analytics framed as trending, zero privacy risk. RECOMMENDED for the shelf feature.
+3. **Synthetic "recommended for you" label** — deterministic from SM-2 due dates and anchor importance; already how the pipeline works. ALREADY IMPLEMENTED (just unlabeled). Add a "why this post" tooltip/label.
+4. **Crowd-sourced trending** — requires backend, violates local-first. ANTI-FEATURE.
 
 ---
 
-## Rednote-Style Post Example: Concrete Design
+## Word Count Norms for Educational Content (2026 Research)
 
-### Concept: "How to Debug Async Code"
+Based on current educational content research:
 
-#### v1.0 Design (Current)
-```
-┌────────────────────────────┐
-│   How to Debug Async Code  │  ← Plain text title
-│                            │
-│   [Generic code image]     │
-│                            │
-│   JavaScript debugging...  │  ← Long description
-│   ...more description text │
-│   ...even more...          │
-│                            │
-│   [More]                   │  ← Button to load more
-└────────────────────────────┘
-```
+- **Feed tile body (scan):** 150-250 words, 30-45 second read time. This is what `post-essay.service.ts` already produces. Correct for feed context.
+- **On-expand continuation (depth):** 350-600 additional words (total 500-850w). Users who expand have signaled intent; 500-850w matches newsletter and Substack educational content norms.
+- **Long-form deep dive (optional):** 1,500-3,000 words. Out of scope for v1.5 — this is article-length content, not feed content.
 
-#### v1.1 Design (Rednote-Style)
-```
-┌────────────────────────────┐
-│                            │
-│   [AI-GENERATED IMAGE]     │
-│   Showing async flow       │
-│   with debug breakpoints   │
-│   🐛 5 Debugging Patterns   │  ← Emoji overlay text
-│   for Async Code          │
-│                            │
-├────────────────────────────┤
-│ 🐛 5 Debugging Patterns    │  ← Title with emoji
-│    for Async Code         │
-│ Learn how to spot and fix  │  ← 1-line description
-│ async timing issues        │
-│                            │
-│ [ASK] [Review] [Save]      │  ← Action buttons (no "More")
-└────────────────────────────┘
-```
-
-**Differences:**
-- 70% screen real estate → image (vs 30% before)
-- Emoji on image (visual hook, faster scanning)
-- Title + 1-line description (vs full description)
-- Action buttons (invite engagement)
-- No "More" button (infinite scroll handles it)
+**"Read more" expansion is still the dominant pattern in 2026** for educational/informational feeds. It is NOT out of fashion. Apple News, Substack, and Medium all use it. The key is: expansion must be in-place (no navigation away from feed context), and the transition must feel instant (no LLM latency visible — progressive streaming into an expanded container is the right approach).
 
 ---
 
-## Best Practices: Learning App Engagement
+## Masonry Library Recommendation
 
-### Do ✅
-1. **Make images relevant to concept** (not just decorative)
-   - Image should illustrate core concept or spark curiosity
-   - Generic stock photos < AI-generated contextual visuals
+**Use `masonic` (jaredLunde) for production.**
 
-2. **Use emoji strategically** (not as filler)
-   - 1-2 emoji per title; themed consistently (🎯 for mastery, 💡 for insight)
-   - Emoji improves 30% scannability; overuse (>3) reduces it
+Rationale:
+- Virtualized via red-black interval tree (O(log n + m) cell lookup); renders ~40-50 DOM nodes regardless of item count
+- ResizeObserver-based: handles variable-height cells without forcing full reflows
+- React 18+ compatible; no known incompatibility with Capacitor WebView
+- Actively maintained as of 2025 (npm: `masonic`)
 
-3. **Keep titles short** (5-8 words)
-   - "Learn JavaScript" (4 words) ✅
-   - "An In-Depth Look at How JavaScript Works and Why It's Important" ❌ (too long)
+**Do NOT use CSS Grid Lanes (`grid-template-rows: masonry`)** — Safari 26 shipped it but Chrome/Firefox are behind experimental flags as of May 2026. Capacitor's embedded Chromium WebView lags Chrome stable, making this unreliable for the Android target.
 
-4. **Show reasoning** (for suggestions)
-   - "Review 'React Hooks' (due today)" > "Review 'React Hooks'"
-   - Users trust suggestions they understand
-
-5. **Batch suggestions** (3-5, not 10+)
-   - Too many choices = paralysis
-   - 80/20 rule: 80% of value from top 3-5 suggestions
-
-6. **Make retry frictionless**
-   - 1 click to regenerate (not multi-step modal)
-   - Show result immediately (no reload)
-
-7. **Celebrate milestones visually**
-   - Don't bury in a list; show as full-screen moments or prominent cards
-   - Celebration > announcement
-
-### Don't ❌
-1. **Auto-scroll users to top on new posts** (disorienting)
-2. **Load new posts ABOVE current scroll point** (throws user off)
-3. **Generate images synchronously** (blocks UI; users perceive slowness)
-4. **Recommend same concept twice in a row** (looks like bug)
-5. **Ignore user retry/rejection feedback** (algorithm should learn to avoid that suggestion type)
-6. **Use placeholder text where images should be** (incomplete feel)
-7. **Show skeleton loaders that are slower than actual load** (defeats purpose)
+**Do NOT use `react-masonry-css`** for a virtualized feed. It renders all items in DOM (no virtualization). Acceptable for static galleries; not for a growing feed that could reach 100+ posts.
 
 ---
 
-## Implementation Roadmap: v1.1 Phases
+## Sources
 
-### Phase 1: Image Generation Foundation (Week 1-2)
-- [ ] Integrate Nano Banana or Gemini API for image generation
-- [ ] Implement caching (SQLite local storage + LRU cache)
-- [ ] Pre-generate images for existing posts (daily batch job)
-- [ ] Fallback to placeholder if generation fails
-- [ ] Test latency (<2s for cached, <8s for fresh)
-
-### Phase 2: Post Redesign (Week 2-3)
-- [ ] Update post component layout (image-first, 70/30 split)
-- [ ] Add emoji overlay on images (canvas or CSS overlay)
-- [ ] Refactor title/description (short format, emoji prefix)
-- [ ] Add action buttons (ASK, Review, Save)
-- [ ] Remove "More" button
-- [ ] Test mobile responsiveness (notches, keyboard)
-
-### Phase 3: Infinite Scroll (Week 3-4)
-- [ ] Implement scroll-to-load trigger (80% depth)
-- [ ] Add loading skeleton
-- [ ] Test pagination (batch size 10-15)
-- [ ] Fix scroll position preservation (mobile back/forward)
-- [ ] Handle "end of feed" state
-- [ ] Performance test (100+ items)
-
-### Phase 4: Planner Auto-Suggestions (Week 4-5)
-- [ ] Implement suggestion algorithm (graph, SRS, diversity)
-- [ ] Define trigger conditions (on graph change, daily, post-ASK)
-- [ ] Build suggestion card UI (3-5 variants)
-- [ ] Add retry/regenerate button (context-aware options)
-- [ ] Test relevance and acceptance rate
-
-### Phase 5: Polish (Week 5-6)
-- [ ] Daily refresh of suggestions
-- [ ] Milestone card template variety (5 designs)
-- [ ] Emoji overlay refinement
-- [ ] Engagement metrics tracking
-- [ ] UAT and iteration
+- [Scrolling Designs: 8 Patterns (Lovable, 2026)](https://lovable.dev/guides/scrolling-designs-patterns-when-to-use)
+- [Infinite Scroll Feed System Design Guide (2026)](https://www.muhammadtayyab.dev/blog/how-to-design-an-infinite-scroll-feed-the-complete-system-design-guide)
+- [Masonic: High-performance masonry for React (GitHub)](https://github.com/jaredLunde/masonic)
+- [CSS Grid Lanes Complete Guide (DEV, 2026)](https://dev.to/bean_bean/css-grid-lanes-masonry-layout-is-here-a-complete-guide-for-2026-4686)
+- [Building High-Performance Scroll Restoration Infinite Lists (Medium, Feb 2026)](https://suhaotian.medium.com/building-high-performance-scroll-restoration-infinite-lists-on-the-web-baa55d4cd52f)
+- [Social Media Algorithms 2026: How Platforms Rank Content (Hootsuite)](https://blog.hootsuite.com/social-media-algorithm/)
+- [Google Discover Feb 2026 Core Update Scorecard (Newzdash)](https://www.newzdash.com/guide/google-discover-feb-2026-core-update-scorecard-data-shows-what-actually-changed)
+- [Designing swipe-to-delete and swipe-to-reveal interactions (LogRocket)](https://blog.logrocket.com/ux-design/accessible-swipe-contextual-action-triggers/)
+- [Content Length Best Practices 2026](https://www.georgescifo.com/2025/10/the-definitive-guide-to-content-length-best-practices-for-2026/)
+- [Mobile-First UX Patterns Driving Engagement 2026 (TensorBlue)](https://tensorblue.com/blog/mobile-first-ux-patterns-driving-engagement-design-strategies-for-2026)
+- [Tavily Web Search Essentials Docs](https://docs.tavily.com/examples/quick-tutorials/search-api)
+- [On-Device Recommender Systems Survey (Springer, 2025)](https://link.springer.com/article/10.1007/s41019-025-00308-8)
+- [Progressive Disclosure in UX (IxDF, 2026)](https://ixdf.org/literature/topics/progressive-disclosure)
+- [Instagram New UI 2026 (ClickAnalytic)](https://www.clickanalytic.com/instagram-new-ui-2025-explained/)
 
 ---
 
-## Recommended Reading & Sources
-
-### Image-First Feeds
-- **Rednote (小红书) design language:** Focus on visual discovery over social graph
-- **Pinterest architecture:** Tall, narrow cards (1:1.3 aspect ratio) that encourage infinite scroll
-- **Instagram Reels:** Hook → depth progression (1-3 second hook before detail layer)
-
-### Infinite Scroll
-- **Smashing Magazine: "Pagination or Infinite Scroll"** - tradeoffs between UX patterns
-- **React Virtual:** Library for rendering large lists efficiently
-- **Intersection Observer API (MDN):** Modern native browser API for scroll detection
-
-### Recommendation Systems
-- **Netflix tech blog: "Personalization Architecture"** - how to generate diverse recommendations
-- **Spotify algorithm research:** Balancing exploration vs exploitation (new content vs proven good)
-- **Bandits & Exploration:** Multi-armed bandit algorithms for suggestion diversity
-
-### Learning App Engagement
-- **Duolingo's engagement metrics:** What makes learning sticky (streaks, celebrations, difficulty calibration)
-- **Anki study:** Why spaced repetition works (neuroscience + implementation)
-- **CourseEra UX research:** Why users complete or abandon online courses
-
-### Mobile UX
-- **Nielsen Norman Group: "Mobile Usability"** - best practices for mobile scroll and touch
-- **Apple Human Interface Guidelines:** Safe area awareness, haptic feedback patterns
-
----
-
-## Risks & Mitigation
-
-### Risk 1: Image Generation Latency
-**Problem:** Users expect instant posts; image generation takes 8-30 seconds.
-**Mitigation:**
-- Pre-generate images daily in background (batch job)
-- Show placeholder while generating
-- Cache aggressively (same concept = same image for 7 days)
-- Allow user to skip image and see text-only fallback
-
-### Risk 2: Infinite Scroll Induces "Scroll Fatigue"
-**Problem:** Users scroll mindlessly; engagement metrics go up but learning doesn't.
-**Mitigation:**
-- Track actual learning metrics (ASK conversion, Review adds), not scroll depth
-- Show "end of feed" signal after 20+ items (give users stopping point)
-- Monitor bounce rate (if >40% exit feed without action, redesign)
-
-### Risk 3: Suggestion Algorithm Recommends Irrelevant Concepts
-**Problem:** Users reject suggestions; trust in "auto-generated" features drops.
-**Mitigation:**
-- Test algorithm on existing users (simulate suggestions retroactively)
-- Include reasoning in UI ("Why: You recently asked about X")
-- Make regenerate button prominent (users expect to reject sometimes)
-- Monitor acceptance rate; if <15%, revisit algorithm
-
-### Risk 4: Card Design Variety Adds Complexity
-**Problem:** Too many templates; code maintenance becomes hard; designs clash.
-**Mitigation:**
-- Limit to 5 templates (not 10+)
-- Use design system (consistent colors, spacing, typography)
-- Template selection is deterministic (milestone type → template), not random
-- Use component composition (shared header, content slots, footer)
-
-### Risk 5: Performance Degrades with Large Feed
-**Problem:** Rendering 100+ posts slows down scroll on mid-range Android.
-**Mitigation:**
-- Use virtualization library (`react-window` or `react-virtual`)
-- Lazy-load images (native `loading="lazy"` or intersection observer)
-- Batch database queries (load 10-15 at a time, not 1 at a time)
-- Profile on real Android device (test with 4GB RAM, mid-tier processor)
-
----
-
-## Summary: Table Stakes vs Differentiators
-
-### MVP for v1.1 (Ship By Launch)
-1. ✅ **Image-first post layout** (table stakes)
-2. ✅ **Infinite scroll** (table stakes, explicitly requested)
-3. ✅ **Emoji titles** (table stakes, engagement boost)
-4. ✅ **AI image generation** (differentiator, but required for redesign)
-5. ✅ **Retry button for suggestions** (table stakes for trust)
-
-### Next Sprint (v1.1.1, Post-Launch Polish)
-1. ⚠️ **Auto-generated Planner suggestions** (high impact, medium complexity)
-2. ⚠️ **Daily suggestion refresh** (medium impact, low complexity)
-3. ⚠️ **Milestone card variety** (medium impact, visual polish)
-4. ⚠️ **Context-aware regeneration** (differentiator, builds trust)
-
-### Future (v1.2+)
-1. 🚀 **Algorithmic feed ranking** (requires extensive usage data)
-2. 🚀 **Social sharing** (privacy implications; defer)
-3. 🚀 **User-generated content** (moderation required; defer)
-4. 🚀 **A/B testing framework** (server-side; incompatible with local-first)
-
----
-
-## Conclusion
-
-EchoLearn v1.1 adds engagement layers inspired by Rednote, Pinterest, and Instagram—but optimized for **learning retention and discovery**, not viral engagement. The critical path is clear: Image generation → Post redesign → Infinite scroll → Auto-suggestions.
-
-Success metrics are learning signals (ASK conversion, Review adds, long-term recall), not vanity metrics (scroll time, post views). Suggestions should be fewer (3-5), reasoned (why this concept?), and regenerable (trust through control).
-
-Card design variety prevents habituation but requires design discipline (5 templates, not 10+). Emoji overlays and short titles improve scannability by 30-40%.
-
-**Estimated ship date:** 4-6 weeks for MVP (phases 1-3) + 2-3 weeks for polish (phase 5) = **6-9 weeks to full v1.1 launch**.
+*Feature research for: Trellis v1.5 Curiosity Feed v2*
+*Researched: 2026-05-08*

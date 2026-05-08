@@ -1,1018 +1,363 @@
-# Domain Pitfalls: Engagement Features in Learning Apps
+# Domain Pitfalls: Trellis v1.5 Curiosity Feed v2 + Tech-Debt Hardening
 
-**Project:** EchoLearn v1.1 (Rednote-style feed, image generation, auto-suggestions)
-**Domain:** Learning + Social + Mobile + AI Integration
-**Researched:** 2024-12
-**Focus:** Image generation, infinite scroll, suggestions, mobile performance, privacy
+**Project:** Trellis v1.5
+**Domain:** Adding masonry layout, engagement signals, source diversity, richer essays, and tech-debt cleanup to an existing React 19 + Capacitor 8 local-first app
+**Researched:** 2026-05-08
+**Confidence:** HIGH (most pitfalls derived directly from codebase archaeology and known v1.4 incident history)
+
+> **Scope:** These are pitfalls specific to ADDING v1.5 features. Pitfalls already learned in CLAUDE.md are cited but not restated: `position: fixed` + `overflow: auto` + Android WebView flicker (Header portal pattern), `import.meta.env.DEV` chain breaking `node --test` (leaf-module pattern), one-signal-per-semantic-event, `bodyMarkdown: ''` for deferred-streamer posts, always-mounted screens need `[location.pathname]` resync effects, dev affordances must mutate ALL date-stamped storage keys.
 
 ---
 
-## Critical Pitfalls (Cause Rewrites or Major Regressions)
+## Critical Pitfalls
 
-### 1. Infinite Scroll Infinite Loading Loop (No Bottom Detection)
+### Pitfall 1: Native CSS Masonry Is Not Production-Ready — JS Column-Balancing Will Rebalance Mid-Scroll and Corrupt `cyclePosition`
 
-**What goes wrong:** The feed never terminates. Users scroll, new items load, they scroll more, more items load — but the app has no mechanism to detect "end of available data." Results in wasted bandwidth, memory growth, and frozen UX as the app tries to paginate beyond what exists.
+**What goes wrong:**
+A developer reaches for `grid-template-rows: masonry` or `display: masonry` to implement the Pinterest layout. The API is behind flags in Chrome 140+ and not yet available in Capacitor 8's bundled WebView (typically lags browser release by one major cycle). The build ships. The WebView falls back to standard grid — no masonry. Alternatively, a JS-driven masonry library (e.g., `masonic`, `react-masonry-css`) is chosen and dynamically balances columns on image-load. Each balance recomputes column assignments. If the rebalance happens while the user is mid-scroll, the scroll container's `scrollHeight` changes, causing Android Chromium's scroll anchor algorithm to snap the viewport to a different item. The user loses their place. On top of that: the feed's `cyclePosition` pointer in `post-queue.service.ts` is keyed to flat-index order. If a masonry lib virtualizes or reorders items to balance columns, the flat-index that `walkDerivedList` returned diverges from what the user sees. Posts that were "next" in the derived-list walk are skipped or repeated from the user's perspective.
 
 **Why it happens:**
-- Missing sentinel value in query (last-loaded-id or offset/limit pagination)
-- Server/query returns empty array but client treats it as "keep going"
-- No tracking of "seen items" — accidental duplicates in infinite loop
-- Confusing "loading state" with "error state" — keeps retrying
+- CSS masonry browser support is experimental-flag-only as of mid-2025; Capacitor WebView ships an older Chromium build.
+- JS masonry libs that do post-mount DOM rebalancing fire `ResizeObserver` on each image `onLoad`, triggering layout recalculation mid-scroll.
+- The three-list pipeline's `cyclePosition` assumes a stable, flat ordering of posts as delivered. Any visual reordering that doesn't mirror the queue's pop order breaks the conceptual contract.
 
-**Consequences:**
-- Memory exhaustion on older phones (v1.1 targets Android 8+, iOS 11+)
-- Battery drain (constant network requests)
-- Janky UX (frame drops as DOM grows to thousands of items)
-- User inability to reach end-of-feed states (breaks planner workflows)
+**How to avoid:**
+- Use CSS `column-count: 2` (the CSS multi-column fallback, not masonry spec) for the variable-height two-column layout. It is universally supported, respects `overflow: auto`, and does NOT rebalance on image load — items flow down each column naturally. Requires explicit `break-inside: avoid` on card containers.
+- Reserve the masonry CSS property for a phase when Capacitor ships Chromium 140+ WebView (monitor `@capacitor/android` changelogs).
+- If a JS masonry lib is chosen, lock column assignments at first render using pre-specified aspect ratios from `post.videoMeta.thumbnailUrl` dimensions or a per-style aspect-ratio table. Never recalculate columns after mount. The image `onLoad` handler should only update local image-display state, never trigger a column rebalance.
+- The queue's pop order defines display order. The masonry layout must display posts in queue-pop order top-to-bottom within each column (left-column first, then right), NOT per-column sorted by height. Do not let the masonry lib sort for visual balance.
 
-**Prevention:**
-- Implement explicit sentinel: `hasMore` flag from backend, or `items.length < pageSize` (end of data)
-- Track `lastSeenId` or `nextCursor` — never load the same page twice
-- On empty page response, set `hasMore = false` immediately
-- Deduplicate client-side using Set of IDs before rendering
-- Add hard limit: max 300-500 items in DOM, virtualizing beyond that
+**Warning signs:**
+- `column-count` approach is abandoned in favor of a `grid` or absolute-position masonry layout after "performance testing" — check whether column reassignment is wired to image `onLoad`.
+- `masonic` or similar lib is imported — these virtualize by scroll position, not by queue index, breaking the `cyclePosition` contract.
+- User-visible symptom: "Feed jumps when images load" or "I keep seeing the same concept."
 
-**Detection:**
-- Monitor: "User scrolled >20 screens with >0 load requests per screen"
-- Alert: Feed DOM has >1000 items
-- Metric: If `pageSize = 10` and user scrolled 50 screens, query results should show items 0-500 (not repeating)
-
-**Prevention Phase:** Phase 1 (Feed Infrastructure) — unit test with endpoint returning empty vs. partial results
+**Phase to address:** Masonry layout phase (first v1.5 feed phase). Decide column strategy before any layout code is written.
 
 ---
 
-### 2. Image Generation Rate Limiting Breaks User Flow Without Fallback
+### Pitfall 2: Engagement Signals (Like/Save/Dismiss) Collide With the Lazy-Skip Walker — Dismiss ≠ Explored
 
-**What goes wrong:** Nano Banana or Gemini image generation hits rate limit mid-session. UI shows "Loading..." forever, user retries, more requests queue, system backs off, and users see loading spinners for 10+ minutes. No cached fallback, no graceful degradation, no clear error messaging.
+**What goes wrong:**
+The lazy-skip walker in `post-queue.service.ts:walkDerivedList` skips concept anchors that appear in `dailyReadService.getExploredAnchors()`. A developer adds "Dismiss" as an engagement signal and wires `dismiss(postId)` to call `dailyReadService.markExplored(anchorId)` — the same path that Detectors A/B/C/D use. Two bugs follow immediately:
+
+1. **Double-skip without vine credit:** A dismissed post fires `CONCEPT_EXPLORED`, incrementing VineProgress, awarding credits, and marking the anchor as explored — even though the user rejected the content, not engaged with it. The vine credits are now polluted.
+2. **Dismissed = explored forever:** After dismiss, the anchor is in `exploredAnchors`. The walker lazy-skips it for the rest of the day. If the user later opens Ask and asks a question anchored to that concept, the feed will still skip it. The user's dismissal of one article killed all posts for that concept.
 
 **Why it happens:**
-- Using single API key (quota shared across user base or time window)
-- No queue/backoff strategy — naive retry loops hammer API
-- No caching layer — every suggestion triggers a fresh image generation request
-- Error state not distinct from loading state (UI says "Loading..." for both)
-- Assuming image generation is always fast (<2 seconds) during development
+- `markExplored` is the single-gate path to both vine progress and lazy-skip. It was designed for genuine engagement, not rejection signals.
+- The event-bus rule (one signal per semantic event, from CLAUDE.md Phase 32.1 rule 6) makes it tempting to reuse `CONCEPT_EXPLORED` for dismiss.
 
-**Consequences:**
-- User frustration with perceived app "hanging"
-- Cascading failures (user retries → more requests → longer backoff → cascading retries)
-- Suggestion feature feels unreliable
-- Mobile users on slow networks give up (no timeout handling)
-- Battery drain from stuck async operations
+**How to avoid:**
+- Introduce a separate `dismissedPostIds: Set<string>` in a new `engagementService` (or as a field in `dailyReadService`), keyed to post IDs (not anchor IDs). The walker should check `dismissedPostIds.has(post.id)` before enqueueing that specific post, but NOT mark the anchor as explored.
+- Emit a NEW event `POST_DISMISSED` — this is the ONE case where adding a new event type is justified: dismiss and explored are semantically distinct (rejection vs. completion). The walker subscribes to `POST_DISMISSED` to update the post-level skip set, not the anchor-level explored set.
+- Like and Save do NOT interact with the walker at all — they annotate the post record in `post-history.service.ts` but do not affect derived-list walking.
+- Write a source-reading test asserting `dismiss` does NOT call `markExplored` and does NOT emit `CONCEPT_EXPLORED`.
 
-**Prevention:**
-- Implement tiered strategy:
-  1. Try live generation (Gemini/Nano Banana with 3-second timeout)
-  2. On rate limit: Return placeholder + queue for background generation (success notification later)
-  3. Never block the UI — show skeleton + "Will be ready soon" message
-- Cache generated images by prompt hash (SQLite BLOB storage on device)
-- Detect and reject duplicate requests within 30 seconds
-- Clear, distinct error UI: "Image generation paused. Retry?" (vs. loading spinner)
-- Use exponential backoff with jitter: wait 1s, 2s, 4s, then give up after 16s
-- Respect rate-limit headers: `Retry-After` header tells you exactly when to try again
-- Batch requests: if user generates 3 suggestions, don't fire 3 image requests simultaneously
+**Warning signs:**
+- `dismiss` handler is wired to `dailyReadService.markExplored` or emits `CONCEPT_EXPLORED`.
+- VineProgress completes unexpectedly after rapid dismissals.
+- User reports "I dismissed one post and now I never see that topic again."
 
-**Detection:**
-- Alert: More than 3 retries for single image in 60 seconds
-- Metric: `image_generation_timeout_rate > 5%`
-- Metric: Uncached image requests for same prompt within 10 minutes
-- Log: Every image generation request (timestamp, prompt, provider, latency, status)
-
-**Implementation Pattern:**
-```typescript
-// GOOD: Timeout + queue fallback
-async function generateImage(prompt: string, card: Card) {
-  const cached = await imageCache.get(hashPrompt(prompt));
-  if (cached) return cached;
-
-  const timeoutPromise = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error('Generation timeout')), 3000)
-  );
-
-  try {
-    const image = await Promise.race([
-      geminiClient.generateImage(prompt),
-      timeoutPromise
-    ]);
-    await imageCache.set(hashPrompt(prompt), image);
-    return image;
-  } catch (error) {
-    // Queue for background retry, don't block UI
-    backgroundQueue.enqueue({ prompt, cardId: card.id });
-    return null; // Let UI show placeholder
-  }
-}
-
-// BAD: Blocking loop
-while (!imageReady) {
-  try {
-    imageReady = await generateImage(prompt);
-  } catch (e) {
-    // Infinite retries, no backoff, blocks UI
-  }
-}
-```
-
-**Prevention Phase:**
-- Phase 1 (Feed + Image Gen): Implement caching layer in database schema
-- Phase 1: Add timeout constants and error state to UI components
-- Phase 2: Add background queue infrastructure (Capacitor Background Tasks or similar)
+**Phase to address:** Engagement signals phase. Define the engagement-to-walker boundary in the CONTEXT doc before implementation.
 
 ---
 
-### 3. Poor Suggestion Algorithm Recommendations Erode Trust Quickly
+### Pitfall 3: Engagement State Not Reset on Force-New-Day — Triples the Defense Required
 
-**What goes wrong:** Auto-generated planner suggestions are boring (always "review old cards"), irrelevant (suggesting topics user already mastered), or repetitive (same suggestions every day). Users see "suggested by AI" and ignore it, then stop trusting any automated recommendations. Trust erosion is fast (2-3 bad suggestions), recovery is slow (requires weeks of good suggestions).
+**What goes wrong:**
+Following the Phase 36 lesson (CLAUDE.md "Concept Feed Generation Pipeline → Numeric defaults"): dev affordances simulating wall-clock events must mutate ALL date-stamped storage keys, AND always-mounted screens must re-sync on navigation. When engagement signals (like/save/dismiss) are added to their own localStorage key (e.g., `trellis_engagement_state`), the `handleForceNewDay` handler in `SettingsDataScreen` will NOT know about this new key. On Force-New-Day: post-queue resets, daily-read resets, but engagement state carries over. Next-day feed starts with yesterday's dismissed posts already in the skip set and yesterday's liked posts still "liked" — wrong in both cases (dismissed posts should re-appear, liked posts are saved-permanently by design but VineProgress should not have them already counted).
 
 **Why it happens:**
-- Algorithm only looks at "due for review" → always suggests review
-- Ignores user's learning velocity or mastery signals
-- No diversity heuristic — suggests same topic multiple times
-- No freshness signal — always picks "oldest unreviewed item"
-- Suggestion doesn't account for time of day or session context
-- Suggesting advanced topics to beginners, vice versa
-- No A/B test baseline: no measurement of suggestion quality
+- `handleForceNewDay` was built to mutate a specific list of date-stamped keys (CLAUDE.md Phase 36 round-4 lesson). Adding a new date-scoped service without updating the handler is the classic drift failure.
 
-**Consequences:**
-- Users disable auto-suggestions
-- Planner feature perceived as "not smart"
-- No engagement lift from auto-suggestions (defeats v1.1 goal)
-- Users revert to manual planner moves (breaks orchestration strategy)
-- User churn if suggestions feel repetitive/stale
+**How to avoid:**
+- Every date-scoped service (i.e., any service with a `date` field in its localStorage payload) MUST register a `reset()` method. `handleForceNewDay` MUST call `engagementService.reset()` alongside `dailyReadService.reset()`.
+- Persist-across-days: like/save annotations belong in `post-history.service.ts` (SQLite/permanent). Dismiss-for-today belongs in the new engagement service with a date stamp. They are NOT the same store.
+- Write a Force-New-Day test (matching the pattern in `tests/services/SettingsDataScreen.force-new-day.test.mjs`) that asserts `engagementService.reset()` is called.
+- HomeScreen's `[location.pathname]` resync `useEffect` (Phase 36-14 canonical pattern) MUST re-pull engagement state if HomeScreen renders engagement annotations (like indicators, dismissal badges). Add a sibling effect alongside the existing `exploredAnchors` resync.
 
-**Prevention:**
-- Multi-signal ranking:
-  1. **Diversity (40%)**: If you suggested "Biology" yesterday, bias toward different category
-  2. **Relevance (30%)**: Score by user engagement history — suggest what user actually engages with
-  3. **Spaced interval (20%)**: Prefer items at "optimal review interval" (SRS logic) over arbitrary recency
-  4. **Challenge (10%)**: Add 1-2 "stretch" items (harder topics) to mix, but not >20% of suggestions
-- Freshness: Never suggest same item twice within 7 days
-- Time-of-day: Suggest lighter reviews at 8am (easier wake-up), deeper dives at 8pm (focused time)
-- Track suggestion quality metric: `(suggestions_user_engaged_with / total_suggestions)` — aim for >40%
-- Manual override: Show "Why was this suggested?" + easy "Not for me" feedback
-- A/B test: Random 20% of users get "best guess" algorithm, 80% get "safe review" — measure engagement
+**Warning signs:**
+- Yesterday's dismissed posts are missing from today's feed after Force-New-Day.
+- Like/Save icons show stale state after navigating to `/home` following a Force-New-Day.
+- `handleForceNewDay` does not call `engagementService.reset()` — a source-reading test catches this.
 
-**Detection:**
-- Alert: Same suggestion appears twice in 7-day window
-- Metric: Suggestion acceptance rate (did user click and interact?) — track weekly
-- Metric: Suggestion category distribution — ensure variety, not just "review"
-- User feedback: "Show me why" button on every suggestion captures qualitative data
-
-**Anti-Pattern Example (What to Avoid):**
-```typescript
-// BAD: Always suggests oldest unreviewed
-function suggestCard() {
-  return cards.filter(c => !c.reviewedToday)
-    .sort((a, b) => a.lastReviewAt - b.lastReviewAt)
-    [0]; // Always picks oldest
-}
-
-// GOOD: Multi-signal scoring
-function suggestCard(user: User) {
-  const scores = cards.map(card => ({
-    card,
-    score:
-      diversityScore(card, lastSuggestions) * 0.4 +
-      relevanceScore(card, user) * 0.3 +
-      spacedIntervalScore(card) * 0.2 +
-      challengeBoost(card, user.mastery) * 0.1
-  }));
-  const topCard = scores.sort((a, b) => b.score - a.score)[0];
-  
-  // Ensure variety
-  if (scores[0].score - scores[1].score < 0.1) {
-    return scores[Math.floor(Math.random() * 3)]; // Randomize close scores
-  }
-  return topCard;
-}
-```
-
-**Prevention Phase:**
-- Phase 2 (Planner Suggestions): Define scoring algorithm before implementation
-- Phase 2: Add suggestion quality tracking from day 1
-- Phase 3+: Add user feedback loop ("Why this?" + reactions)
+**Phase to address:** Engagement signals phase AND tech-debt hygiene phase (update Force-New-Day handler when engagement service lands).
 
 ---
 
-### 4. Breaking Existing Workflows: Planner Auto-Refresh During Active Review
+### Pitfall 4: Source Diversity Domain-Reputation Lookup Blocks the Refill Mutex
 
-**What goes wrong:** Planner suggestions auto-refresh every day at 3am UTC (or some fixed time). User is in the middle of a review session at 2:59am, system refreshes, suggestions change mid-session, user's planned learning path is now different. Or: user was reviewing "Biology" and suddenly sees "History" suggestions pop in, breaking focus.
+**What goes wrong:**
+Source diversity scoring requires a per-domain reputation lookup — either a local hardcoded allowlist or a network call to a scoring API. This lookup is placed inside `refillQueue`'s body, which is wrapped in `_refillMutex.run(...)`. If the lookup is async (network call or even a slow synchronous allowlist scan over many domains), it extends the mutex hold time. The refill mutex was designed to serialize LLM generation calls (one refill body at a time). Adding a slow domain-lookup inside the mutex means:
+
+1. Rapid swipes now queue behind the domain lookup, not just the LLM call. The refill threshold of 16 posts was sized for LLM latency, not LLM + domain-lookup latency.
+2. If the domain lookup fails (network error, timeout), the mutex's `try/finally` releases correctly per Phase 36-12's design — but the LLM posts were never generated. The refill returns empty, the queue drains, and the user sees "No more posts" during a domain-lookup outage.
 
 **Why it happens:**
-- Suggestion refresh is time-based (cron job), not lifecycle-aware
-- No concept of "active learning session" — system doesn't know user is in the middle of something
-- Suggestion refresh doesn't throttle while app is in foreground
-- No debouncing: if user opens Planner 10 times in 5 minutes, system refreshes 10 times
+- Source diversity is conceptually part of "building the post," so developers put it inside `refillQueue`.
+- The mutex hold time was designed around a single concern (LLM), not a pipeline of concerns.
 
-**Consequences:**
-- User loses context ("Wait, where was I?")
-- User confusion about what they were supposed to learn
-- Breaks spaced repetition flow (the core learning mechanism)
-- Users manually revert to old suggestions (defeating automation)
-- User frustration with "app changed my plan"
+**How to avoid:**
+- Domain reputation lookup must be a pre-computed, synchronous lookup against a local allowlist. No network calls inside `refillQueue`. If a reputation database is fetched from the network, fetch it once at app start and cache in module scope — the lookup inside `refillQueue` reads from the cached copy synchronously.
+- Source diversity filtering (deduplicate Tavily results by domain before building posts) happens in the Tavily result set, BEFORE the LLM generation call, but within the same `_refillMutex.run(...)` block. Keep it synchronous and O(N_results) where N ≤ 10 (Tavily page size).
+- "Diversity filter starves concept of all candidates" is a silent zero-results bug: if the allowlist is too strict and all Tavily results for a concept are from blocked domains, `buildConceptBatch` returns zero posts for that concept. Add a fallback: if all candidates are filtered, allow the lowest-scoring blocked domain as a last resort rather than returning empty.
+- Write a test asserting that with all-blocked Tavily results, at least one post is still generated (the fallback fires).
 
-**Prevention:**
-- Never refresh suggestions while:
-  - User is in active Review or ASK session (track session state)
-  - App is in foreground (check `AppState.currentAppState` in Capacitor)
-- Use lifecycle-aware refresh:
-  - Only refresh on app launch (not mid-session)
-  - Or refresh at idle time (no activity for 2+ minutes)
-  - Or refresh when user explicitly opens Planner (user-triggered)
-- Add "Suggestion refresh" event logging: log when/why suggestions changed
-- Debounce: if suggestions refresh trigger fires multiple times in 5 min, batch into single refresh
-- User communication: If suggestions do change during session, show toast: "Suggestions updated. Continue learning or view changes?"
+**Warning signs:**
+- `refillQueue` body contains `await fetch(...)` for domain scoring.
+- User sees "No more posts" after enabling source diversity.
+- Refill takes noticeably longer than without source diversity (measure with `console.time`).
 
-**Implementation Pattern:**
-```typescript
-// BAD: Cron-based, doesn't know about user state
-setInterval(async () => {
-  await plannerService.refreshSuggestions(); // Fires even during review!
-}, 24 * 60 * 60 * 1000);
-
-// GOOD: Lifecycle-aware
-async function refreshSuggestionsIfSafe() {
-  const appState = await App.getState();
-  if (appState.isActive && !learningSession.isActive) {
-    await plannerService.refreshSuggestions();
-  }
-}
-
-// On app resume
-App.addListener('appStateChange', async (state) => {
-  if (state.isActive && !learningSession.isActive) {
-    await refreshSuggestionsIfSafe();
-  }
-});
-
-// Or: user-triggered only
-function openPlanner() {
-  // Refresh ONLY if user opened Planner, not automatically
-  refreshSuggestions();
-}
-```
-
-**Prevention Phase:**
-- Phase 1 (Architecture): Define "learning session" state in AppProvider
-- Phase 2 (Planner Suggestions): Implement lifecycle-aware refresh checks
-- Phase 2: Add session state to logging/analytics
+**Phase to address:** Source diversity phase.
 
 ---
 
-### 5. Cached Images Cause Storage Bloat and Battery Drain
+### Pitfall 5: Richer Essays Break the Existing AbortController Contract — Two Unmount Paths
 
-**What goes wrong:** Every suggested card includes an AI-generated image. Images cached to SQLite BLOB or device filesystem. After 1 week: user has 500+ cached images (50-200 MB). After 1 month: 1-2 GB. Device storage warnings appear. App slow. Battery drain from I/O. System eventually deletes app cache without warning.
+**What goes wrong:**
+Richer essays (longer 400-600 word target, tighter source grounding, citation rendering) increase the streaming window from ~5 seconds to ~15-20 seconds. The existing `PostDetailScreen` already has a correct AbortController setup (CLAUDE.md "D-06 + D-16" comments at lines 283-386) — one controller aborts on locale change AND on unmount. The risk for v1.5 is that a developer:
+
+1. **Adds a second async call inside the streaming loop** (e.g., a source-citation fetch for citation rendering) without threading the same `abortController.signal`. The citation fetch completes after unmount, calls `setState`, and React emits a "cannot update unmounted component" warning — and potentially corrupts `patchPostEssayInCache`.
+2. **Increases essay length targets in the prompt** without increasing the `post-essay.service.ts` body slice limit (currently `bodyMarkdown.slice(0, 2000)` in `generateEssayMeta`). At 400-600 words, the slice truncates the body before it reaches the meta call, making `whyCare`/`takeaway`/`quickAskPrompts` less grounded. This is a silent quality regression, not a crash.
+3. **Adds a `generateCitationBlock` call after `generateEssayMeta`** (outside the existing abort-guard chain) that runs after the user has already navigated away.
 
 **Why it happens:**
-- No image size limits — full resolution Gemini images (1000x1000+px) cached naively
-- No cache eviction policy — images never deleted
-- No storage quota checks — app doesn't know how much space is left
-- Assuming unlimited device storage (ignores low-end phones with 32-64 GB)
-- Caching without deduplication — same image stored multiple times under different IDs
+- The existing abort chain is multi-step: stream → check aborted → meta call → check aborted → patch cache. Each step manually checks `abortController.signal.aborted`. A new call added after step 3 is easy to forget the check on.
+- Longer streaming means longer exposure windows for all the intermediate checks.
 
-**Consequences:**
-- User uninstalls app due to storage warning
-- App slowness (DB queries scan large BLOB table)
-- Battery drain (Android/iOS background task scanning cache)
-- App crashes on cache queries (OOM on low-memory devices)
-- User data loss if OS clears app cache without permission
+**How to avoid:**
+- Any new async call added to the `PostDetailScreen` essay-generation `useEffect` MUST receive `{ signal: abortController.signal }` and be preceded by an explicit `if (abortController.signal.aborted) return;` guard. This is the D-08 pattern. Add a source-reading test for each new call site.
+- Raise the `bodyMarkdown.slice(0, 2000)` cap in `generateEssayMeta` to `slice(0, 4000)` to accommodate richer essays before any quality work begins.
+- Citation rendering should be part of the ReactMarkdown pipeline (inline link rendering, not a separate fetch) — avoid any network calls triggered by the rendered essay body.
+- For RTL/CJK layout impact: longer essays in Japanese and Chinese will wrap at different line lengths. Spanish essays at 400 words run ~480 words equivalent width. Add a max-height + scroll on the essay container BEFORE increasing word counts, not after observing overflow.
 
-**Prevention:**
-- Implement strict image policy:
-  - Resize to max 400x400px (sufficient for card display, 80% size reduction)
-  - Use WEBP format (30% smaller than PNG)
-  - Compress to quality 75-80 (imperceptible on mobile, 40% smaller)
-- Add cache size limit: max 50MB (roughly 200 images at 250KB each)
-- Implement LRU eviction:
-  - Track `lastAccessedAt` for each cached image
-  - On cache size >50MB, delete oldest 10% of images
-  - Fallback: regenerate on-demand (cached prompt + generation is fast if deduplicated)
-- Check available storage before caching:
-  - If <100MB free, skip caching (regenerate later)
-  - Warn user if cache >30MB
-- Deduplicate: Store image once per prompt hash, reference by ID (not duplicate copies)
-- Database cleanup task: Daily, remove unused images (not referenced by any card in last 30 days)
+**Warning signs:**
+- A new `async function` is added inside the `PostDetailScreen` essay `useEffect` without a call to `abortController.signal.aborted` before it.
+- `generateEssayMeta` is called with `accumulated` that is always truncated to exactly 2000 chars (the current slice limit) — signals the slice cap is too small for the new essay length.
+- "Cannot update unmounted component" warnings in the console after navigating away mid-stream.
 
-**Implementation Pattern:**
-```typescript
-// Image storage with size limits
-const IMAGE_CACHE_LIMIT_MB = 50;
-const IMAGE_MAX_SIZE = 400;
-const IMAGE_QUALITY = 80;
-
-async function cacheImage(prompt: string, imageBlob: Blob) {
-  // Check space
-  const cacheSize = await getImageCacheSizeBytes();
-  if (cacheSize + imageBlob.size > IMAGE_CACHE_LIMIT_MB * 1024 * 1024) {
-    // Evict oldest
-    const oldest = await db.query(
-      `SELECT id FROM images ORDER BY lastAccessedAt ASC LIMIT 0,10`
-    );
-    for (const img of oldest) {
-      await db.run(`DELETE FROM images WHERE id = ?`, [img.id]);
-    }
-  }
-
-  // Compress before storage
-  const compressed = await compressImage(imageBlob, {
-    maxWidth: IMAGE_MAX_SIZE,
-    maxHeight: IMAGE_MAX_SIZE,
-    quality: IMAGE_QUALITY,
-    format: 'webp'
-  });
-
-  // Store with deduplication
-  const promptHash = sha256(prompt);
-  await db.run(
-    `INSERT OR REPLACE INTO images (promptHash, data, createdAt, lastAccessedAt)
-     VALUES (?, ?, datetime('now'), datetime('now'))`,
-    [promptHash, compressed]
-  );
-}
-```
-
-**Prevention Phase:**
-- Phase 1 (Image Gen): Define image size/format strategy before first image generation
-- Phase 1: Add cache size monitoring to analytics
-- Phase 2: Implement LRU eviction policy (can be added anytime without breaking changes)
+**Phase to address:** Richer essays phase. Raise the slice cap and audit the abort chain before lengthening the prompt.
 
 ---
 
-### 6. Privacy Bleed: Image Generation Prompts Sent to APIs Without Sanitization
+## Moderate Pitfalls
 
-**What goes wrong:** Prompt contains sensitive user data (medical symptoms, personal struggles, names of people). Prompt sent to Gemini or Nano Banana unencrypted (or worse, logged by API provider). User learns that their private learning data is being sent to third-party APIs. Trust violation.
+### Pitfall 6: Masonry Scroll-Position Restoration After Back-Navigation Is Not Wired
+
+**What goes wrong:**
+Current single-column InfoFlow uses a `scrollRef` on `HomeScreen`'s scroll container. When the user taps a card and navigates to `PostDetailScreen`, the scroll container is still mounted (always-mounted HomeScreen slot, `SwipeTabContainer` keeps it off-screen via `translateX`). On return (back navigation via `navigate(-1)` or `Header backTo`), the scroll container retains its `scrollTop` — this is effectively free for the single-column layout.
+
+Pinterest masonry with two columns changes this: if the masonry layout is JS-driven and recalculates column heights on mount/remount, the `scrollTop` value may not correspond to the same visual item because item heights may have changed (image aspect ratios settling, theme re-evaluation). The user returns to a different visual position than where they left off.
 
 **Why it happens:**
-- Image generation prompt is just raw card content + suggestion context
-- No sanitization: card might say "Remember: John's phone number is 555-1234"
-- No user consent: feature added without explaining data flow
-- No local-first fallback: required to use third-party API for every image
-- Assuming "it's just images" — but prompts are full learning context
+- CSS `column-count: 2` does NOT remount on back-navigation (the DOM node stays alive in the always-mounted slot). Scroll is automatically preserved. Problem doesn't exist.
+- A JS masonry lib that uses absolute positioning (masonic, react-virtualized) stores position-to-item mappings internally. On remount or window resize, it recalculates. If it considers a `ResizeObserver` on the SwipeTabContainer slot's becoming `visible` (translateX = 0) a "resize event," it may invalidate its position map and reset scroll to 0.
 
-**Consequences:**
-- User trust violation (specifically problematic for "privacy-first" brand)
-- Potential data breach if API provider is compromised
-- Regulatory issue (GDPR, CCPA if user is EU/CA resident)
-- User disables feature or leaves app
-- Reputational damage ("Privacy-first app sends private data to Google")
+**How to avoid:**
+- Use CSS `column-count: 2` (recommended in Pitfall 1). Scroll is preserved automatically.
+- If a JS masonry lib is chosen: override its resize behavior so it does NOT recalculate when the SwipeTabContainer fires a resize event due to slot becoming visible (width did not change — Pitfall directly related to CLAUDE.md SwipeTabContainer `resync()` early-return guard). This requires forking or patching the lib's resize handler.
+- Test the back-navigation flow explicitly: navigate to card, return, assert `scrollTop` matches pre-navigation value.
 
-**Prevention:**
-- Sanitization strategy:
-  1. Never include names, identifiers, or sensitive keywords in prompt
-  2. Use only card title + category + vague concept description
-  3. Example: ❌ "Draw image for John's heart surgery notes" → ✅ "Draw image for medical procedure learning card"
-- Add privacy shield:
-  - Offer local-only image option: use default illustrations instead of generated images
-  - Or use on-device image generation (if feasible) for sensitive topics
-  - Or let users opt-out of image generation per card/topic
-- Consent + transparency:
-  - First time user enables image generation, show: "Images generated using Gemini AI. Your learning content will be sent to Google. [Learn more] [Enable] [Skip]"
-  - In settings, show which APIs data is sent to, allow per-API toggle
-  - In privacy policy, explicitly list "Image generation" as data-sharing practice
-- API provider safety:
-  - Use APIs that don't log prompts (or have logging disabled in contract)
-  - Check provider's privacy policy before using
-  - For Nano Banana: verify no persistent logging
-  - For Gemini: use non-Business key if available (different terms)
-- No API keys in client code:
-  - Use backend proxy (server-to-server API calls)
-  - Prevents key leakage in app source code
+**Warning signs:**
+- User returns from PostDetail to HomeScreen and sees the top of the feed.
+- A JS masonry lib's resize handler is wired to `ResizeObserver` on the slot container (will re-trigger on translateX change).
 
-**Detection:**
-- Audit: Every image generation prompt that's logged — manually review for sensitive data
-- Automated check: Scan prompts for PII patterns (names, phone numbers, emails, medical terms)
-- User feedback: "I'm not comfortable sending this data" button on image generation
-- Metric: Image generation opt-out rate — if >5%, investigate privacy concerns
-
-**Prevention Phase:**
-- Phase 0 (Architecture): Design image generation to use backend proxy, not client API keys
-- Phase 1 (Image Gen): Add sanitization function to prompt builder
-- Phase 1: Add privacy consent screen before first image generation
-- Phase 1: Document data flow in privacy policy
+**Phase to address:** Masonry layout phase. Validate scroll-restoration in UAT before shipping.
 
 ---
 
-## Moderate Pitfalls (Cause Significant UX Issues, Not Total Rewrites)
+### Pitfall 7: Source-Reading Invariant Tests Snap on i18n Leaf-Module Refactor Import-Line Changes
 
-### 7. Infinite Scroll: Missing/Skipped Items Due to Race Conditions
+**What goes wrong:**
+Four source-reading tests use regex patterns against raw TypeScript source to assert structural invariants. If the i18n leaf-module refactor renames or moves imports in the files these tests guard, the regex may match an import line instead of the intended call site, producing a false-positive pass — or match nothing and produce a false-negative fail.
 
-**What goes wrong:** User scrolls fast, loads page 2, item loads, scrolls back up, items have shifted position. Scrolls back down, page 3 loads at same time as page 2 response arrives (race condition). Duplicate items appear, or items mysteriously skip.
+The specific tests at risk:
+- `tests/state/useQuestions-system-prompt-stability.test.mjs` — asserts `formatCandidateContextPack` appears inside `role: 'assistant'` content, NOT inside `role: 'system'`. If the refactor adds an import named `formatCandidateContextPack` at the top of `useQuestions.ts`, the import line matches the "is referenced in assistant content" regex before the `role:` context is established.
+- `tests/screens/HomeScreen.exploredAnchors-resync.test.mjs` and `HomeScreen.warm-start-refallback.test.mjs` — use anchor-pair extraction to assert specific `useEffect` structures. If the refactor moves `dailyReadService` import to a leaf module with a different name, the anchor string changes.
+- `tests/screens/SettingsDataScreen.force-new-day.test.mjs` — asserts `dailyReadService.reset()` appears in `handleForceNewDay`. If the service is re-exported from a leaf module under a different local name, the grep misses it.
 
 **Why it happens:**
-- Multiple concurrent pagination requests (user scrolls faster than responses arrive)
-- No request deduplication — if user triggers page 2 load twice, both requests fire
-- No sequencing: page 3 response arrives before page 2, items rendered out of order
-- State management doesn't track pending requests — doesn't know if page 2 is already loading
+- Source-reading tests grep or regex raw source files. Import line changes are syntactically outside their intended scope but textually within their match window.
+- The i18n refactor touches import sections across many service files simultaneously (it's a breadth-first sweep), increasing the chance of collateral regex matches.
 
-**Consequences:**
-- User confusion ("Did I see this card before?")
-- Missed learning content (user doesn't notice cards got skipped)
-- Janky UX (items appear, disappear, reorder)
-- Breaking trust in data integrity (feels buggy)
+**How to avoid:**
+- Run the FULL test suite (`npm test`) after EVERY batch of i18n leaf-module extractions, not just after the whole refactor is complete. The refactor should be done file-by-file with a green test baseline after each file.
+- Before starting the refactor, grep for all source-reading tests: `grep -rl "readFileSync\|fs\.read" app/tests/`. Audit each one against the files the refactor will touch.
+- When renaming a service's import (e.g., `import { dailyReadService } from './daily-read.service'` → `import { dailyReadService } from './daily-read.leaf'`), check whether any source-reading test asserts the string `dailyReadService` in a file that's being touched. Update the test's expected import path simultaneously.
+- The anchor-pair extraction pattern (used in HomeScreen tests) is robust to file restructuring as long as the function NAME in the source stays the same. Preserve function names during refactor; rename files not functions.
 
-**Prevention:**
-- Add request queue + deduplication:
-  - Track `currentPageLoading` and `nextPageToLoad`
-  - If user scrolls while page 2 is loading, don't fire another page 2 request
-  - Only fire next request after current completes
-- Add abort controller:
-  - If user scrolls back up fast, abort page 3 request in progress
-  - Let completed responses settle before allowing new requests
-- Add sequence numbers:
-  - Tag each page response with sequence ID
-  - On receive, if sequence ID < current, discard (out of order)
-- No race conditions:
-  ```typescript
-  let currentPage = 1;
-  let isLoading = false;
-  
-  async function loadNextPage() {
-    if (isLoading) return; // Prevent concurrent requests
-    isLoading = true;
-    const response = await fetch(`/feed?page=${currentPage + 1}`);
-    currentPage += 1;
-    isLoading = false;
-  }
-  ```
+**Warning signs:**
+- A source-reading test changes from FAIL to PASS during the refactor without any logic change — this is a false-positive caused by the import line matching.
+- `npm test` passes but a specific invariant test's match is against an import line (`import.*formatCandidateContextPack`) rather than a usage site.
 
-**Prevention Phase:**
-- Phase 1 (Feed Infrastructure): Add request deduplication from start
-- Phase 1: Unit test concurrent scroll + race conditions
+**Phase to address:** i18n leaf-module refactor phase (first v1.5 phase). Run tests after each file, not batch.
 
 ---
 
-### 8. Accessibility: Image-Heavy Feed Excludes Visually Impaired Users
+### Pitfall 8: Engagement State localStorage Key Not Listed in the `trellis_*` Migration Registry
 
-**What goes wrong:** Rednote-style feed is image-forward, minimal text. Screen readers see images with no alt text. Users with visual impairments can't participate in engagement feature (defeat purpose of "accessible learning").
+**What goes wrong:**
+`legacy-migration.service.ts` migrated all `echolearn_*` keys to `trellis_*` keys at v1.4. If engagement signals add a new `trellis_engagement_state` key, this key will not have a legacy migration entry — that's fine. But if a developer accidentally uses `echolearn_engagement_*` as the key name (copy-paste from an older service file that hasn't been fully rebranded), there is no runtime migration and the key is silently orphaned on upgrade. The user's engagement history vanishes.
+
+More commonly: the CLAUDE.md "Brand history" note says `localStorage keys use trellis_*` but the SQLite connection name is still `'echolearn'`. A developer working on engagement signals may reach for the SQLite connection (reasonable, since like/save are permanent records) but use the wrong connection name string literal.
 
 **Why it happens:**
-- Prioritizing visual design over accessibility
-- AI image generation prompts don't translate to good alt text
-- No text fallback: if image fails to load, user sees nothing
-- Animated cards/transitions cause motion sickness for vestibular sensitivity
-- Color-only design (e.g., status by color) fails for colorblind users
+- Brand rename happened in v1.4 (commit `9e5d1f38`). New developers (or agent threads) reading the codebase see both `echolearn` (in SQLite) and `trellis_` (in localStorage) and may cross them up.
+- Copy-paste from existing services that have both names in proximity.
 
-**Consequences:**
-- Legal: Potential ADA violation (if in US)
-- Ethical: Exclude users who depend on accessibility features
-- Practical: Users with accessibility needs uninstall
-- Brand damage ("Inclusive app" claim undermined)
+**How to avoid:**
+- All new localStorage keys MUST use the `trellis_` prefix. Add a lint check or source-reading test asserting `localStorage.setItem('echolearn_` never appears in `src/services/`.
+- SQLite connection name `'echolearn'` is intentionally preserved. If engagement signals are persisted to SQLite (like/save permanent records), use the existing `db.service.ts` connection — do NOT create a new connection with a new name.
+- Engagement service must use `trellis_engagement_state` for its date-scoped localStorage payload. Document this explicitly in the service file's header comment.
 
-**Prevention:**
-- Alt text strategy:
-  - Generate meaningful alt text from card content, not image
-  - Example: Card title + category + suggestion reason
-  - Bad: `<img alt="generated image" src="..." />`
-  - Good: `<img alt="Photosynthesis concept card. Suggested for biology review." src="..." />`
-- AI-generated alt text:
-  - If image generated from prompt, use prompt as base for alt text
-  - Or use vision API to describe image and generate alt text
-- Text fallback:
-  - If image fails: show text summary of card instead of blank
-  - Never show broken image icon without fallback content
-- Motion considerations:
-  - Add `prefers-reduced-motion` media query detection
-  - Disable animations if user has `prefers-reduced-motion: reduce`
-  - Example: Card entrance animation can be disabled
-- Color + contrast:
-  - Never convey status by color alone (e.g., red = due, green = mastered)
-  - Add text labels or icons in addition to colors
-  - Ensure text contrast ratio ≥4.5:1 (WCAG AA standard)
-- Screen reader testing:
-  - Test feed with VoiceOver (iOS) and TalkBack (Android)
-  - Ensure card order makes sense when read aloud
-  - Check link/button focus order
+**Warning signs:**
+- `grep -r "echolearn_" app/src/services/` returns results in files created after v1.4.
+- User reports engagement state vanishing after app update.
 
-**Prevention Phase:**
-- Phase 1 (Feed Design): Define accessibility requirements in spec
-- Phase 1: Add screen reader testing to QA checklist
-- Phase 1: Add `prefers-reduced-motion` support to all animations
+**Phase to address:** Engagement signals phase.
 
 ---
 
-### 9. Design Fatigue: Visual Variety Runs Out, Feed Feels Repetitive
+### Pitfall 9: Dependency Sweep — framer-motion `will-change` on Masonry Cards Creates a New Containing Block, Breaks Portalled Headers
 
-**What goes wrong:** Expanded card designs include 3-4 layouts (title + image, image-first, text-focused, etc.). First 50 cards, users enjoy variety. After 100 cards, pattern becomes obvious. After 200 cards, same layouts repeat. Users say "feed feels the same every day" despite algorithmic diversity.
+**What goes wrong:**
+The masonry card entrance animation (a common touch: cards fade/slide in as they appear in viewport) uses `framer-motion`'s `<motion.div>` with `animate={{ opacity: 1, y: 0 }}`. framer-motion adds `will-change: transform` to animating elements. Per CLAUDE.md "Header positioning": `transform`/`will-change`/`filter`/`contain`/`perspective` on any ancestor of an in-tree `Header` creates a new containing block that breaks `position: fixed` headers inside that ancestor.
+
+The always-mounted HomeScreen slot is an in-tree header slot (inside `SwipeTabContext`). If a `<motion.div>` wrapping a masonry card is an ancestor of... wait, HomeScreen's Header is above the feed, not inside the cards. The real risk: if the masonry card wrapper becomes a containing block via `will-change: transform`, AND a portalled sub-screen Header is somehow rendered adjacent to it during a transition, the stacking context changes. More concretely: the existing `SwipeTabContainer.tsx:245` translateZ(0) containing block is intentionally the ONLY containing block creator in the top-level slot chain. Adding `will-change: transform` on individual masonry cards does NOT break this — they are leaf nodes, not ancestors of the Header. This is a false alarm for the in-tree case.
+
+The real risk is on `PostDetailScreen` (a portalled sub-screen). If a card's entrance animation is still running when the user taps through to PostDetail, the animating `will-change: transform` element is in the HomeScreen subtree (not PostDetail's subtree). PostDetailScreen's Header is portalled to `document.body` — immune. No regression here either.
+
+The ACTUAL risk: a developer, trying to animate the masonry grid container itself with framer-motion (not individual cards), wraps `<InfoFlow />` or the scroll container in a `<motion.div>`. This creates a `will-change: transform` on an ancestor of the in-tree HomeScreen Header. This breaks the containing block chain and HomeScreen's header may flicker.
+
+**How to avoid:**
+- Animate individual masonry CARDS with `<motion.div>`, never the scroll container or InfoFlow root.
+- Alternatively, use CSS `animation` (not framer-motion) for card entrance: `@keyframes fadeSlideIn` with `opacity` and `transform` only. Avoids adding framer-motion's automatic `will-change` to the DOM.
+- If using framer-motion on cards, pass `layout={false}` and do not set `layoutId` — layout animations recalculate bounding boxes, causing the `ResizeObserver` cascade described in Pitfall 6.
+- Source-reading test: assert the HomeScreen scroll container does NOT have `framer-motion` `motion.*` on its root div (or assert no `will-change` in the container's inline style).
+
+**Warning signs:**
+- HomeScreen Header flickers or repositions during card entrance animations.
+- A `<motion.div>` wraps the `<InfoFlow />` component rather than individual cards inside it.
+
+**Phase to address:** Masonry layout phase. Animation choice is an implementation detail that must be locked early.
+
+---
+
+### Pitfall 10: `walkDerivedList` Test Coverage at N=4 Masks Single-Concept Masonry Regression (Repeat of GAP-B Pattern)
+
+**What goes wrong:**
+Phase 36 GAP-B was discovered in UAT, not in tests, because integration smoke tests called `walkDerivedList(2, ...)` on a 4-entry derived list — N=2 is within the `count * 2 = 4 = len` boundary, so truncation didn't fire. The masonry phase will change the number of posts fetched per refill call (a 2-column layout with 4 rows visible pops 8 posts per swipe, not 4, to fill both columns). If the refill call increases `count` from 16 to 32 without also checking that `maxSteps = Math.max(count * 2, len)` still holds for single-anchor users (`len = 4`), the walker will return `min(32*2=64, 4)` → still 4, fine. But the stratified style allocator (`assignStylesStratified`) now receives N=32 entries from a 4-entry derived list, which means 28 of the 32 are repeats of the same 4 anchors. The largest-remainder allocation works correctly on N=32, but all 32 are the same concept — the `spreadByConcept` mixer has nothing to spread.
 
 **Why it happens:**
-- Limited layout variations (only 3-4 patterns)
-- Same visual hierarchy repeats (title always top-left, image always right)
-- No semantic variety: all cards are "study suggestions" (same intent)
-- No content type variety: all are learning cards (no quiz, no milestone, no achievement)
-- Color palette too limited or repetitive
-- No time-based variation (Monday != Friday, morning != evening)
+- Changing the posts-per-swipe constant or the refill batch size without auditing downstream invariants (style allocation, spreadByConcept, cyclePosition arithmetic) is the pattern that bit Phase 36.
+- The v1.5 double-column layout is explicitly called out in CLAUDE.md as the forward-looking reason for the refill threshold increase from 12 to 16. Changing the posts-per-swipe default from 4 to 8 will require re-auditing ALL of those numeric defaults.
 
-**Consequences:**
-- User engagement plateau (initial spike, then drop)
-- Perceived "staleness" despite fresh content
-- Users stop opening engagement feed
-- Less time in app (goal of engagement feature fails)
+**How to avoid:**
+- Before changing posts-per-swipe for the double-column layout: audit `MAX_QUEUE_SIZE`, `REFILL_THRESHOLD`, `walkDerivedList(count, ...)` call sites, and `assignStylesStratified(N)` expected output. Write the regression test for the new N BEFORE changing the constant (RED-first as per Phase 36 discipline).
+- Add a dedicated test: `walkDerivedList(8, single-anchor-4-entry-derived-list)` → assert returns exactly 8 entries (4 unique + 4 repeats cycling), all from the same anchor.
+- The `spreadByConcept` mixer must handle the degenerate case where all entries are the same concept — it should not infinite-loop or return an empty array.
 
-**Prevention:**
-- Extend layout variety:
-  - Don't just change image placement; vary card height, typography, density
-  - Example patterns: "Title first + image", "Image full-width", "Side-by-side + metadata", "Minimal text + large visual"
-  - Aim for 6-8 distinct layouts, rotated throughout feed
-- Add semantic variety:
-  - Mix content types: 70% learning suggestions, 20% milestones/achievements, 10% discovery items
-  - Example: "Completed 50 reviews in Biology this week" → celebration card
-  - Or: "Suggested learning path" (not single card) → collection view
-- Time-based variation:
-  - Morning (6am-12pm): Lighter, briefer cards + motivational messaging
-  - Afternoon (12pm-6pm): Deeper cards, connections, multi-step suggestions
-  - Evening (6pm-10pm): Review-focused, recap suggestions
-- Color strategy:
-  - Use category colors (not just card colors) to vary feed
-  - If card is Biology, use green accents; History = orange, etc.
-  - Prevents "all blue cards" fatigue
-- Randomized non-visual breaks:
-  - Occasionally show empty state or "Take a break" message
-  - Or show "What to do next" prompt (interactive engagement)
-- Measurement:
-  - Track "feed open frequency" weekly
-  - If drop >20% week-to-week after launch, investigate design fatigue
-  - Survey: "Does the feed feel repetitive?" — track sentiment
+**Warning signs:**
+- Posts-per-swipe constant is bumped from 4 to 8 without a corresponding refill-queue-integration test at N=8.
+- `spreadByConcept` throws or returns [] for a single-concept derived list.
 
-**Prevention Phase:**
-- Phase 2 (Card Design Expansion): Define 6+ layout variations in design spec
-- Phase 2: Implement time-of-day and content-type variation logic
-- Phase 3: Add engagement metrics to detect fatigue trends
+**Phase to address:** Masonry layout phase (if posts-per-swipe changes) or a future posts-per-swipe phase.
 
 ---
 
-### 10. Mobile Performance: Virtual Scroll Not Implemented, Infinite Scroll Tanks FPS
+## Minor Pitfalls
 
-**What goes wrong:** Infinite scroll loads 50+ cards into DOM without virtualization. Each card has image, text, interactions. React renders all 50. Frame rate drops to 10 FPS. Phone heats up. Users can't scroll smoothly. Older phones (Android 8) lag significantly.
+### Pitfall 11: i18n Refactor — `_actions-mock-loader.mjs` Doesn't Stub New Leaf Modules
+
+**What goes wrong:**
+The `test:actions` script registers `_actions-mock-loader.mjs` via `--import` to stub LLM/SQLite/i18n dependencies for trellis-actions tests. When the i18n leaf-module refactor extracts a new module (e.g., `engagement-locale.leaf.ts`), that module may transitively import `src/locales/index.ts` (which pulls `import.meta.env.DEV`). If the new leaf module is not stubbed in `_actions-mock-loader.mjs`, any trellis-actions test that imports a service using the new leaf module will fail with the `import.meta.env.DEV` chain error. This is the exact pattern that caused the 10 carried test failures from v1.4.
+
+**How to avoid:**
+- Every new leaf module extracted during the i18n refactor must be listed in `_actions-mock-loader.mjs` (or its stub registry). Check the existing pattern from Phase 36 leaf modules (`feed-spread.ts`, `refill-mutex.ts`).
+- Run `npm run test:actions` after each new leaf module extraction to catch the failure immediately.
+- The leaf-module pattern rule (CLAUDE.md): pure-logic helpers that must be testable under `node --test` must NOT import from `src/locales/index.ts` — stub the locale dependency or accept it as a parameter.
+
+**Warning signs:**
+- `test:actions` fails after a leaf-module extraction with `import.meta.env` is not defined.
+- A new leaf module imports `useTranslation` or `i18next` directly rather than accepting locale as a parameter.
+
+**Phase to address:** i18n leaf-module refactor phase (first v1.5 phase).
+
+---
+
+### Pitfall 12: Dependency Sweep — React 19 Minor Bump May Change `useEffect` Double-Invocation Behavior Under StrictMode
+
+**What goes wrong:**
+React 19 in Strict Mode intentionally double-invokes `useEffect` setup+cleanup in development. This was used in Phase 36 to design the `useRef(dailyPosts.length > 0)` snapshot pattern (StrictMode-safe, commit `06` in Phase 36 round 2). A React 19.x minor bump that changes StrictMode behavior (historically: React 18.0 introduced double-invoke for `useEffect`; React 18.1 adjusted timing) could change the execution order of the `useState` initializer snapshot vs. the `useEffect` resync, causing the HomeScreen warm-start fallback to mis-fire.
+
+**How to avoid:**
+- Lock React to `^19.2.0` (current minor) in package.json and review changelogs before bumping.
+- The StrictMode double-invoke pattern is tested structurally in `HomeScreen.warm-start-guard.test.mjs` — run this test against any React upgrade candidate in isolation first.
+- Do not bump React mid-feature-phase. Reserve dependency bumps for the tech-debt hygiene phase.
+
+**Warning signs:**
+- Warm-start feed shows empty on cold-start in development (Strict Mode) but works in production builds.
+- HomeScreen shows briefly then re-fetches (double-invoke timing changed).
+
+**Phase to address:** Tech-debt dependency sweep phase. Not a feature phase.
+
+---
+
+### Pitfall 13: Like/Save Annotations Stored in `post-history.service.ts` Without a Schema Migration
+
+**What goes wrong:**
+`post-history.service.ts` writes post snapshots to SQLite via `db.service.ts`. Adding `liked: boolean` and `saved: boolean` columns to an existing SQLite table without a migration script causes `SQLITE_ERROR: table post_history has no column named liked` on first write after upgrade. The error is silent at the service level (ServiceResult `{ success: false }`) but the like/save action appears to work to the user (optimistic UI) — then vanishes on next app restart.
 
 **Why it happens:**
-- Naive rendering: `cards.map(card => <Card key={id} />)` renders all cards
-- No windowing: all cards in viewport, not just visible ones
-- Image rendering: Each card loads image without lazy loading
-- Event listeners: Every card has click handlers + touch handlers, 50+ listeners added to DOM
-- JavaScript memory: Card state duplicated in React tree + Redux/Context
+- SQLite schema is not automatically migrated when the app upgrades. `@capacitor-community/sqlite` requires explicit `ALTER TABLE` migrations run in a migration script keyed to a version number.
+- Optimistic UI hides the write failure from the user.
 
-**Consequences:**
-- Unusable on low-end phones (defeats "mobile-first" goal)
-- Battery drain (sustained high GPU usage)
-- Jank perception (users think app is buggy, not just slow)
-- User frustration leads to uninstall
+**How to avoid:**
+- Any schema change to `post_history` (or any other SQLite table) MUST have an accompanying migration in `db.service.ts` with a version bump. Check the existing migration pattern in that file before adding columns.
+- Alternatively, store like/save in a separate localStorage key (simpler, no migration needed). Given that Trellis is local-first with user-managed keys, localStorage is acceptable for engagement annotations.
+- Write an integration test that opens an old-schema DB (without the new columns), runs the migration, and confirms the new columns exist and old data is preserved.
 
-**Prevention:**
-- Implement virtual scrolling:
-  - Use library like `react-window` or `recyclerlistview`
-  - Only render cards visible in viewport + buffer (e.g., ±3 cards above/below)
-  - For 50 cards in feed, render only 8-10 at once
-  - Massive FPS improvement (60 FPS on mid-range phones)
-- Lazy load images:
-  - Use `Loading.lazy` or Intersection Observer
-  - Don't load image until card about to appear in viewport
-  - Defer heavy image rendering until needed
-- Optimize rendering:
-  - Memoize Card component: `React.memo(Card)` prevents re-renders if props unchanged
-  - Use `useCallback` for event handlers (don't create new function on each render)
-  - Profile with React DevTools: check for unnecessary re-renders
-- Reduce bundle size:
-  - Each card component should be <10KB (including styles)
-  - Lazy load image library if using (e.g., Blurhash for placeholders)
-- Testing:
-  - Test on real device: Android 8 (Pixel 2) or iPhone SE (1st gen)
-  - Use Chrome DevTools Performance tab or React Profiler
-  - Target: 60 FPS for scroll, <100ms interaction latency
+**Warning signs:**
+- `ServiceResult<{ liked: boolean }>` returns `{ success: false }` in logs after upgrade.
+- Like/Save state is correct immediately after tap (optimistic) but missing after app restart.
 
-**Implementation Pattern:**
-```typescript
-// GOOD: Virtual scroll with React Window
-import { FixedSizeList } from 'react-window';
-
-function FeedList({ cards }) {
-  return (
-    <FixedSizeList
-      height={600}
-      itemCount={cards.length}
-      itemSize={200}
-      width="100%"
-    >
-      {({ index, style }) => (
-        <div style={style}>
-          <Card card={cards[index]} />
-        </div>
-      )}
-    </FixedSizeList>
-  );
-}
-
-// GOOD: Lazy load images
-function CardImage({ src }) {
-  const [isVisible, setIsVisible] = React.useState(false);
-  const ref = React.useRef();
-
-  React.useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => setIsVisible(entry.isIntersecting)
-    );
-    observer.observe(ref.current);
-    return () => observer.disconnect();
-  }, []);
-
-  return isVisible ? (
-    <img ref={ref} src={src} />
-  ) : (
-    <div ref={ref} className="placeholder" />
-  );
-}
-
-// BAD: No virtualization, renders all 50 cards
-function FeedList({ cards }) {
-  return (
-    <div>
-      {cards.map(card => <Card key={card.id} card={card} />)}
-    </div>
-  );
-}
-```
-
-**Prevention Phase:**
-- Phase 1 (Feed Infrastructure): Use virtualization library from start (not bolt-on)
-- Phase 1: Performance testing on target low-end device
-- Phase 1: Set FPS budget (target 60 FPS for scroll)
+**Phase to address:** Engagement signals phase. Decide storage location (SQLite vs localStorage) before writing any like/save write path.
 
 ---
 
-### 11. UX Feedback: No Clear Loading/Error States for Async Image Generation
+## Phase-Specific Warning Table
 
-**What goes wrong:** Image generation takes 2-5 seconds (API latency). Card shows skeleton, then image appears. But no loading indicator, no "Generating..." message. User thinks image failed to load. Or: API errors (rate limit), UI shows skeleton forever, user doesn't know if it's loading or broken.
-
-**Why it happens:**
-- Skeleton screen designed but no loading state messaging
-- No distinct error states: blank = loading = error (all look the same)
-- No timeout messaging: if generation takes >5 seconds, no feedback to user
-- No retry affordance: user doesn't know they can tap to retry
-
-**Consequences:**
-- User confusion about app state
-- User attempts to retry manually (hammers API)
-- Perceived sluggishness (no feedback = feels broken)
-- User frustration leads to poor review/rating
-
-**Prevention:**
-- Clear state hierarchy:
-  - **Loading**: Skeleton + "Generating image..." (subtle animation)
-  - **Success**: Image appears with smooth fade-in
-  - **Error**: Skeleton replaced with icon + "Image not available" + [Retry] button
-  - **Timeout**: Show placeholder + "Image generation delayed" + [Try Again]
-- Timeout messaging:
-  - If generation >3 seconds: show "Still generating..."
-  - If generation >10 seconds: show "This is taking longer than expected" + suggest offline placeholder
-- Retry affordance:
-  - Always show [Retry] button in error state
-  - Or allow tap-to-retry on placeholder
-- Distinct visual states:
-  - Don't use same skeleton for loading and error
-  - Use colored indicators: gray = loading, red = error, green = success
-- Messaging clarity:
-  - "Loading..." is vague. Better: "Generating image..." (explains what's happening)
-  - Helps user understand why wait time exists
-
-**Implementation Pattern:**
-```typescript
-function CardWithImage({ card, prompt }) {
-  const [state, setState] = React.useState('loading');
-  const [image, setImage] = React.useState(null);
-
-  React.useEffect(() => {
-    let timeout;
-    generateImage(prompt)
-      .then(img => {
-        setState('success');
-        setImage(img);
-      })
-      .catch(err => {
-        setState('error');
-        // Show error after 10 seconds of loading
-        timeout = setTimeout(() => {
-          setState('timeout');
-        }, 10000);
-      });
-    return () => clearTimeout(timeout);
-  }, [prompt]);
-
-  return (
-    <div className="card">
-      {state === 'loading' && (
-        <div className="skeleton">
-          <div className="pulse">Generating image...</div>
-        </div>
-      )}
-      {state === 'timeout' && (
-        <div className="placeholder">
-          <p>Image generation delayed</p>
-          <button onClick={() => setState('loading')}>Try Again</button>
-        </div>
-      )}
-      {state === 'error' && (
-        <div className="error">
-          <p>Image unavailable</p>
-          <button onClick={() => setState('loading')}>Retry</button>
-        </div>
-      )}
-      {state === 'success' && <img src={image} alt={card.title} />}
-    </div>
-  );
-}
-```
-
-**Prevention Phase:**
-- Phase 1 (Card UI): Design all 4 states (loading, success, error, timeout) in Figma
-- Phase 1: Implement state machine in card component (use XState if complex)
+| Phase Topic | Likely Pitfall | Mitigation |
+|---|---|---|
+| Masonry layout | Native CSS masonry not supported in Capacitor WebView | Use CSS `column-count: 2` (Pitfall 1) |
+| Masonry layout | Column rebalance on image load corrupts cyclePosition | Lock column assignment at first render (Pitfall 1) |
+| Masonry layout | Back-navigation scroll position lost with JS masonry lib | Validate scroll-restore in UAT; prefer CSS columns (Pitfall 6) |
+| Masonry layout | framer-motion on scroll container breaks Header containing block | Animate individual cards only (Pitfall 9) |
+| Masonry layout | posts-per-swipe bump breaks style allocation at small N | Write RED test before changing the constant (Pitfall 10) |
+| Engagement signals | Dismiss wired to markExplored → vine credit pollution | Separate dismiss skip set from explored anchor set (Pitfall 2) |
+| Engagement signals | Engagement state not reset on Force-New-Day | `engagementService.reset()` in `handleForceNewDay` (Pitfall 3) |
+| Engagement signals | Like/Save schema migration missing from SQLite | Migration script or localStorage storage decision (Pitfall 13) |
+| Engagement signals | New `echolearn_` localStorage key after v1.4 rebrand | Lint check: no `echolearn_` in new service files (Pitfall 8) |
+| Source diversity | Domain lookup inside refill mutex holds lock too long | Synchronous local allowlist only; no network inside `_refillMutex.run()` (Pitfall 4) |
+| Source diversity | Strict filter silently returns zero posts for a concept | Fallback: allow lowest-blocked domain when all filtered (Pitfall 4) |
+| Richer essays | New async call in PostDetailScreen essay useEffect missing abort guard | D-08 pattern: every call gets `signal` + aborted-check (Pitfall 5) |
+| Richer essays | `generateEssayMeta` slice cap too small for richer essays | Raise `slice(0, 2000)` to `slice(0, 4000)` before lengthening prompt (Pitfall 5) |
+| Richer essays | CJK/RTL essay overflow at higher word counts | Add max-height + scroll on essay container first (Pitfall 5) |
+| i18n leaf-module refactor | Source-reading invariant tests false-positive on import lines | Run `npm test` after each file; audit regex targets before refactor (Pitfall 7) |
+| i18n leaf-module refactor | New leaf modules not stubbed in `_actions-mock-loader.mjs` | Add to stub registry immediately after extraction (Pitfall 11) |
+| Tech-debt dependency sweep | React 19 minor bump changes StrictMode double-invoke timing | Lock version; bump only in tech-debt phase; validate warm-start test (Pitfall 12) |
 
 ---
 
-## Mobile-Specific Pitfalls
+## Sources
 
-### 12. Network Interruption: No Offline Handling for Infinite Scroll
-
-**What goes wrong:** User on cellular connection scrolls feed, network drops briefly. Pagination request hangs. UI shows loading spinner indefinitely. User scrolls more, more requests queue. Network returns, all requests retry at once, causing cascade of requests and memory spike.
-
-**Why it happens:**
-- No network state detection (doesn't know connection dropped)
-- No request timeout: waits forever for response
-- No retry strategy: dropped requests just hang
-- No offline cache: can't show previously loaded items while offline
-
-**Consequences:**
-- Broken UX during network hiccup
-- User frustration (nothing loads)
-- Wasted data if user gives up and retries manually
-
-**Prevention:**
-- Detect network state:
-  ```typescript
-  import { Network } from '@capacitor/network';
-  
-  Network.addListener('networkStatusChange', status => {
-    if (!status.connected) {
-      showOfflineMessage();
-      pauseFeedLoading();
-    } else {
-      hideOfflineMessage();
-      resumeFeedLoading();
-    }
-  });
-  ```
-- Add request timeout:
-  - Set max 10-second timeout for pagination requests
-  - On timeout, show "Network error, please try again" (not infinite spinner)
-  - Abort controller prevents queuing
-- Retry strategy with backoff:
-  - Retry once immediately on network error
-  - Then wait 2 seconds + show retry message
-  - Don't retry automatically, let user tap [Retry]
-- Offline cache:
-  - Cache feed items to SQLite on successful load
-  - Show cached items while offline (label as "Cached")
-  - Disable retry when offline (show "Your device is offline")
-- Batch retry:
-  - If multiple requests failed while offline, batch into single retry (not multiple)
-  - Prevents cascade when network returns
-
-**Prevention Phase:**
-- Phase 1 (Feed Infrastructure): Add Network listener + state management
-- Phase 1: Add request timeout to all API calls
-- Phase 2: Implement offline cache (can be added later)
-
----
-
-### 13. Battery Drain: Background Image Regeneration Tasks Never Finish
-
-**What goes wrong:** Image generation rate-limited mid-session, queued for background retry. App put in background. Background task scheduled but never executes (iOS limitations, Android Doze mode). Task retry loop somehow wakes device repeatedly. User notices 50% battery drain in 2 hours.
-
-**Why it happens:**
-- Background task scheduling not respecting OS constraints
-- iOS: background tasks must complete in <30 seconds
-- Android: Doze mode (API 21+) restricts background execution
-- Retry loops that wake device without condition
-- No cancellation: queued tasks pile up, never cleared
-
-**Consequences:**
-- Battery drain user complaint
-- User disables image generation feature
-- App uninstalled if battery drain is severe
-- Poor app store rating ("Drains my battery")
-
-**Prevention:**
-- Use proper background task API:
-  - iOS: Use `BGProcessingTaskRequest` with `requiresNetworkConnectivity`
-  - Android: Use `WorkManager` (respects Doze mode)
-  - Capacitor: `@capacitor/background-tasks` plugin
-- Constraints:
-  - Only retry if device has good battery (>20%)
-  - Only retry if connected to WiFi or good cellular signal
-  - Only retry if not in Doze mode
-- Task limits:
-  - Max 3 retries per image (then give up)
-  - Max 5 background tasks active at once
-  - Cancel old tasks if they've been pending >24 hours
-- Monitoring:
-  - Log all background task execution (timestamp, duration, outcome)
-  - Alert if background task takes >10 seconds (might be waking device repeatedly)
-  - User opt-out: "Skip background image generation" setting
-
-**Prevention Phase:**
-- Phase 2 (Background Sync): Use proper OS background task API
-- Phase 2: Add battery/network constraint checks
-- Phase 3: Add background task monitoring + logging
-
----
-
-### 14. Low Memory: App Crashes After Scrolling 100+ Cards on Mid-Range Device
-
-**What goes wrong:** Mid-range Android phone (2GB RAM) with EchoLearn + other apps running. User scrolls feed for 10 minutes, loads 150+ cards. Each card loaded into memory. JavaScript heap grows to 500MB. System kills app (OOM). User loses session progress.
-
-**Why it happens:**
-- No virtual scrolling (all 150 cards in memory)
-- Image caching without cleanup (150 images × 250KB = 37.5MB)
-- Card state duplicated in React + Redux/Context
-- No garbage collection hinting
-- Memory leak in image loading (event listeners not cleaned up)
-
-**Consequences:**
-- App crash mid-session (user loses progress)
-- User frustration (especially on low-end phones)
-- Data loss if session state not persisted
-
-**Prevention:**
-- Virtual scrolling (highest priority):
-  - Reduces active cards in memory from 150 to ~10
-  - Massive memory savings
-- Image memory management:
-  - Limit image resolution (400x400px max)
-  - Use compressed format (WEBP, not PNG)
-  - Implement cache eviction (delete oldest images if >50MB)
-- State optimization:
-  - Don't store full card objects in Redux
-  - Store IDs, lazy-load details on render
-  - Use React Context only for small data (not entire feed)
-- Cleanup on unmount:
-  - Cancel in-flight requests
-  - Remove event listeners
-  - Clear timers
-  ```typescript
-  React.useEffect(() => {
-    return () => {
-      abortController.abort();
-      imageElement?.removeEventListener('load', handleLoad);
-      clearTimeout(loadTimeout);
-    };
-  }, []);
-  ```
-- Monitor memory:
-  - Periodic `performance.memory` check (Chrome DevTools)
-  - Alert if heap >200MB
-  - Log OOM crashes to analytics
-
-**Prevention Phase:**
-- Phase 1 (Feed): Virtual scroll from start (not retrofit)
-- Phase 1: Memory profiling on mid-range device (target: <150MB heap)
-- Phase 2: Implement image cache eviction
-
----
-
-## Accessibility & Inclusive Design Pitfalls
-
-### 15. Color-Only Status Indicators: Colorblind Users Can't Tell Card Status
-
-**What goes wrong:** Cards use color to show status: red = due for review, green = mastered, blue = new. User with red-green colorblindness can't distinguish due vs. mastered cards. Feature becomes inaccessible.
-
-**Why it happens:**
-- Visual design prioritizes color coding for aesthetic
-- No text labels or icons (relies solely on color)
-- Assumption that color is universally understood
-
-**Consequences:**
-- Feature completely inaccessible to ~8% of male population (color blindness prevalence)
-- User frustration: can't distinguish cards by status
-- Legal risk (ADA violation if in US)
-
-**Prevention:**
-- Always add text + icon in addition to color:
-  - Red card: Red badge + "Due Today" text + due icon (📌)
-  - Green card: Green badge + "Mastered" text + checkmark icon (✓)
-  - Blue card: Blue badge + "New" text + star icon (⭐)
-- Use colorblind-safe palette:
-  - Avoid pure red/green combinations
-  - Use colors like blue, orange, purple (distinguishable for all colorblindness types)
-- Test with colorblind simulator:
-  - Use Chrome DevTools "Render" tab → "Emulate CSS media feature prefers-color-scheme"
-  - Or use external tool: https://www.color-blindness.com/coblis-color-blindness-simulator/
-
-**Prevention Phase:**
-- Phase 1 (Card Design): Always include text + icon + color (no color-only states)
-- Phase 1: Add colorblind testing to design review checklist
-
----
-
-## Data & State Management Pitfalls
-
-### 16. Stale Suggestion State: User Disables Auto-Suggestions, Still Appears Because State Not Cleared
-
-**What goes wrong:** User goes to settings and disables "Daily suggestions". Next day, suggestions still appear in planner. Or: user provides feedback "Don't suggest this topic", but same topic suggested again next week.
-
-**Why it happens:**
-- User preference not propagated to suggestion algorithm
-- Stale cache: suggestions computed before user changed setting
-- No invalidation trigger: setting change doesn't clear cached suggestions
-- Different component/service owns "user preferences" vs. "suggestion computation"
-
-**Consequences:**
-- User thinks setting doesn't work
-- Frustration with app ("I turned it off but it keeps showing")
-- User distrust of settings/customization
-
-**Prevention:**
-- Centralized preference management:
-  - Single source of truth: `userPreferences.autoSuggestionsEnabled`
-  - All suggestion services check this flag before showing
-  - Don't cache preferences in multiple places
-- Cache invalidation:
-  - On setting change, emit event: `PreferenceUpdated('autoSuggestionsEnabled')`
-  - All subscribers refresh: clear cached suggestions, recompute if needed
-  - Example: PlannnerService listens, clears suggestion cache
-- Explicit apply:
-  - Settings change doesn't auto-apply for "dangerous" changes
-  - Show confirmation: "Turn off daily suggestions? You can enable anytime."
-  - Clear cached suggestions on confirmation
-- Persistence:
-  - Save preference to SQLite immediately on change
-  - On app restart, load preference and validate
-  - Example: localStorage can be cleared by OS, SQLite persists
-
-**Prevention Phase:**
-- Phase 1 (Architecture): Define preference storage + event system
-- Phase 1: Add invalidation pattern to suggestion service
-
----
-
-## Pitfall Prevention Checklist
-
-| Pitfall | Phase | Responsible | Prevention Method |
-|---------|-------|-------------|-------------------|
-| 1. Infinite scroll loop | P1 (Feed) | Eng | Implement `hasMore` flag, deduplicate by ID, hard limit on DOM items |
-| 2. Image generation rate limit | P1 (Image Gen) | Eng | Timeout 3s, queue fallback, cache by prompt hash, distinct error UI |
-| 3. Poor suggestions | P2 (Planner) | Product/Eng | Multi-signal ranking, diversity heuristic, A/B test baseline, quality metric |
-| 4. Planner refresh during session | P2 (Planner) | Eng | Lifecycle-aware refresh, only on app launch or user trigger |
-| 5. Image storage bloat | P1 (Image Gen) | Eng | Max 50MB cache, resize to 400x400, WEBP format, LRU eviction |
-| 6. Privacy data leak | P0 (Architecture) | Security/Eng | Sanitize prompts, backend proxy, user consent, no API keys in client |
-| 7. Infinite scroll race conditions | P1 (Feed) | Eng | Request deduplication, abort controller, sequence numbers |
-| 8. Accessibility: No alt text | P1 (Design) | Design/Eng | Generate alt text from card content, test with screen reader |
-| 9. Design fatigue | P2 (Card Design) | Design | 6+ layout variations, semantic variety, time-based variation |
-| 10. Mobile performance | P1 (Feed) | Eng | Virtual scroll from start, lazy load images, memoize components, target 60 FPS |
-| 11. UX feedback (loading/error) | P1 (Card UI) | Design/Eng | 4 distinct states: loading, success, error, timeout; clear messaging |
-| 12. Network offline | P1 (Feed) | Eng | Network state listener, 10s timeout, offline cache, retry strategy |
-| 13. Battery drain | P2 (Background) | Eng | Use WorkManager/BGTask, battery + network constraints, max 3 retries |
-| 14. Low memory OOM | P1 (Feed) | Eng | Virtual scroll, image cache limit, state optimization, garbage collection |
-| 15. Color-only status | P1 (Card Design) | Design | Add text + icon + color, test colorblind simulation |
-| 16. Stale suggestion state | P1 (Architecture) | Eng | Centralized preferences, cache invalidation events, explicit confirm |
-
----
-
-## Testing Strategy
-
-### Unit Tests
-- Infinite scroll: test duplicate detection, `hasMore` logic, empty response handling
-- Image cache: test size limits, eviction policy, compression
-- Suggestions: test multi-signal scoring, diversity, freshness
-- Preference system: test state changes, cache invalidation
-
-### Integration Tests
-- Feed load → image generation → scroll → rate limit → retry
-- Planner suggestion → user rejects → next day refresh (does it appear again?)
-- Network interruption → resume → no cascade retry
-- App background → refresh scheduled → app foreground (does it interfere?)
-
-### Performance Tests
-- Virtual scroll: scroll 200 cards, target <100ms layout time, 60 FPS
-- Image cache: 300 cards with images, max 500MB heap
-- Memory: load feed for 10 min, no OOM on mid-range device
-- Battery: 1 hour background task, <5% battery drain
-
-### Accessibility Tests
-- Screen reader: Navigate feed with VoiceOver/TalkBack, all cards readable
-- Colorblind: Use simulator, all status indicators distinguishable
-- Motion sensitivity: Disable animations with `prefers-reduced-motion`, animations don't play
-- Contrast: Text color contrast ≥4.5:1 (WCAG AA)
-
-### User Testing
-- Suggestion quality: Show 10 users 20 suggestions, measure engagement rate
-- Design fatigue: Daily active users trend over 4 weeks (should plateau, not drop)
-- Privacy concerns: Ask 5 users if comfortable with image API calls
-- Offline experience: Test on slow 3G, simulate network dropout
-
----
-
-## References & Context
-
-- **Spaced Repetition Risk**: Learning is the core EchoLearn feature. Any engagement feature that disrupts SRS workflows undermines product value. Test that suggestions don't interfere with active review sessions.
-- **Privacy-First Brand**: EchoLearn positions as "privacy-first, local-first." Image generation that sends data to APIs directly contradicts brand promise. Privacy must be baked into design, not retrofit.
-- **Mobile-First**: Target low-end phones (Android 8, 2GB RAM). Performance issues on low-end = failure. Virtual scroll and cache management not optional.
-- **AI Integration Risk**: Image generation failure modes (rate limits, timeouts, sanitization) are new to the codebase. Treat as high-risk feature. Extra testing required.
-- **User Trust in Algorithms**: Suggestion algorithm quality directly impacts trust in orchestration engine (Milestone 2 goal). Boring/irrelevant suggestions poison the well for future features.
-
+- CLAUDE.md (all load-bearing sections cited throughout) — HIGH confidence (primary source)
+- `.planning/PROJECT.md` (v1.4 phase history, v1.5 goal definition) — HIGH confidence
+- [CSS Masonry — MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Grid_layout/Masonry_layout) — masonry browser support status — MEDIUM confidence
+- [Chrome for Developers: Brick by brick, CSS Masonry](https://developer.chrome.com/blog/masonry-update) — Chromium flag status — MEDIUM confidence
+- [Masonry in React: A Performance Hell](https://medium.com/@colecodes/masonry-in-react-a-performance-hell-fb779f5fcebd) — JS masonry rebalance pitfalls — MEDIUM confidence
+- [localStorage storage event does not fire in same tab](https://www.xjavascript.com/blog/forcing-local-storage-events-to-fire-in-the-same-window/) — cross-tab sync caveat — HIGH confidence
+- [AbortController + React useEffect cleanup](https://www.j-labs.pl/en/tech-blog/how-to-use-the-useeffect-hook-with-the-abortcontroller/) — unmount abort patterns — HIGH confidence
+- [Motion (framer-motion) animation performance](https://motion.dev/docs/performance) — will-change caveats — MEDIUM confidence
+- Phase 36 incident history (GAP-A, GAP-B, GAP-C, GAP-D from `.planning/PROJECT.md`) — HIGH confidence
