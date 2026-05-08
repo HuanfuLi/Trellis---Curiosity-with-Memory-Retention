@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Curiosity Feed v2 + Tech-Debt Hardening
-status: Roadmap created
-stopped_at: Roadmap drafted (37-45); awaiting plan-phase 37 to begin
-last_updated: "2026-05-08T09:30:00.000Z"
+status: Phase 37 context gathered
+stopped_at: Phase 37 CONTEXT.md committed; ready for /gsd:plan-phase 37
+last_updated: "2026-05-08T10:15:00.000Z"
 progress:
   total_phases: 9
   completed_phases: 0
@@ -16,10 +16,10 @@ progress:
 
 ## Current Position
 
-Phase: Not started — Phase 37 (i18n Leaf-Module Refactor) is next
+Phase: 37 — i18n Leaf-Module Refactor (context gathered)
 Plan: —
-Status: Roadmap created; ready for `/gsd:plan-phase 37`
-Last activity: 2026-05-08 — v1.5 roadmap drafted (9 phases / 4 waves / 22 reqs mapped)
+Status: CONTEXT.md committed; ready for `/gsd:plan-phase 37`
+Last activity: 2026-05-08 — Phase 37 context capture (9 files in scope after audit; 3-plan structure recommended)
 
 ## Progress
 
