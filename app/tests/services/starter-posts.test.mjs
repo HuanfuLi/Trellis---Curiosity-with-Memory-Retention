@@ -54,10 +54,10 @@ function makeStarterPost(id, title, hook, preview, bodyMarkdown, contextLabel) {
 const STARTER_POSTS = [
   makeStarterPost(
     'starter-welcome',
-    'Welcome to EchoLearn',
+    'Welcome to Trellis',
     'Your AI learning companion',
-    'Ask any question and watch your knowledge grow. EchoLearn uses AI to create personalized learning paths.',
-    '# Welcome to EchoLearn\n\nEchoLearn is your AI-powered learning companion. Here\'s how to get started:\n\n1. **Ask a question** — Tap the Ask tab and type any question. The AI will answer it and save it to your knowledge graph.\n2. **Review what you learn** — Your answers become flashcards. Review them to build lasting memory.\n3. **Explore your feed** — This feed brings you fresh content based on what you\'re learning.\n\nStart by asking your first question!',
+    'Ask any question and watch your knowledge grow. Trellis uses AI to create personalized learning paths.',
+    '# Welcome to Trellis\n\nTrellis is your AI-powered learning companion. Here\'s how to get started:\n\n1. **Ask a question** — Tap the Ask tab and type any question. The AI will answer it and save it to your knowledge graph.\n2. **Review what you learn** — Your answers become flashcards. Review them to build lasting memory.\n3. **Explore your feed** — This feed brings you fresh content based on what you\'re learning.\n\nStart by asking your first question!',
     'Getting Started',
   ),
   makeStarterPost(
@@ -65,7 +65,7 @@ const STARTER_POSTS = [
     'How your knowledge grows',
     'From questions to mastery',
     'Every question you ask becomes part of your knowledge graph. Review flashcards to strengthen your memory.',
-    '# How Your Knowledge Grows\n\nEchoLearn follows a proven learning loop:\n\n1. **Ask** — Ask questions about anything you\'re curious about.\n2. **Connect** — Your questions are organized into a knowledge graph by topic.\n3. **Review** — Flashcards are generated automatically. Spaced repetition helps you remember.\n4. **Grow** — As you master topics, your trellis tree blooms and bears fruit.\n\nThe more you review, the stronger your knowledge becomes.',
+    '# How Your Knowledge Grows\n\nTrellis follows a proven learning loop:\n\n1. **Ask** — Ask questions about anything you\'re curious about.\n2. **Connect** — Your questions are organized into a knowledge graph by topic.\n3. **Review** — Flashcards are generated automatically. Spaced repetition helps you remember.\n4. **Grow** — As you master topics, your trellis tree blooms and bears fruit.\n\nThe more you review, the stronger your knowledge becomes.',
     'How It Works',
   ),
   makeStarterPost(
