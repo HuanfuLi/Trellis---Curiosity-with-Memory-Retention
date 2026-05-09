@@ -78,10 +78,10 @@
 | CONTENT-03  | Phase 41 | Wave 2 | Pending |
 | CONTENT-04  | Phase 41 | Wave 2 | Pending |
 | TECHDEBT-01 | Phase 37 | Wave 0 | ✓ Complete |
-| TECHDEBT-02 | Phase 38 | Wave 0 | Pending |
-| TECHDEBT-03 | Phase 38 | Wave 0 | Pending |
+| TECHDEBT-02 | Phase 38 | Wave 0 | ✓ Complete |
+| TECHDEBT-03 | Phase 38 | Wave 0 | ✓ Complete |
 | TECHDEBT-04 | Phase 38 | Wave 0 | Pending |
-| TECHDEBT-05 | Phase 38 | Wave 0 | Pending |
+| TECHDEBT-05 | Phase 38 | Wave 0 | ✓ Complete |
 | TECHDEBT-06 | Phase 38 | Wave 0 | Pending |
 | TECHDEBT-07 | Phase 45 | Wave 4 | Pending |
 | TECHDEBT-08 | Phase 44 | Wave 4 | Pending |
