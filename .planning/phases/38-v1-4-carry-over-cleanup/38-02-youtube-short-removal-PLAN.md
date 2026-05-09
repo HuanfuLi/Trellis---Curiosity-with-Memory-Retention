@@ -818,7 +818,7 @@ type AppEvent =
   <done>4 test files updated; all assertions pass; 4 atomic commits land per file.</done>
 </task>
 
-<task type="auto" tdd="true">
+<task type="auto">
   <name>Task 6: Add NEW invariant test youtube-no-short-classification.test.mjs (4 source-reading assertions)</name>
   <files>app/tests/services/youtube-no-short-classification.test.mjs</files>
   <behavior>
