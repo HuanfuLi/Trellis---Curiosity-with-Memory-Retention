@@ -104,9 +104,9 @@ The derived list is **append-only** (grows on new question, shrinks on read). Th
 
 ___
 
-## Video & short post completion signals (Phase 36 GAP-C — load-bearing)
+## Video post completion signals (Phase 36 GAP-C, generalized in Phase 38 — load-bearing)
 
-Video and short posts have explicit completion-signal detectors so the lazy-skip walker (Phase 36 GAP-2) sees `CONCEPT_EXPLORED` events for video-only engagement. Without these detectors, watching a video for a concept never increments vine progress and the walker keeps re-suggesting the same concept on subsequent refills.
+Video posts have explicit completion-signal detectors so the lazy-skip walker (Phase 36 GAP-2) sees `CONCEPT_EXPLORED` events for video-only engagement. Without these detectors, watching a video for a concept never increments vine progress and the walker keeps re-suggesting the same concept on subsequent refills. Phase 38 (TECHDEBT-06) dropped the `short` post type entirely; all YouTube content is `sourceType: 'video'` and the thumbnail-tap inline-play emit (formerly the "Short tap-to-play" detector) generalized to fire on any video card thumbnail tap.
 
 ### Detector inventory (PostDetailScreen.tsx + InfoFlow.tsx)
 
@@ -115,20 +115,20 @@ Video and short posts have explicit completion-signal detectors so the lazy-skip
 | A — scroll 70% sentinel | `PostDetailScreen.tsx:124-137` | IntersectionObserver fires on essay sentinel | text/image/news (sentinel below essay body) |
 | B — 30s dwell timer | `PostDetailScreen.tsx:139-149` | setTimeout(30_000) on resolvedAnchorId | all post types reaching detail screen |
 | C — Q&A follow-up | `PostDetailScreen.tsx:406-411` | handleAsk on user submit | all post types reaching detail screen |
-| **D — YouTube IFrame API postMessage** | `PostDetailScreen.tsx` (after Detector B) | window 'message' event: `onStateChange info=0` (ENDED) OR `infoDelivery currentTime/duration >= 0.8` | video (sourceType='video') |
-| **Short tap-to-play emit** | `InfoFlow.tsx` (short card onClick) | setVideoPlaying invoked on short post | short (sourceType='short') — never reaches detail screen |
+| **D — YouTube IFrame API postMessage** | `PostDetailScreen.tsx` (after Detector B) | window 'message' event: `onStateChange info=0` (ENDED) OR `infoDelivery currentTime/duration >= 0.8` | video (sourceType='video') — engagement after navigate |
+| **Video thumbnail-tap inline-play emit** | `InfoFlow.tsx` (video card thumbnail onClick) | setVideoPlaying invoked on video post via thumbnail tap | video (sourceType='video') — engagement WITHOUT navigate (D-02b hybrid interaction; formerly gated on the deleted short-card branch) |
 
-### Why both Detector D AND the short tap emit exist
+### Why both Detector D AND the thumbnail-tap inline-play emit exist (D-02b hybrid interaction)
 
-- Video posts (`sourceType === 'video'`) navigate to PostDetailScreen via `onOpen`. Detector D listens on the parent window for postMessage events from the YouTube iframe (which now includes `enablejsapi=1` — required to activate the API channel).
-- Short posts (`sourceType === 'short'`) have `interactive=false` at `InfoFlow.tsx:295` and play inline in the feed without navigating. Detectors A/B/C/D never run. Tap-to-play (5-15s clips) is the strongest implicit signal available — `setVideoPlaying(post.id)` fires `dailyReadService.markExplored` + `eventBus.emit({type: 'CONCEPT_EXPLORED', ...})` directly.
+- Video posts in the feed have a HYBRID interaction (Phase 38 D-02b): tapping the **thumbnail/iframe area** plays inline (no navigation) — the inline-play emit at `InfoFlow.tsx` video card thumbnail `onClick` fires `dailyReadService.markExplored` + `eventBus.emit({type: 'CONCEPT_EXPLORED', ...})` directly. Tapping the **title/teaser/hook/channel attribution area** navigates to PostDetailScreen via `onOpen`/`handleActivate` — Detector D then listens on the parent window for postMessage events from the YouTube iframe (which includes `enablejsapi=1` — required to activate the API channel).
+- Both paths now exist for ALL video posts. Phase 38 generalized the formerly short-only inline-play emit because dropping the `short` type meant ALL videos otherwise would have been forced through tap-and-navigate (losing the low-friction inline preview that Phase 36 GAP-C established for shorts).
 
 ### Rules
 
-1. **Don't remove `enablejsapi=1` from YouTubeEmbed.tsx or InfoFlow.tsx iframe srcs.** Without it, YouTube's IFrame Player API postMessage channel is closed and Detector D receives nothing. Tests at `app/tests/screens/PostDetailScreen.video-detector.test.mjs` enforce Detector D's structure but cannot detect a missing query param at compile time — the iframe-src tests at `app/tests/components/InfoFlow.short-tap-emit.test.mjs` do not directly assert this either, but `grep -c "enablejsapi=1" app/src/components/YouTubeEmbed.tsx app/src/components/InfoFlow.tsx` is the source-of-truth check (must return ≥3).
+1. **Don't remove `enablejsapi=1` from YouTubeEmbed.tsx or InfoFlow.tsx iframe srcs.** Without it, YouTube's IFrame Player API postMessage channel is closed and Detector D receives nothing. Tests at `app/tests/screens/PostDetailScreen.video-detector.test.mjs` enforce Detector D's structure but cannot detect a missing query param at compile time — the iframe-src tests at `app/tests/components/InfoFlow.video-tap-emit.test.mjs` do not directly assert this either, but `grep -c "enablejsapi=1" app/src/components/YouTubeEmbed.tsx app/src/components/InfoFlow.tsx` is the source-of-truth check (must return ≥3).
 2. **Don't remove the origin allowlist from Detector D** (`event.origin !== 'https://www.youtube.com' && event.origin !== 'https://www.youtube-nocookie.com'`). Without it, any iframe on the page can spoof concept-explored signals.
-3. **Don't add a duplicate emit in the InfoFlow video card onClick** (line ~368-371). Video posts route through PostDetailScreen → Detector D; adding an emit at the feed-tap point would double-fire (idempotent via `hasEmittedRef`/markExplored, but still unnecessary work + confusing semantics). Test `InfoFlow.short-tap-emit.test.mjs` enforces `markExplored` is called exactly once in InfoFlow.tsx.
-4. **Don't introduce new event types** for video/short completion. Reuse `CONCEPT_EXPLORED` (CLAUDE.md best practice rule 6 — one signal per semantic event). The walker subscribes to a single event; multiple events would fragment the lazy-skip flow.
+3. **Don't add a SECOND emit at the InfoFlow video card-level onClick.** The Phase 36 GAP-C emit already lives in the video card's THUMBNAIL onClick (where setVideoPlaying fires). Adding a second emit at the card-level onClick (which navigates to PostDetailScreen via handleActivate) would double-fire on every card tap — once from thumbnail bubble, once from card. The thumbnail onClick uses `e.stopPropagation()` to prevent bubble; preserve this. The single emit is enforced by `InfoFlow.video-tap-emit.test.mjs` which asserts `dailyReadService.markExplored` and `CONCEPT_EXPLORED` each appear EXACTLY ONCE in InfoFlow.tsx.
+4. **Don't introduce new event types** for video completion. Reuse `CONCEPT_EXPLORED` (CLAUDE.md best practice rule 6 — one signal per semantic event). The walker subscribes to a single event; multiple events would fragment the lazy-skip flow.
 5. **Don't refactor PostDetailScreen.tsx's video render branch** (lines 589-601) to a native `<video>` element. The current `YouTubeEmbed` is correct; the postMessage path is preferred over swapping renderers.
 
 ___
