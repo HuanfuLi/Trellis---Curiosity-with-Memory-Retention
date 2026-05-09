@@ -484,6 +484,10 @@ export interface PostSnapshot {
   title: string;
   teaser: FeedTeaser;
   bodyMarkdown: string;
+  /** Phase 41 D-03 — optional 350-600w deep variant. Generated on demand,
+   *  lives alongside the standard bodyMarkdown teaser. Back-compat additive:
+   *  old cached posts without this field remain valid. */
+  bodyMarkdownDeep?: string;
   whyCare: string;
   takeaway: string;
   quickAskPrompts: string[];

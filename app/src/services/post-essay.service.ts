@@ -10,10 +10,15 @@ import { settingsService } from './settings.service.ts';
 
 export interface EssayOptions {
   signal?: AbortSignal;
+  /** Phase 41 D-03 — 'standard' (default, 150-250w teaser) or 'deep' (350-600w expansion). */
+  depth?: 'standard' | 'deep';
 }
 
 export interface EssayContent {
   bodyMarkdown: string;
+  /** Phase 41 D-03 — populated when generator was called with depth: 'deep'.
+   *  patchPostEssayInCache merges this field-by-field; standard cache stays intact. */
+  bodyMarkdownDeep?: string;
   whyCare: string;
   takeaway: string;
   quickAskPrompts: string[];
