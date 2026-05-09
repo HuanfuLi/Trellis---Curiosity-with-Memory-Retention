@@ -3,32 +3,32 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: gap closure)
 status: verifying
-stopped_at: Phase 39 context gathered
-last_updated: "2026-05-09T08:02:05.506Z"
+stopped_at: Completed 39-01-engagement-service-PLAN.md
+last_updated: "2026-05-09T09:56:28.126Z"
 last_activity: 2026-05-09
 progress:
-  total_phases: 40
-  completed_phases: 2
-  total_plans: 7
-  completed_plans: 7
+  total_phases: 21
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Project State: v1.5 ROADMAP CREATED — 2026-05-08
 
 ## Current Position
 
-Phase: 38 (v1-4-carry-over-cleanup) — EXECUTING
-Plan: 4 of 4
-Status: Phase complete — ready for verification
-Last activity: 2026-05-09
+Phase: 39 (engagement-service-walker-extension) — Plan 1 of 1 complete; ready for verification
+Plan: 1 of 1 (executed)
+Status: Phase 39 complete — ready for `/gsd:verify-work`
+Last activity: 2026-05-09 — Plan 39-01 close
 
 ## Progress
 
-**Phases:** 1 / 9 complete (37 ✓; 38 IN PROGRESS — all 4 plans done, awaiting verification; 39-45 pending)
-**Plans:** 4 / 4 complete in Phase 38 (38-01 doc cleanup ✓; 38-02 youtube-short-removal ✓; 38-03 device-uat ✓; 38-04 fresh-install-bugs ✓)
+**Phases:** 2 / 9 complete (37 ✓; 38 ✓; 39 ready for verification; 40-45 pending)
+**Plans:** 1 / 1 complete in Phase 39 (39-01 engagement-service ✓)
 
 ```
-[████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 22%
+[██████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 25%
 ```
 
 ### Wave Order
@@ -45,7 +45,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-08 — milestone v1.5 started)
 
 **Core value:** Enable learners to transform fragmented information into structured knowledge through AI-driven Q&A, visual mapping, and adaptive spaced repetition — all while maintaining complete local-first privacy.
 
-**Current focus:** Phase 38 — v1-4-carry-over-cleanup
+**Current focus:** Phase 39 — engagement-service-walker-extension
 
 ## Requirement Coverage
 
@@ -72,6 +72,17 @@ All carry-overs are scheduled into Wave 0:
 ## Resolved blockers
 
 All v1.4 blockers resolved at close. No open blockers.
+
+## Last decisions (Plan 39-01 close, 2026-05-09)
+
+- **Storage key `trellis_engagement_v1` locked verbatim.** The `_v1` suffix is unusual (other Trellis keys are unsuffixed) but mandated by ROADMAP success criterion #1; not normalized away. Future schema migrations would bump the suffix in a separate phase.
+- **Defense-in-depth anti-wire enforcement (D-06).** Two tests lock the invariant that no code path emits both `ANCHOR_DISMISSED` and `CONCEPT_EXPLORED` for the same call: (a) BEHAVIORAL — `engagement.service.test.mjs` case 6 captures the event-bus log on a `dismissAnchor` call and asserts exactly 1 dismiss event + 0 engagement-change events + 0 explored events; (b) STATIC — `engagement-anti-wire.test.mjs` walks every `.ts/.tsx` file under `app/src/` and scans for the two emit substrings within an 800-char window, with a counterweight assertion that `engagement.service.ts` IS in the scan list AND emits at least one dismiss event (catches future scope drift). Manual sanity-checked: temporarily injecting a co-emit triggers the test failure with offset diagnostics; reverted.
+- **Walker third arg `dismissedIds` is REQUIRED positional, NOT defaulted (D-07).** Defaulting to `new Set()` would let new callers silently bypass dismiss-skip behavior. Required arg forces explicit consideration. Cost was one line at the single existing caller (`concept-feed.service.ts:1209`); benefit is structural. Phase 36 GAP-B `Math.max(count * 2, len)` math + comment block preserved verbatim — load-bearing per CLAUDE.md "Concept Feed Generation Pipeline" section.
+- **ESM cycle `engagement.service` ↔ `post-history.service` is acceptable as value-level cycle.** `engagementService.getSavedPosts/getLikedPosts` invoke `postHistoryService.getPosts()` at call time; `postHistoryService.purgeExpired()` invokes `engagementService.getPinnedIds()` at call time. Neither side touches the other at module-init time. Both top-levels only declare functions/objects; both deferred reads happen at call time. tsc -b --noEmit exits 0; engagement.service.test.mjs runs cleanly. New canonical pattern documented in SUMMARY frontmatter `patterns-established`.
+- **Engagement-service docstring de-collision (proactive Rule 2 fix during Task 2).** Original docstrings directly named ANCHOR_DISMISSED, ENGAGEMENT_CHANGED, and CONCEPT_EXPLORED; this would have caused the Task 4 source-reading anti-wire test to false-positive on the docstring co-occurrence. Rephrased to surrogate names ("anchor-dismiss event" / "explored-anchor signal" / "engagement-change event"). Single literal `ANCHOR_DISMISSED` occurrence is the emit site; ENGAGEMENT_CHANGED count = 5 (one per emit site); CONCEPT_EXPLORED count = 0. Same lesson as Plan 37-03 leaf-shim docstring de-collision.
+- **Phase 39 D-07 comment trim in concept-feed.service.ts (Task 8 Rule 1 fix).** My added 6-line Phase 39 D-07 comment block pushed the `hasImageGenKey: imageGenEnabled && (nanoBananaKeyPresent || geminiImageKeyPresent)` assignment past the 6000-char window read by `tests/services/image-gen-key-gate.test.mjs:22`. Trimmed to 3 lines integrated into the existing comment block; Phase 39 D-07 marker preserved verbatim. Test infrastructure fragility (window-based source-reading) is captured as a Phase 44/45 candidate. Same class as the leaf-shim docstring fragility from Plan 37-03.
+- **walkDerivedList signature change broke `refill-queue-integration.test.mjs` (Task 8 Rule 3 fix).** Plan listed only `derived-list.test.mjs` as needing the third-arg update; planner could not have known about `refill-queue-integration.test.mjs` without exhaustively scanning `tests/`. Added `, new Set()` as third arg to all 5 walkDerivedList calls in that file. Fix is in scope (my walker change directly broke these). 7/7 tests pass after fix.
+- **Plan 39-01 close-out: 8 atomic per-task commits + close-out commit.** Test baseline: pre-Phase-39 579/2 fail → post-Phase-39 583/2 fail (net +4 passes from new test files; both remaining fails are the same pre-existing carry-overs from Phase 37 STATE.md — `tests/concept-feed.test.mjs` ERR_MODULE_NOT_FOUND for extensionless youtube.service import + `tests/services/trellis-layout.test.mjs:64` getVineColor date-dependent assertion). test:actions 16/16/0 (unchanged from Plan 38-02 close baseline). tsc -b --noEmit exits 0. Pass count exceeds plan's expected lower bound of 582.
 
 ## Last decisions (Plan 38-04 close, 2026-05-09)
 
@@ -126,8 +137,37 @@ All v1.4 blockers resolved at close. No open blockers.
 
 ## Session Continuity
 
-**Stopped at:** Phase 39 context gathered
-**Next action:** `/gsd:discuss-phase 39` (recommended — 4 ENGAGE-* requirements warrant context discussion) or `/gsd:plan-phase 39` to skip discussion. Phase 39 (engagement service) is parallel-safe with Phase 40 (source diversity); both Wave 1.
+**Stopped at:** Completed 39-01-engagement-service-PLAN.md
+**Next action:** `/gsd:verify-work 39 01` (verifier sweep over Plan 39-01 must-haves) → after verification, `/gsd:plan-phase 40` (source diversity, Wave 1 parallel-safe with completed Phase 39).
+
+**Files written this session (Plan 39-01 close):**
+
+- `app/src/types/index.ts` (MODIFIED — AppEvent union + ANCHOR_DISMISSED + ENGAGEMENT_CHANGED { kind })
+- `app/src/services/engagement.service.ts` (NEW — 210 lines, full save/like/dismiss API + getPinnedIds + reset)
+- `app/src/services/post-queue.service.ts` (MODIFIED — walkDerivedList signature gains required positional dismissedIds; predicate ANDs both sets; Phase 36 GAP-B math preserved verbatim)
+- `app/src/services/concept-feed.service.ts` (MODIFIED — engagementService import; sole walker caller updated to pass dismissedIds; Phase 39 D-07 comment trimmed for image-gen-key-gate window compatibility)
+- `app/src/services/post-history.service.ts` (MODIFIED — engagementService import; purgeExpired filter pins saved/liked posts via getPinnedIds)
+- `app/tests/services/engagement.service.test.mjs` (NEW — 13 behavioral test cases incl. D-06 BEHAVIORAL HALF case 6 and D-08 reset() emits-nothing case 12)
+- `app/tests/services/engagement-anti-wire.test.mjs` (NEW — D-06 STATIC HALF: counterweight + 800-char window co-emit scan across all .ts/.tsx files under app/src/)
+- `app/tests/services/derived-list.test.mjs` (MODIFIED — 8 existing walkDerivedList calls get empty third arg; 4 new dismiss-skip cases under new describe block)
+- `app/tests/services/refill-queue-integration.test.mjs` (MODIFIED — 5 walkDerivedList calls get empty third arg; Task 8 auto-fix for walker-signature regression)
+- `.planning/phases/39-engagement-service-walker-extension/39-01-engagement-service-SUMMARY.md` (NEW — close-out)
+- `.planning/STATE.md` (this file)
+
+**Plan 39-01 commits:**
+
+- `7dc20dac` (Task 1: AppEvent union + ANCHOR_DISMISSED + ENGAGEMENT_CHANGED)
+- `84ed50d2` (Task 2: engagement.service.ts leaf service)
+- `c332ba82` (Task 3: behavioral test suite — 13 cases incl. D-06 BEHAVIORAL HALF)
+- `ab56005e` (Task 4: source-reading anti-wire test — D-06 STATIC HALF)
+- `6b4d40da` (Task 5: walkDerivedList signature + 4 new dismiss-skip tests + 8 existing test updates)
+- `040a865d` (Task 6: concept-feed.service.ts walker caller wired with engagementService.getDismissedAnchorIds)
+- `aca300b8` (Task 7: post-history.service.ts purgeExpired pins via getPinnedIds — D-04)
+- `d15fc16f` (Task 8: full-suite green check + auto-fix walker-signature regressions)
+
+**Test baseline (post-Plan-39-01):** test:main 583/2 (matches pre-Phase-39 pass count + 4 new tests, with the same 2 pre-existing carry-over failures); test:actions 16/16/0 (unchanged); tsc -b --noEmit → exit 0. Pass count exceeds plan's expected lower bound of 582.
+
+---
 
 **Files written this session (Plan 38-02 close):**
 

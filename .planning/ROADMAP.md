@@ -1060,7 +1060,7 @@ _Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round
 
 - [x] **Phase 37: i18n Leaf-Module Refactor** — Extract i18n usage from 6 service files into `lib/i18n-leaf.ts` shim; close 10 v1.4-carried test failures; unblock all new-service test coverage (completed 2026-05-09)
 - [x] **Phase 38: v1.4 Carry-Over Cleanup** — VALIDATION drift flip (34/35), ROADMAP plan-list polish, 33-HUMAN-UAT-1/2 device retest, CLAUDE.md `echolearn_*` doc-drift cleanup, YouTube landscape-listed-as-short bug fix (completed 2026-05-09)
-- [ ] **Phase 39: Engagement Service + Walker Extension** — `engagement.service.ts` leaf module (save/dismiss/like, cross-day localStorage); `walkDerivedList` gains optional `dismissedIds` param; `ANCHOR_DISMISSED` event added to AppEvent union
+- [x] **Phase 39: Engagement Service + Walker Extension** — `engagement.service.ts` leaf module (save/dismiss/like, cross-day localStorage); `walkDerivedList` gains optional `dismissedIds` param; `ANCHOR_DISMISSED` event added to AppEvent union (completed 2026-05-09)
 - [ ] **Phase 40: Source Diversity Leaf Module** — `source-diversity.ts` session-scoped leaf (filterForDiversity, recordServedDomain, scoreSource); bundled domain-tier allowlist (~200 entries); synchronous O(N) scan for mutex safety
 - [ ] **Phase 41: Pipeline Wiring + Essay Depth** — Wire engagement + diversity into refillQueue; add `EssayOptions.depth: 'standard' | 'deep'` to post-essay.service.ts (350-600w deep variant); raise body-slice cap 2000→4000; multi-snippet grounding + ReactMarkdown citation overrides
 - [ ] **Phase 42: Masonry Feed Layout** — `MasonryFeed.tsx` with CSS `column-count: 2` + `break-inside: avoid`; framer-motion entrance animations on leaf cards; vine-bloom end-of-content celebration card
@@ -1107,7 +1107,7 @@ _Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round
   4. `ANCHOR_DISMISSED` event added to AppEvent union; `engagementService.dismissAnchor` emits it; no code path emits both `ANCHOR_DISMISSED` and `CONCEPT_EXPLORED` for the same call (anti-wire test passes)
   5. Saved/liked posts persist across day boundaries (no date-based reset); dismissed anchors only reset via explicit undo or Clear All Data
 **Plans**: 1 plan
-  - [ ] 39-01-engagement-service-PLAN.md — engagement leaf service + walker dismissedIds extension + ANCHOR_DISMISSED/ENGAGEMENT_CHANGED events + post-history pin (D-04) + behavioral & source-reading anti-wire tests (ENGAGE-01, ENGAGE-02, ENGAGE-03)
+  - [x] 39-01-engagement-service-PLAN.md — engagement leaf service + walker dismissedIds extension + ANCHOR_DISMISSED/ENGAGEMENT_CHANGED events + post-history pin (D-04) + behavioral & source-reading anti-wire tests (ENGAGE-01, ENGAGE-02, ENGAGE-03)
 
 ### Phase 40: Source Diversity Leaf Module
 **Goal**: Foundation leaf module for per-anchor domain rotation; bundled domain-tier allowlist; synchronous O(N) scan inside refillQueue's mutex hold.
@@ -1190,7 +1190,7 @@ _Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round
 |-------|----------------|--------|-----------|
 | 37. i18n Leaf-Module Refactor | 3/3 | Complete    | 2026-05-09 |
 | 38. v1.4 Carry-Over Cleanup | 4/4 | Complete   | 2026-05-09 |
-| 39. Engagement Service + Walker Extension | 0/1 | Planned     | - |
+| 39. Engagement Service + Walker Extension | 1/1 | Complete   | 2026-05-09 |
 | 40. Source Diversity Leaf Module | 0/0 | Not started | - |
 | 41. Pipeline Wiring + Essay Depth | 0/0 | Not started | - |
 | 42. Masonry Feed Layout | 0/0 | Not started | - |

@@ -13,9 +13,9 @@
 
 ### ENGAGE — Local-first engagement signals
 
-- [ ] **ENGAGE-01** User can save / bookmark a post; saved posts persist across days; saved-posts view accessible
-- [ ] **ENGAGE-02** User can dismiss / mark "not interested" a concept via long-press contextual menu; dismissed anchors skip in subsequent walker calls
-- [ ] **ENGAGE-03** User can like / heart a post; likes persist locally
+- [x] **ENGAGE-01** User can save / bookmark a post; saved posts persist across days; saved-posts view accessible
+- [x] **ENGAGE-02** User can dismiss / mark "not interested" a concept via long-press contextual menu; dismissed anchors skip in subsequent walker calls
+- [x] **ENGAGE-03** User can like / heart a post; likes persist locally
 - [ ] **ENGAGE-04** Tile shows graph-derived social proof: "N connections in your graph" micro-label computed from `candidatePack` at queue-fill time
 
 ### CONTENT — Source diversity + richer essays
