@@ -1,26 +1,26 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.5
-milestone_name: Curiosity Feed v2 + Tech-Debt Hardening
-status: Phase 38 context gathered
-stopped_at: Phase 38 context gathered (4 D-decisions locked); ready for /gsd:plan-phase 38
-last_updated: "2026-05-09T03:10:37.888Z"
-last_activity: 2026-05-09
+milestone: v1.3
+milestone_name: gap closure)
+status: executing
+stopped_at: "Plan 38-03 Task 1 landed scaffold (commit 00321198); paused at Task 2 checkpoint:human-verify awaiting operator device UAT on iOS+Android"
+last_updated: "2026-05-09T04:14:07.028Z"
+last_activity: 2026-05-09 -- Phase 38 execution started
 progress:
-  total_phases: 9
-  completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_phases: 21
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Project State: v1.5 ROADMAP CREATED — 2026-05-08
 
 ## Current Position
 
-Phase: 38 (next)
-Plan: Not started
-Status: Phase 37 complete (TECHDEBT-01 closed; UAT passed). Ready for `/gsd:discuss-phase 38` or `/gsd:plan-phase 38`.
-Last activity: 2026-05-09
+Phase: 38 (v1-4-carry-over-cleanup) — EXECUTING
+Plan: 1 of 3
+Status: Executing Phase 38
+Last activity: 2026-05-09 -- Phase 38 execution started
 
 ## Progress
 
@@ -45,7 +45,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-08 — milestone v1.5 started)
 
 **Core value:** Enable learners to transform fragmented information into structured knowledge through AI-driven Q&A, visual mapping, and adaptive spaced repetition — all while maintaining complete local-first privacy.
 
-**Current focus:** Phase 38 — v1.4 carry-over cleanup (TECHDEBT-02..06)
+**Current focus:** Phase 38 — v1-4-carry-over-cleanup
 
 ## Requirement Coverage
 
@@ -100,7 +100,7 @@ All v1.4 blockers resolved at close. No open blockers.
 
 ## Session Continuity
 
-**Stopped at:** Phase 38 context gathered
+**Stopped at:** Plan 38-03 Task 1 landed scaffold (commit 00321198); paused at Task 2 checkpoint:human-verify awaiting operator device UAT on iOS+Android
 **Next action:** `/gsd:discuss-phase 38` (recommended — 5 mixed requirements TECHDEBT-02..06) or `/gsd:plan-phase 38` to skip discussion.
 
 **Files written this session (Plan 37-03 close):**
