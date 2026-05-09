@@ -45,11 +45,12 @@ describe('getAnchorIdForPost', () => {
     }
   });
 
-  it('returns anchorId for video, short, news sourceTypes (unified as concept styles)', () => {
+  it('returns anchorId for video, news sourceTypes (unified as concept styles)', () => {
+    // (Phase 38 / TECHDEBT-06): the legacy short sourceType was removed from this iteration — short type is gone.
     const questionsById = new Map([
       ['q1', { id: 'q1', parentId: 'anchor-1' }],
     ]);
-    for (const sourceType of ['video', 'short', 'news']) {
+    for (const sourceType of ['video', 'news']) {
       const post = { sourceType, sourceQuestionIds: ['q1'] };
       assert.equal(getAnchorIdForPost(post, questionsById), 'anchor-1', `${sourceType} should resolve to anchor`);
     }
