@@ -1201,11 +1201,9 @@ export async function refillQueue(questions: Question[]): Promise<void> {
     // from saved cyclePosition rather than restarting from index 0 each time.
     //
     // Removal-on-read is LAZY: walkDerivedList skips conceptIds in `exploredIds`
-    // (already computed at line ~1199). Physical splice would corrupt the walker's
-    // index — see RESEARCH § Pitfall 1.
-    //
-    // Phase 39 D-07: dismissedIds (from engagementService) is the second lazy-skip
-    // gate. Same semantics as exploredIds — never splice the derived list.
+    // (already computed at line ~1199) AND in `dismissedIds` (Phase 39 D-07 —
+    // engagementService.getDismissedAnchorIds()). Physical splice would corrupt
+    // the walker's index — see RESEARCH § Pitfall 1.
     const dueConceptIds = buildConceptBatch(questions);
     postQueueService.appendToDerivedList(dueConceptIds);
     // Walk batchSize entries — large enough to refill the queue past REFILL_THRESHOLD

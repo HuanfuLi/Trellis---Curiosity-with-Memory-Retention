@@ -80,16 +80,16 @@ describe('refill-queue integration (Phase 36 GAP-1..4 composition)', () => {
     postQueueService.appendToDerivedList(['A', 'B', 'C', 'D']);
     assert.equal(postQueueService.getCyclePosition(), 0);
 
-    const w1 = postQueueService.walkDerivedList(2, new Set());
+    const w1 = postQueueService.walkDerivedList(2, new Set(), new Set());
     assert.deepEqual(w1, ['A', 'B']);
     assert.equal(postQueueService.getCyclePosition(), 2);
 
-    const w2 = postQueueService.walkDerivedList(2, new Set());
+    const w2 = postQueueService.walkDerivedList(2, new Set(), new Set());
     assert.deepEqual(w2, ['C', 'D']);
     assert.equal(postQueueService.getCyclePosition(), 0, 'wrapped to 0');
 
     // Subsequent walk should resume from 0
-    const w3 = postQueueService.walkDerivedList(1, new Set());
+    const w3 = postQueueService.walkDerivedList(1, new Set(), new Set());
     assert.deepEqual(w3, ['A']);
     assert.equal(postQueueService.getCyclePosition(), 1);
   });
@@ -134,7 +134,7 @@ describe('refill-queue integration (Phase 36 GAP-1..4 composition)', () => {
   it('Composition smoke — append/walk/stratify/spread chain produces a usable queue', () => {
     // Simulate one refill cycle with 3 unique anchors due:
     postQueueService.appendToDerivedList(['A', 'B', 'C']);
-    const conceptIds = postQueueService.walkDerivedList(3, new Set());
+    const conceptIds = postQueueService.walkDerivedList(3, new Set(), new Set());
     assert.equal(conceptIds.length, 3, 'walk returns all 3 unique IDs');
 
     const assignments = assignStylesStratified(conceptIds, allAvailable);
@@ -153,7 +153,7 @@ describe('refill-queue integration (Phase 36 GAP-1..4 composition)', () => {
 
   it('All-explored — walkDerivedList returns [] (caller early-returns)', () => {
     postQueueService.appendToDerivedList(['A', 'B', 'C']);
-    const walked = postQueueService.walkDerivedList(8, new Set(['A', 'B', 'C']));
+    const walked = postQueueService.walkDerivedList(8, new Set(['A', 'B', 'C']), new Set());
     assert.deepEqual(walked, [], 'all-explored produces []');
   });
 
@@ -165,7 +165,7 @@ describe('refill-queue integration (Phase 36 GAP-1..4 composition)', () => {
   // See .planning/debug/style-mix-imbalance.md for the math walkthrough.
   it('GAP-B regression — text-art count ≥ floor(N × 0.55) at N=16 with single-anchor derivedList', () => {
     postQueueService.appendToDerivedList(['anchor1', 'anchor1', 'anchor1', 'anchor1']);
-    const conceptIds = postQueueService.walkDerivedList(16, new Set());
+    const conceptIds = postQueueService.walkDerivedList(16, new Set(), new Set());
     assert.equal(conceptIds.length, 16, 'walker must return 16 entries — pre-fix bug returned 8');
 
     const assignments = assignStylesStratified(conceptIds, allAvailable);
