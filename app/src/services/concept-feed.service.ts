@@ -1820,6 +1820,8 @@ export const conceptFeedService = {
     questionB: Question,
     conceptNounA: string,
     conceptNounB: string,
+    // Phase 41 SC-7 — trailing options bag (back-compat: positional callers unaffected).
+    options?: { signal?: AbortSignal },
   ): AsyncGenerator<string> {
     const settings = settingsService.getSync();
     if (!settings.preferences.aiConsentGiven || !settings.llm.isConfigured) return;
@@ -1850,7 +1852,7 @@ export const conceptFeedService = {
     yield* chatStream(
       [{ role: 'system', content: system }, { role: 'user', content: prompt }],
       settings.llm,
-      { serviceName: 'posts' },
+      { serviceName: 'posts', signal: options?.signal },
     );
   },
 
@@ -1944,7 +1946,12 @@ export const conceptFeedService = {
   /**
    * Stream an exploratory essay for a discover chunk. Yields markdown chunks as they arrive.
    */
-  async *generateDiscoverPost(concept: string, title: string): AsyncGenerator<string> {
+  async *generateDiscoverPost(
+    concept: string,
+    title: string,
+    // Phase 41 SC-7 — trailing options bag (back-compat: positional callers unaffected).
+    options?: { signal?: AbortSignal },
+  ): AsyncGenerator<string> {
     const settings = settingsService.getSync();
     if (!settings.preferences.aiConsentGiven || !settings.llm.isConfigured) return;
 
@@ -1968,7 +1975,7 @@ export const conceptFeedService = {
     yield* chatStream(
       [{ role: 'system', content: system }, { role: 'user', content: prompt }],
       settings.llm,
-      { serviceName: 'posts' },
+      { serviceName: 'posts', signal: options?.signal },
     );
   },
 
