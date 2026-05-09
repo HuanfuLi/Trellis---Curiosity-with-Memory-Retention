@@ -8,7 +8,8 @@ const { assignStylesStratified, STYLE_WEIGHTS } = styleMod;
 const allAvailable = { hasYoutubeKey: true, hasTavilyKey: true, hasImageGenKey: true };
 
 function counts(result) {
-  const c = { image: 0, 'text-art': 0, suggestion: 0, news: 0, video: 0, short: 0 };
+  // (Phase 38 / TECHDEBT-06): the legacy short counter slot was removed — short type is gone.
+  const c = { image: 0, 'text-art': 0, suggestion: 0, news: 0, video: 0 };
   for (const r of result) c[r.style] = (c[r.style] ?? 0) + 1;
   return c;
 }
@@ -55,7 +56,8 @@ describe('style-assignment-stratified (GAP-3)', () => {
   it('N=2 small-N edge: returns 2 valid assignments, no crash', () => {
     const result = assignStylesStratified(['c1', 'c2'], allAvailable);
     assert.equal(result.length, 2);
-    const valid = new Set(['image', 'text-art', 'suggestion', 'news', 'video', 'short']);
+    // (Phase 38 / TECHDEBT-06): the legacy short style was removed from this set — short type is gone.
+    const valid = new Set(['image', 'text-art', 'suggestion', 'news', 'video']);
     for (const r of result) assert.ok(valid.has(r.style));
   });
 
@@ -71,10 +73,11 @@ describe('style-assignment-stratified (GAP-3)', () => {
     assert.equal(c.image, 0);
   });
 
-  it('hasYoutubeKey=false: video+short count is 0', () => {
+  it('hasYoutubeKey=false: video count is 0', () => {
+    // (Phase 38 / TECHDEBT-06): the legacy video+short check collapsed to video-only — short type is gone.
     const ids = Array.from({ length: 20 }, (_, i) => `c${i}`);
     const c = counts(assignStylesStratified(ids, { ...allAvailable, hasYoutubeKey: false }));
-    assert.equal(c.video + c.short, 0);
+    assert.equal(c.video, 0);
   });
 
   it('Fisher-Yates produces different orders across runs', () => {
