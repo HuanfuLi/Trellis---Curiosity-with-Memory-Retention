@@ -363,7 +363,8 @@ export const postQueueService = {
    * found (possibly empty — caller has an early-return guard). See Phase 36
    * GAP-B closure (post-queue.service.ts comment + .planning/debug/style-mix-imbalance.md).
    */
-  walkDerivedList(count: number, exploredIds: Set<string>): string[] {
+  // Phase 39 D-07: dismissedIds is REQUIRED positional (not defaulted) so future callers must explicitly opt in to the dismiss-skip behavior.
+  walkDerivedList(count: number, exploredIds: Set<string>, dismissedIds: Set<string>): string[] {
     const len = _state.derivedList.length;
     if (len === 0) return [];
     const result: string[] = [];
@@ -382,7 +383,7 @@ export const postQueueService = {
       const id = _state.derivedList[_state.cyclePosition];
       _state.cyclePosition = (_state.cyclePosition + 1) % len;
       steps++;
-      if (!exploredIds.has(id)) result.push(id);
+      if (!exploredIds.has(id) && !dismissedIds.has(id)) result.push(id);
     }
     save(_state);
     return result;

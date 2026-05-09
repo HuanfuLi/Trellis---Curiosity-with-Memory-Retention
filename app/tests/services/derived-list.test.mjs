@@ -44,7 +44,7 @@ describe('derived list (GAP-1 + GAP-2)', () => {
   it('resetForNewDay clears derivedList and cyclePosition', () => {
     postQueueService.appendToDerivedList(['a', 'b']);
     // walk a step so cyclePosition advances
-    postQueueService.walkDerivedList(1, new Set());
+    postQueueService.walkDerivedList(1, new Set(), new Set());
     postQueueService.resetForNewDay();
     assert.deepEqual(postQueueService.getDerivedList(), []);
     assert.equal(postQueueService.getCyclePosition(), 0);
@@ -72,7 +72,7 @@ describe('derived list (GAP-1 + GAP-2)', () => {
   // Test 6 — walker advances cyclePosition by `count`
   it('walkDerivedList(4, emptySet) advances cyclePosition by 4', () => {
     postQueueService.appendToDerivedList(['a', 'b', 'c', 'd', 'e', 'f']);
-    const out = postQueueService.walkDerivedList(4, new Set());
+    const out = postQueueService.walkDerivedList(4, new Set(), new Set());
     assert.deepEqual(out, ['a', 'b', 'c', 'd']);
     assert.equal(postQueueService.getCyclePosition(), 4);
   });
@@ -80,10 +80,10 @@ describe('derived list (GAP-1 + GAP-2)', () => {
   // Test 7 — walker wraps to 0 on overflow
   it('walkDerivedList wraps to position 0 after reaching length', () => {
     postQueueService.appendToDerivedList(['a', 'b', 'c']);
-    const first = postQueueService.walkDerivedList(2, new Set());
+    const first = postQueueService.walkDerivedList(2, new Set(), new Set());
     assert.deepEqual(first, ['a', 'b']);
     assert.equal(postQueueService.getCyclePosition(), 2);
-    const second = postQueueService.walkDerivedList(2, new Set());
+    const second = postQueueService.walkDerivedList(2, new Set(), new Set());
     assert.deepEqual(second, ['c', 'a']);
     assert.equal(postQueueService.getCyclePosition(), 1);
   });
@@ -91,14 +91,14 @@ describe('derived list (GAP-1 + GAP-2)', () => {
   // Test 8 — walker lazily skips explored ids
   it('walkDerivedList lazily skips explored ids', () => {
     postQueueService.appendToDerivedList(['a', 'b', 'c', 'd']);
-    const out = postQueueService.walkDerivedList(3, new Set(['b']));
+    const out = postQueueService.walkDerivedList(3, new Set(['b']), new Set());
     assert.deepEqual(out, ['a', 'c', 'd']);
   });
 
   // Test 9 — walker returns empty when all explored, no infinite loop
   it('walkDerivedList returns [] when every entry is explored', () => {
     postQueueService.appendToDerivedList(['a', 'b', 'c']);
-    const out = postQueueService.walkDerivedList(4, new Set(['a', 'b', 'c']));
+    const out = postQueueService.walkDerivedList(4, new Set(['a', 'b', 'c']), new Set());
     assert.deepEqual(out, []);
   });
 
@@ -125,7 +125,7 @@ describe('derived list (GAP-1 + GAP-2)', () => {
   // See .planning/debug/style-mix-imbalance.md for the math walkthrough.
   it('walkDerivedList(16, emptySet) on 4-entry list returns 16 entries (4 wraps)', () => {
     postQueueService.appendToDerivedList(['a', 'b', 'c', 'd']);
-    const out = postQueueService.walkDerivedList(16, new Set());
+    const out = postQueueService.walkDerivedList(16, new Set(), new Set());
     assert.equal(out.length, 16, 'walker must return the requested count, not be capped at len * 2');
     // Contents are the input list cycled 4 times — exact ordering reflects 4 full passes
     assert.deepEqual(out, ['a','b','c','d','a','b','c','d','a','b','c','d','a','b','c','d']);
@@ -144,10 +144,57 @@ describe('derived list (GAP-1 + GAP-2)', () => {
   // breaks out at 8). Final result = 8 entries, all non-'a'.
   it('walkDerivedList(8, exploredSet) advances past skipped ids while honoring count', () => {
     postQueueService.appendToDerivedList(['a', 'b', 'c', 'd']);
-    const out = postQueueService.walkDerivedList(8, new Set(['a']));
+    const out = postQueueService.walkDerivedList(8, new Set(['a']), new Set());
     assert.equal(out.length, 8, 'walker must return count=8 entries, skipping `a` lazily');
     assert.ok(out.every(id => id !== 'a'), 'no explored id should appear in the output');
     // Sanity: contents are b/c/d cycled — first wrap [b,c,d], second wrap [b,c,d], third partial [b,c]
     assert.deepEqual(out, ['b','c','d','b','c','d','b','c']);
+  });
+});
+
+// Phase 39 D-07 — walker lazy-skips dismissed ids in the same way it skips
+// explored ids. The third positional arg is REQUIRED (not defaulted) so future
+// callers must explicitly opt in. cyclePosition still advances over skipped
+// entries (lazy semantics — never splice the derived list, would corrupt it).
+describe('walkDerivedList — dismissedIds skip (Phase 39 D-07)', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    postQueueService.loadQueue();
+  });
+
+  // 5a — lazy-skip dismissed while honoring count; cyclePosition advances past skipped entry
+  it('walkDerivedList lazy-skips dismissed ids while honoring count', () => {
+    postQueueService.appendToDerivedList(['a', 'b', 'c', 'd']);
+    const out = postQueueService.walkDerivedList(3, new Set(), new Set(['b']));
+    assert.deepEqual(out, ['a', 'c', 'd']);
+    // cyclePosition advanced by 4 steps (past 'a','b','c','d'), wrapping to 0.
+    // 'b' was lazy-skipped — position still moved past it. Final cyclePosition = 4 % 4 = 0.
+    assert.equal(postQueueService.getCyclePosition(), 0, 'cyclePosition must advance past skipped dismissed entries (lazy skip, no splice)');
+  });
+
+  // 5b — lazy-skip both explored AND dismissed in the same call
+  it('walkDerivedList lazy-skips both explored AND dismissed in one call', () => {
+    postQueueService.appendToDerivedList(['a', 'b', 'c', 'd', 'e', 'f']);
+    const out = postQueueService.walkDerivedList(3, new Set(['b']), new Set(['d']));
+    assert.deepEqual(out, ['a', 'c', 'e']);
+  });
+
+  // 5c — every entry dismissed → returns [], no infinite loop (maxSteps guard)
+  it('walkDerivedList returns [] when every entry is dismissed (no infinite loop)', () => {
+    postQueueService.appendToDerivedList(['a', 'b', 'c']);
+    const out = postQueueService.walkDerivedList(4, new Set(), new Set(['a', 'b', 'c']));
+    assert.deepEqual(out, []);
+  });
+
+  // 5d — Phase 36 GAP-B preserved under dismiss-skip:
+  // walkDerivedList(16, emptySet, dismissed={'a'}) on 4-entry list returns 16 entries
+  // (only b/c/d, since 'a' is dismissed). count*2 = 32 maxSteps headroom is enough.
+  it('walkDerivedList(16, emptySet, dismissed) on 4-entry list returns 16 entries excluding dismissed', () => {
+    postQueueService.appendToDerivedList(['a', 'b', 'c', 'd']);
+    const out = postQueueService.walkDerivedList(16, new Set(), new Set(['a']));
+    assert.equal(out.length, 16, 'walker must return count=16 even with one entry dismissed (Phase 36 GAP-B count*2 headroom preserved)');
+    assert.ok(out.every(id => id !== 'a'), 'no dismissed id should appear in the output');
+    // Should be b/c/d cycled — first 5 wraps + partial: [b,c,d]*5 = 15, then [b]
+    assert.deepEqual(out, ['b','c','d','b','c','d','b','c','d','b','c','d','b','c','d','b']);
   });
 });
