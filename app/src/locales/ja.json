@@ -727,7 +727,6 @@
   },
   "infoFlow": {
     "newsTag": "ニュース",
-    "shortTag": "ショート",
     "byChannel": "{{channel}} より",
     "concept": "概念",
     "postImageAlt": "ショート動画",

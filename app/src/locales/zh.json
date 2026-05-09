@@ -727,7 +727,6 @@
   },
   "infoFlow": {
     "newsTag": "新闻",
-    "shortTag": "短片",
     "byChannel": "来自 {{channel}}",
     "concept": "概念",
     "postImageAlt": "短视频",
