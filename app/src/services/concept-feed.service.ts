@@ -184,7 +184,14 @@ function loadCache(): CachedDailyPosts | null {
     // See .planning/phases/36-.../36-UAT.md round-3 sub-issue (b cause #2)
     // and (d) — second Force-New-Day was rendering the previous-state served
     // posts because of this missing date check.
-    if (parsed.date !== today()) return null;
+    if (parsed.date !== today()) {
+      // Phase 41 D-02 — wholesale wipe of per-anchor usedByAnchor Map at day boundary.
+      // sourceDiversityService.reset() is idempotent (Map.clear()); calling on already-empty
+      // Map is a no-op. Fires once per loadCache() invocation across stale-cache scenarios
+      // until a fresh saveCache(today) writes a new entry — harmless per Pitfall 8.
+      sourceDiversityService.reset();
+      return null;
+    }
 
     const posts = parsed.posts.filter(isValidDailyPost);
     if (posts.length === 0) return null;
