@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: gap closure)
 status: verifying
-stopped_at: Phase 40 context gathered
-last_updated: "2026-05-09T12:06:24.657Z"
+stopped_at: Completed 40-01-source-diversity-service-PLAN.md
+last_updated: "2026-05-09T12:56:48.721Z"
 last_activity: 2026-05-09
 progress:
   total_phases: 21
@@ -17,18 +17,18 @@ progress:
 
 ## Current Position
 
-Phase: 39 of 1 (engagement-service-walker-extension)
-Plan: Not started
-Status: Phase 39 complete — ready for `/gsd:verify-work`
-Last activity: 2026-05-09
+Phase: 40 (source-diversity-leaf-module) — COMPLETE
+Plan: 1 of 1 complete
+Status: Phase 40 complete — ready for verification
+Last activity: 2026-05-09 -- Plan 40-01 closed
 
 ## Progress
 
-**Phases:** 2 / 9 complete (37 ✓; 38 ✓; 39 ready for verification; 40-45 pending)
-**Plans:** 1 / 1 complete in Phase 39 (39-01 engagement-service ✓)
+**Phases:** 2 / 9 complete (37 ✓; 38 ✓; 39 ready for verification; 40 ready for verification; 41-45 pending)
+**Plans:** 1 / 1 complete in Phase 40 (40-01 source-diversity-service ✓); 1 / 1 complete in Phase 39 (39-01 engagement-service ✓)
 
 ```
-[██████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 25%
+[████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 30%
 ```
 
 ### Wave Order
@@ -45,7 +45,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-08 — milestone v1.5 started)
 
 **Core value:** Enable learners to transform fragmented information into structured knowledge through AI-driven Q&A, visual mapping, and adaptive spaced repetition — all while maintaining complete local-first privacy.
 
-**Current focus:** Phase 39 — engagement-service-walker-extension
+**Current focus:** Phase 40 — source-diversity-leaf-module
 
 ## Requirement Coverage
 
@@ -72,6 +72,16 @@ All carry-overs are scheduled into Wave 0:
 ## Resolved blockers
 
 All v1.4 blockers resolved at close. No open blockers.
+
+## Last decisions (Plan 40-01 close, 2026-05-09)
+
+- **DOMAIN_TIERS authored at 219 entries (above ~180-200 target).** Above-target depth came from broader academic publisher coverage (added Springer, Wiley, Cambridge, OUP, ScienceDirect, Tandfonline, Frontiers, Plos, USENIX) and finer social/UGC distinction (Twitter/X 0.10 vs LinkedIn 0.25; Stack Overflow 0.45 separate from Stack Exchange 0.35). Operator can override any entry in PR review. RESEARCH § 1's per-tier-count guidance was a soft target; quality-gating each entry against D-03 editorial line is the real gate.
+- **Special-cased plato.stanford.edu (0.85), ProPublica (0.85), Harvard Health (0.85)** as journalism-tier quality despite encyclopedic/general-interest classification. Stanford Encyclopedia of Philosophy is peer-reviewed, ProPublica is investigative journalism, Harvard Health is primary-source clinical content. RESEARCH § 1's mid-tier classification was conservative; the operator's editorial-line directive (D-03) supports the bump.
+- **Docstring de-collision applied PROACTIVELY (Phase 39 lesson — "engagement-service docstring de-collision proactive Rule 2 fix").** The leaf header originally listed forbidden patterns verbatim ("No `await`, no `fetch`, no `chatStream`, no `chatCompletion`, no I/O" + "No `async` keyword anywhere" + "No localStorage"). These literal substrings would have false-positively matched the plan's `! grep -q '\basync\b'` and `! grep -q 'chatStream|chatCompletion'` and `! grep -q 'localStorage'` acceptance grep checks. Rephrased to surrogate language ("No deferred-execution function declarations", "no suspending expression", "no LLM call", "no browser-storage read or write"). The actual runtime anti-wire test uses `/\basync\s/` (whitespace-anchored) which would have been safer (excludes backtick-wrapped instances like `` `async` ``), but the plan's structural grep assertions are stricter (word-boundary only) and forced the rephrase. Cost: ~3 lines of header text. Same root cause + fix as Plan 39-01 close decision.
+- **Anti-wire test sanity-check performed (per plan).** Temporarily injected `async function _antiwire_probe() { await Promise.resolve(); }` into source-diversity.service.ts → assertion fired with the expected message at line 46 → reverted; clean test run confirmed all 4 assertions still pass against the production source. Probe never landed in any commit.
+- **Phase 41 boundary held strictly.** ZERO edits to concept-feed.service.ts, web-search.service.ts, or any consumer. ZERO recordServedDomain call sites added. ZERO Tavily maxResults widening. ZERO WebSearchOptions excludeDomains field added. Phase 40 ships the leaf only; Phase 41 owns the wiring (news pre-fetch loop ~line 1293, news creation loop ~line 1083, day-boundary `reset()` at `loadCache()`'s date-mismatch branch).
+- **CONTENT-02 marked PARTIAL (not complete) in REQUIREMENTS.md.** Per plan output spec — Phase 40 ships the leaf (5-function singleton + DOMAIN_TIERS + PSL slice); Phase 41 ships the Tavily wire (`exclude_domains` field threaded into `WebSearchOptions`). Both halves are required to fulfill the requirement's user-visible behavior ("repeated Tavily calls for the same anchor pass `exclude_domains`"). Status row in traceability table: `◐ Partial (Phase 40 leaf complete; Phase 41 wires into Tavily)`.
+- **Plan 40-01 close-out: 3 atomic per-task commits + close-out commit.** Test baseline: pre-Phase-40 583/2 → post-Plan-40-01 603/2 (+20 passes: 16 behavioral test cases + 4 anti-wire assertions; same 2 pre-existing carry-over failures from Plan 39-01 — `tests/concept-feed.test.mjs` ERR_MODULE_NOT_FOUND on extensionless youtube.service import + `tests/services/trellis-layout.test.mjs:64` getVineColor date-dependent assertion). test:actions 16/16/0 unchanged. tsc -b --noEmit exits 0. Pass count exceeds plan's expected lower bound of 601.
 
 ## Last decisions (Plan 39-01 close, 2026-05-09)
 
@@ -137,8 +147,28 @@ All v1.4 blockers resolved at close. No open blockers.
 
 ## Session Continuity
 
-**Stopped at:** Phase 40 context gathered
-**Next action:** `/gsd:verify-work 39 01` (verifier sweep over Plan 39-01 must-haves) → after verification, `/gsd:plan-phase 40` (source diversity, Wave 1 parallel-safe with completed Phase 39).
+**Stopped at:** Completed 40-01-source-diversity-service-PLAN.md
+**Next action:** `/gsd:verify-work 40 01` (verifier sweep over Plan 40-01 must-haves) → after verification, `/gsd:plan-phase 41` (pipeline + essay depth, Wave 2; consumes Phase 40's leaf at the news pre-fetch loop + news creation loop in concept-feed.service.ts).
+
+**Files written this session (Plan 40-01 close):**
+
+- `app/src/services/source-diversity.service.ts` (NEW — 513 lines, 5-function singleton + extractDomain + normalizeHost + DOMAIN_TIERS (219 entries) + MULTI_SEGMENT_TLDS (12 entries) + UNKNOWN_DOMAIN_SCORE)
+- `app/tests/services/source-diversity.service.test.mjs` (NEW — 16 behavioral test cases: 7 filterForDiversity + 3 scoreSource + 3 extractDomain + 2 record/get/reset + 1 singleton-shape sanity)
+- `app/tests/services/source-diversity-anti-wire.test.mjs` (NEW — 4 source-reading assertions: counterweight + no async + no fetch( + no chatStream/chatCompletion)
+- `.planning/phases/40-source-diversity-leaf-module/40-01-source-diversity-service-SUMMARY.md` (NEW — close-out)
+- `.planning/STATE.md` (this file)
+- `.planning/REQUIREMENTS.md` (CONTENT-02 marked partial: Phase 40 leaf complete, Phase 41 wires Tavily)
+- `.planning/ROADMAP.md` (plan progress row updated)
+
+**Plan 40-01 commits:**
+
+- `934343a3` (Task 1: source-diversity.service.ts leaf service — feat)
+- `8e67b6e1` (Task 2: behavioral test suite — 16 cases — test)
+- `780c00c3` (Task 3: source-reading anti-wire test — 4 assertions — test)
+
+**Test baseline (post-Plan-40-01):** test:main 603/2 (matches pre-Phase-40 583 pass + 20 new tests with the same 2 pre-existing carry-over failures: `tests/concept-feed.test.mjs` ERR_MODULE_NOT_FOUND for extensionless youtube.service import + `tests/services/trellis-layout.test.mjs:64` getVineColor date-dependent assertion); test:actions 16/16/0 (unchanged); tsc -b --noEmit → exit 0. Pass count exceeds plan's expected lower bound of 601.
+
+---
 
 **Files written this session (Plan 39-01 close):**
 
