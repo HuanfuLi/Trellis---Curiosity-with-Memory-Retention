@@ -77,7 +77,7 @@
 | CONTENT-02  | Phase 40 | Wave 1 | Pending |
 | CONTENT-03  | Phase 41 | Wave 2 | Pending |
 | CONTENT-04  | Phase 41 | Wave 2 | Pending |
-| TECHDEBT-01 | Phase 37 | Wave 0 | Pending |
+| TECHDEBT-01 | Phase 37 | Wave 0 | ✓ Complete |
 | TECHDEBT-02 | Phase 38 | Wave 0 | Pending |
 | TECHDEBT-03 | Phase 38 | Wave 0 | Pending |
 | TECHDEBT-04 | Phase 38 | Wave 0 | Pending |

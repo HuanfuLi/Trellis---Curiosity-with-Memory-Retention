@@ -1,8 +1,9 @@
 ---
 phase: 37-i18n-leaf-module-refactor
 verified: 2026-05-08T00:00:00Z
-status: human_needed
-score: 5/5 must-haves verified
+human_uat_completed: 2026-05-09
+status: passed
+score: 5/5 must-haves verified + 1/1 human UAT passed (locale switch)
 human_verification:
   - test: "Locale switch in production app: EN → ZH → ES → JA in Settings"
     expected: "Toasts, dates, and voice labels update on each switch with no console errors. App boots without ReferenceError on i18n binding."
