@@ -40,14 +40,30 @@ describe('concept-feed loadCache — stale cache rejection (Phase 36-11)', () =>
     // Slice forward enough to capture the function body. The rejection check
     // sits between the type-shape guard (early return null on malformed input)
     // and the `parsed.posts.filter(isValidDailyPost)` call.
-    const fnSlice = source.slice(fnStart, fnStart + 1200);
+    // Bumped 1200 → 1800 in Phase 41 Plan 41-01 Task 3 — the date-mismatch
+    // branch wraps a 4-line comment + sourceDiversityService.reset() before
+    // the `return null`, pushing the return past the prior 1200-char cap.
+    const fnSlice = source.slice(fnStart, fnStart + 1800);
     assert.ok(
       fnSlice.includes('parsed.date !== today()'),
       'loadCache() must reject stale cache via `parsed.date !== today()` (Phase 36-11)',
     );
+    // Accept either single-line `if (...) return null;` or braced block form.
+    // Phase 41 Plan 41-01 Task 3 wrapped the early return in a block to call
+    // sourceDiversityService.reset() at the day boundary alongside the return.
+    // Both shapes still short-circuit with return null — the regex must allow
+    // an optional block body (with the reset call) between the `if (...)` and
+    // the `return null`.
+    // Accept either single-line `if (...) return null;` or braced block form.
+    // Phase 41 Plan 41-01 Task 3 wrapped the early return in a block to call
+    // sourceDiversityService.reset() at the day boundary alongside the return.
+    // Both shapes still short-circuit with return null — the regex must allow
+    // an optional block body (with the reset call) between the `if (...)` and
+    // the `return null`. The `s` flag makes . match newlines for the multiline
+    // braced form.
     assert.ok(
-      /parsed\.date !== today\(\)\)\s*return\s+null/.test(fnSlice),
-      'the parsed.date !== today() check must short-circuit with return null',
+      /parsed\.date !== today\(\)\)\s*(\{[\s\S]*?)?return\s+null/.test(fnSlice),
+      'the parsed.date !== today() check must short-circuit with return null (one-liner OR braced block accepted)',
     );
   });
 
