@@ -36,16 +36,16 @@ key-decisions:
 patterns-established:
   - "TECHDEBT-04 device-deferral pattern: scaffold-only Claude work + operator-owned result lines + status: pending → status: complete transition under operator commit; verify-work gate enforces both result: pass landing"
 
-requirements-completed: []  # TECHDEBT-04 NOT yet complete — scaffold landed but operator must run device tests to close it. Will be marked complete in a follow-up commit OR after /gsd:verify-work 38 acceptance per the plan_notes "DEVICE-ACCESS FALLBACK" rule.
+requirements-completed: [TECHDEBT-04]
 
 # Metrics
-duration: ~2min (Task 1 only; Task 2 paused at human-verify checkpoint)
+duration: ~2min scaffold + operator device session 2026-05-09
 completed: 2026-05-09
 ---
 
-# Phase 38 Plan 03: Device UAT Scaffold (PARTIAL — paused at human-verify checkpoint)
+# Phase 38 Plan 03: Device UAT Scaffold + Operator Verification (COMPLETE)
 
-**38-HUMAN-UAT.md scaffold landed at status: pending with 2 verbatim Phase 33 carry-over test specs (touch-target feel + React.memo behavioral correctness), iOS+Android OS matrix per D-03b, sub-checkpoints in expected: block per D-03c. Task 2 paused awaiting operator-driven physical-device UAT.**
+**38-HUMAN-UAT.md scaffold landed at status: pending with 2 verbatim Phase 33 carry-over test specs (touch-target feel + React.memo behavioral correctness); operator ran both tests on physical iOS + Android devices on 2026-05-09; both tests passed; status flipped to complete; TECHDEBT-04 closed.**
 
 ## Performance
 
@@ -66,9 +66,9 @@ completed: 2026-05-09
 ## Task Commits
 
 1. **Task 1: Create 38-HUMAN-UAT.md scaffold** — `00321198` (docs)
-2. **Task 2: Hand off device UAT to operator** — PAUSED at `checkpoint:human-verify` (awaiting operator)
+2. **Task 2: Hand off device UAT to operator** — operator ran tests 2026-05-09; results recorded inline in this commit (uat).
 
-**Plan metadata commit:** pending (will land alongside operator's UAT-result commit when checkpoint resumes)
+**Plan metadata commit:** lands alongside this SUMMARY update.
 
 ## Files Created/Modified
 
@@ -89,15 +89,16 @@ None — plan executed exactly as written. The plan author had pre-prepared the 
 
 None.
 
-## Checkpoint Status
+## Operator UAT Results (2026-05-09)
 
-**Task 2 (`checkpoint:human-verify`) is paused.** This SUMMARY.md is partial — it captures Task 1's outcome and the checkpoint state. When the operator resumes (after running both tests on both iOS + Android and committing the result-line update), this SUMMARY.md will be amended to record:
+- **Started:** 2026-05-09T01:00:00Z
+- **Test 1 — Touch-target feel:** PASS on iOS + Android. All buttons (PlannerScreen refresh, ChatInput mic, ChatInput globe at 44×44) registered reliably across 5-tap sequences; AskScreen bottom-nav clearance unaffected by ChatInput height bump.
+- **Test 2 — React.memo behavioral correctness:** PASS on iOS + Android. All 4 sub-checkpoints verified: 8-card initial render, swipe-for-more pops 4, image-gen toggle respected for new mounts, VineProgress full-width.
+- **Status:** complete (both tests pass on both platforms).
 
-- Operator's `started:` timestamp
-- Test 1 (touch-target feel) — pass/fail with per-platform note
-- Test 2 (React.memo behavioral correctness) — pass/fail per sub-checkpoint × per platform
-- Final `status: complete` (if both passed) OR Gap entries (if any failed) routing to `/gsd:plan-phase 38 --gaps`
-- requirements-completed updated to `[TECHDEBT-04]` (only after both tests resulted in pass)
+### Out-of-scope finding (filed for v1.5 backlog)
+
+During the device session the operator observed **GraphScreen mindmap drag latency on Android Chromium WebView** (recently introduced regression; perceptible-but-usable; warm-up smooths it out). Outside the 2 Phase 33 deferred test specs that scope TECHDEBT-04. Captured at `.planning/notes/2026-05-09-graphscreen-drag-lag-android.md` for triage in a future v1.5 phase (likely Phase 44/45 or a dedicated perf phase). Does NOT block Phase 38 close-out.
 
 ## Next Phase Readiness
 
@@ -114,5 +115,5 @@ None.
 
 ---
 *Phase: 38-v1-4-carry-over-cleanup*
-*Plan: 03 (device-uat — scaffold landed, awaiting operator UAT)*
-*Status: PARTIAL — checkpoint paused at Task 2 (human-verify)*
+*Plan: 03 (device-uat — scaffold landed, operator UAT complete)*
+*Status: COMPLETE — both tests pass on iOS + Android; TECHDEBT-04 closed.*
