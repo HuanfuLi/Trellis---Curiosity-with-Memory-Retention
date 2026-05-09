@@ -1134,7 +1134,7 @@ _Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round
   6. `generateEssayMeta` body-slice cap raised from 2000 to 4000 chars before any prompt lengthening
   7. Every new async call inside PostDetailScreen's essay `useEffect` receives `{ signal: abortController.signal }` and is preceded by an `if (signal.aborted) return` guard (D-08 abort-chain audit)
 **Plans**: 2 plans
-  - [ ] 41-01-refillqueue-source-diversity-wiring-PLAN.md — wire sourceDiversityService into news creation + pre-fetch loops; add WebSearchOptions.excludeDomains → Tavily; reset() at loadCache day boundary; SC-1 walker dismissedIds integration test (CONTENT-02 closes; multi-snippet newsMeta.sources shape lands)
+  - [x] 41-01-refillqueue-source-diversity-wiring-PLAN.md — wire sourceDiversityService into news creation + pre-fetch loops; add WebSearchOptions.excludeDomains → Tavily; reset() at loadCache day boundary; SC-1 walker dismissedIds integration test (CONTENT-02 closed; multi-snippet newsMeta.sources shape landed)
   - [ ] 41-02-essay-depth-citation-rendering-PLAN.md — EssayOptions.depth + bodyMarkdownDeep additive field on EssayContent + PostSnapshot; depth-aware prompts in 4 generators; sources.slice(0,3) news grounding + footnote prompt; meta cap 2000→4000; PostDetailScreen 3-branch abort threading audit; ReactMarkdown sup/a/section overrides + sanitize sup-attr spread fix (CONTENT-01, CONTENT-03, CONTENT-04)
 
 ### Phase 42: Masonry Feed Layout
@@ -1195,7 +1195,7 @@ _Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round
 | 38. v1.4 Carry-Over Cleanup | 4/4 | Complete   | 2026-05-09 |
 | 39. Engagement Service + Walker Extension | 1/1 | Complete    | 2026-05-09 |
 | 40. Source Diversity Leaf Module | 1/1 | Complete    | 2026-05-09 |
-| 41. Pipeline Wiring + Essay Depth | 0/0 | Not started | - |
+| 41. Pipeline Wiring + Essay Depth | 0/2 | Planned    |  |
 | 42. Masonry Feed Layout | 0/0 | Not started | - |
 | 43. Engagement UI | 0/0 | Not started | - |
 | 44. Dependency Version Sweep | 0/0 | Not started | - |

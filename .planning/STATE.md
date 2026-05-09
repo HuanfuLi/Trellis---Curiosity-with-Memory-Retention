@@ -2,30 +2,30 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: gap closure)
-status: verifying
-stopped_at: Phase 41 context gathered
-last_updated: "2026-05-09T13:26:51.109Z"
-last_activity: 2026-05-09
+status: executing
+stopped_at: Plan 41-01 complete — Plan 41-02 may proceed (Wave 2 sequencing on concept-feed.service.ts file-level overlap)
+last_updated: "2026-05-09T19:00:00.000Z"
+last_activity: 2026-05-09 -- Plan 41-01 closed (CONTENT-02 complete)
 progress:
   total_phases: 21
   completed_phases: 0
   total_plans: 0
-  completed_plans: 0
+  completed_plans: 1
 ---
 
 # Project State: v1.5 ROADMAP CREATED — 2026-05-08
 
 ## Current Position
 
-Phase: 40
-Plan: Not started
-Status: Phase 40 complete — ready for verification
-Last activity: 2026-05-09
+Phase: 41 (pipeline-wiring-essay-depth) — EXECUTING
+Plan: 2 of 2
+Status: Plan 41-01 complete; Plan 41-02 ready to proceed (Wave 2 sequencing)
+Last activity: 2026-05-09 -- Plan 41-01 closed (CONTENT-02 complete)
 
 ## Progress
 
-**Phases:** 2 / 9 complete (37 ✓; 38 ✓; 39 ready for verification; 40 ready for verification; 41-45 pending)
-**Plans:** 1 / 1 complete in Phase 40 (40-01 source-diversity-service ✓); 1 / 1 complete in Phase 39 (39-01 engagement-service ✓)
+**Phases:** 2 / 9 complete (37 ✓; 38 ✓; 39 ready for verification; 40 ready for verification; 41 in progress 1/2; 42-45 pending)
+**Plans:** 1 / 2 complete in Phase 41 (41-01 source-diversity-wiring ✓); 1 / 1 complete in Phase 40 (40-01 source-diversity-service ✓); 1 / 1 complete in Phase 39 (39-01 engagement-service ✓)
 
 ```
 [████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 30%
@@ -45,7 +45,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-08 — milestone v1.5 started)
 
 **Core value:** Enable learners to transform fragmented information into structured knowledge through AI-driven Q&A, visual mapping, and adaptive spaced repetition — all while maintaining complete local-first privacy.
 
-**Current focus:** Phase 40 — source-diversity-leaf-module
+**Current focus:** Phase 41 — pipeline-wiring-essay-depth
 
 ## Requirement Coverage
 
@@ -72,6 +72,20 @@ All carry-overs are scheduled into Wave 0:
 ## Resolved blockers
 
 All v1.4 blockers resolved at close. No open blockers.
+
+## Last decisions (Plan 41-01 close, 2026-05-09)
+
+- **Walker integration test targets walkDerivedList directly per Pitfall 7, NOT a mocked refillQueue end-to-end.** Mocking refillQueue would require stubbing settings + Tavily + YouTube + post-history + dailyRead + concept-feed-dedup + style-assignment + ~5 other transitive deps — brittle and slow. The semantic load-bearing seam is `walkDerivedList(count, exploredIds, dismissedIds)`. Test setup mirrors `derived-list.test.mjs`'s Phase 39 dismiss-skip cases.
+- **Outcome-based reset() test per Pitfall 8 (NOT mock.callCount === 1).** `reset()` is idempotent — `Map.clear()` on already-empty Map is a no-op. The plan-prescribed call-count test would FAIL if loadCache fires multiple times during stale-date scenarios (legitimate behavior until saveCache(today) writes a fresh entry). End-state assertion `recordServedDomain → reset → getUsedDomains returns empty Set` is invariant regardless.
+- **Multi-snippet shape stored at creation loop only.** Pre-fetch loop stores ONLY `filtered[0]` as `chosen` into `preFetched.news` (one result per anchor; matches Promise.all pattern). The creation loop's cached-branch wraps single cached result as `topSources = [cached]` for back-compat. Full multi-snippet `topSources = filtered.slice(0, 3)` array is built only when creation loop calls webSearch directly (cache miss). No structural change to pre-fetch.
+- **Conditional `exclude_domains` body set (Pitfall 1).** Always-set with empty array would also work (Tavily ignores empty), but the conditional pattern matches the existing `includeImages` conditional at web-search.service.ts:48-50 — minimal wire payload + consistent code style.
+- **Auto-fix Rule 1 #1 fold into Task 2 commit `83804b5c`:** post-essay.service.test.mjs window 2500 → 3500. The Phase 41 source-diversity wiring block (~600 chars: cached branch + topSources + getUsedDomains + 3-line excludeDomains+maxResults webSearch + filterForDiversity + slice) pushed `snippet:` past the 2500 cap. Window-bump-with-comment auto-fix discipline applied (comment names Phase 41-01 as the source). Same window-fragility class as Plan 39-01's image-gen-key-gate fix.
+- **Auto-fix Rule 1 #2 fold into Task 4 commit `436e8279`:** concept-feed-cache-date.test.mjs regex (one-liner → braced block) + window 1200 → 1800. Phase 41 Plan 41-01 Task 3 wrapped the early return in a braced block to call sourceDiversityService.reset(). Hard-coded one-liner regex `/parsed\.date !== today\(\)\)\s*return\s+null/` no longer matched. Updated to multiline-aware optional-braced-block pattern; window bumped to capture new return-null position past the 4-line comment block.
+- **Walker call at concept-feed.service.ts:1212 UNTOUCHED per plan instruction.** Phase 39 D-07 wired `walkDerivedList(16, exploredIds, dismissedIds)` with `dismissedIds = new Set(engagementService.getDismissedAnchorIds())` correctly. Plan 41-01 SC-1 only ADDS the integration test; the wire was already correct. Counterweight test asserts continued presence of the verbatim line + Set construction.
+- **`bodyMarkdown: ''` invariant preserved at news creation post object.** The pre-Phase-41 5-line comment block above `bodyMarkdown: ''` (explaining the 2026-04-19 truncated-snippet regression) is intact. Only the surrounding wiring (cached-branch handling + topSources construction + after-commit recordServedDomain) changed. CLAUDE.md "News post pipeline" load-bearing rule held.
+- **`extractDomain` undefined-guard pattern at both recordServedDomain call sites.** Phase 40 D-10 made `extractDomain` defensive (returns undefined for malformed URLs via try/catch around `new URL(...)`). The guard `const domain = extractDomain(url); if (domain) sourceDiversityService.recordServedDomain(...)` prevents polluting the per-anchor used set with literal 'undefined' string. Counterweight test asserts both call sites use this pattern.
+- **CONTENT-02 promoted from `◐ Partial` → `✓ Complete` in REQUIREMENTS.md traceability table.** Phase 40 shipped the leaf (5-function singleton + DOMAIN_TIERS + PSL slice); Phase 41-01 wired the leaf into Tavily (excludeDomains body field + getUsedDomains/filterForDiversity/recordServedDomain triple at both news call sites + day-boundary reset). User-visible behavior — repeat-anchor refills surface fresh sources — now shippable. Status row updated to `Phase 40+41 / Wave 1+2 / ✓ Complete`.
+- **Plan 41-01 close-out: 4 atomic per-task commits + close-out commit (this).** Test baseline: pre-Plan-41-01 603/2 → post-Plan-41-01 626/2 (+23 passes: 7 web-search-exclude-domains + 4 day-boundary-reset + 12 source-diversity-wiring; same 2 pre-existing carry-over failures from Plan 40-01: tests/concept-feed.test.mjs ERR_MODULE_NOT_FOUND for extensionless youtube.service import + tests/services/trellis-layout.test.mjs:64 getVineColor date-dependent assertion). test:actions 16/16/0 unchanged. tsc -b --noEmit exits 0.
 
 ## Last decisions (Plan 40-01 close, 2026-05-09)
 

@@ -21,7 +21,7 @@
 ### CONTENT — Source diversity + richer essays
 
 - [ ] **CONTENT-01** User can request a "Deep dive" essay variant (350-600w) from `PostDetailScreen`; standard 150-250w teaser remains default
-- [~] **CONTENT-02** Web-search filters for per-concept domain rotation: repeated Tavily calls for the same anchor pass `exclude_domains` so re-queries surface fresh sources _(Phase 40 leaf complete; Phase 41 wires into Tavily)_
+- [x] **CONTENT-02** Web-search filters for per-concept domain rotation: repeated Tavily calls for the same anchor pass `exclude_domains` so re-queries surface fresh sources _(Phase 40 leaf + Phase 41-01 Tavily wire complete)_
 - [ ] **CONTENT-03** Essay prompts include 2-3 Tavily snippets (multi-snippet grounding) instead of `sources[0].snippet` only
 - [ ] **CONTENT-04** Citations in markdown render via ReactMarkdown `sup`/`a`/`section` component overrides for clean footnote presentation
 
@@ -74,7 +74,7 @@
 | ENGAGE-03   | Phase 39 | Wave 1 | Pending |
 | ENGAGE-04   | Phase 43 | Wave 3 | Pending |
 | CONTENT-01  | Phase 41 | Wave 2 | Pending |
-| CONTENT-02  | Phase 40 | Wave 1 | ◐ Partial (Phase 40 leaf complete; Phase 41 wires into Tavily) |
+| CONTENT-02  | Phase 40+41 | Wave 1+2 | ✓ Complete (Phase 40 leaf + Phase 41-01 wire) |
 | CONTENT-03  | Phase 41 | Wave 2 | Pending |
 | CONTENT-04  | Phase 41 | Wave 2 | Pending |
 | TECHDEBT-01 | Phase 37 | Wave 0 | ✓ Complete |
