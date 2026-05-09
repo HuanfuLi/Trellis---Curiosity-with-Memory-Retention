@@ -7,13 +7,10 @@
 // call site. Do NOT call chatCompletion/chatStream for translation — dev-time
 // Sonnet subagent owns all UI translation (see CLAUDE.md i18n Workflow).
 //
-// This file is intentionally extracted from `./index.ts` so it can be imported
-// by `node --test` on Node 25+ without pulling in the provider's JSON-import
-// chain (src/locales/index.ts statically imports *.json bundles; Node 25
-// rejects those imports without `with { type: 'json' }` attributes).
-// `applyLocaleDirective` reads the i18next global singleton's current language
-// — the same instance that `src/locales/index.ts` configures at app startup.
-import i18next from 'i18next';
+// Phase 37 note: this module reads locale via `getCurrentLocale()` from
+// `../../lib/i18n-leaf` (the leaf is the indirection layer). Behavior is
+// byte-stable vs. the pre-Phase-37 direct i18next.language read.
+import { getCurrentLocale } from '../../lib/i18n-leaf.ts';
 import type { SupportedLocale } from '../../types';
 
 interface ChatMessage {
@@ -33,7 +30,7 @@ const LOCALE_NAMES: Record<SupportedLocale, string> = {
 };
 
 export function applyLocaleDirective(messages: ChatMessage[]): ChatMessage[] {
-  const lng = i18next.language as SupportedLocale;
+  const lng = getCurrentLocale() as SupportedLocale;
   const locale: SupportedLocale = lng in LOCALE_NAMES ? lng : 'en';
   const directive = `Respond in ${LOCALE_NAMES[locale]}.`;
 

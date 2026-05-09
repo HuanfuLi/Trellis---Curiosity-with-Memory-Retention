@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import i18next from 'i18next';
+import { bindI18nLeaf } from '../../src/lib/i18n-leaf.ts';
 
 // Initialize the i18next global singleton once for the whole test file.
-// applyLocaleDirective reads i18next.language (the global default instance).
+// applyLocaleDirective reads via the i18n-leaf shim (Phase 37) which is bound
+// below to this i18next instance.
 await i18next.init({
   lng: 'en',
   fallbackLng: 'en',
@@ -14,6 +16,13 @@ await i18next.init({
     ja: { translation: {} },
   },
 });
+
+// Phase 37: wire the leaf shim to the test-local i18next instance so
+// applyLocaleDirective's getCurrentLocale() call sees subsequent
+// `i18next.changeLanguage(...)` calls in the tests (Pitfall 1 mitigation).
+// MUST run AFTER i18next.init AND BEFORE the dynamic import of the module
+// under test.
+bindI18nLeaf(i18next.t.bind(i18next), () => i18next.language);
 
 // applyLocaleDirective is exported from providers/llm/locale-directive.ts (JSON-free;
 // safe to import under Node 25 `node --test` which rejects JSON imports without
