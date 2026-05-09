@@ -100,7 +100,8 @@ describe('refill-queue integration (Phase 36 GAP-1..4 composition)', () => {
     const counts = {};
     for (const a of assignments) counts[a.style] = (counts[a.style] ?? 0) + 1;
 
-    // STYLE_WEIGHTS sum = 1.00 (0.10 + 0.55 + 0.05 + 0.10 + 0.10 + 0.10).
+    // STYLE_WEIGHTS sum = 1.00 (Phase 38: 0.10 image + 0.55 text-art + 0.05 suggestion
+    // + 0.10 news + 0.20 video — short style was removed; video absorbed its 0.10).
     // Imported from style-assignment.ts to avoid drift if weights are tuned.
     const sum = Object.values(STYLE_WEIGHTS).reduce((a, b) => a + b, 0);
     for (const [style, weight] of Object.entries(STYLE_WEIGHTS)) {
@@ -117,7 +118,8 @@ describe('refill-queue integration (Phase 36 GAP-1..4 composition)', () => {
       makePost('a1', ['A'], 'text-art'), makePost('a2', ['A'], 'video'),
       makePost('a3', ['A'], 'text-art'), makePost('a4', ['A'], 'image'),
       makePost('b1', ['B'], 'text-art'), makePost('b2', ['B'], 'news'),
-      makePost('b3', ['B'], 'text-art'), makePost('b4', ['B'], 'short'),
+      // (Phase 38 / TECHDEBT-06): the legacy short fixture replaced with video — short type is gone.
+      makePost('b3', ['B'], 'text-art'), makePost('b4', ['B'], 'video'),
     ];
     spreadByConcept(posts);
     spreadByStyle(posts);
