@@ -13,6 +13,8 @@ files_modified:
 autonomous: true
 requirements: [TECHDEBT-02, TECHDEBT-03, TECHDEBT-05]
 
+scope_note: "5 tasks but each is a 1-3 line edit to a distinct file (34-VALIDATION.md frontmatter / 35-VALIDATION.md frontmatter / v1.4-ROADMAP.md single line / PITFALLS.md inline annotations / starter-posts.test.mjs string fixture). Tasks have no shared mutable state, are individually grep-verifiable in <1s, and produce 5 atomic bisection-friendly commits. Splitting would harm bisection (each file edit is the natural commit boundary) without reducing degradation risk (total context ~25%, well under the 50% target)."
+
 must_haves:
   truths:
     - "34-VALIDATION.md frontmatter shows status: validated, nyquist_compliant: true, wave_0_complete: true."

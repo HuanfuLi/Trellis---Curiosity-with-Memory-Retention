@@ -27,13 +27,15 @@ files_modified:
 autonomous: true
 requirements: [TECHDEBT-06]
 
+scope_note: "8 tasks and 19 files modified, but tasks 2-8 are mechanically sequential cleanups downstream of Task 1's atomic type-union edit (the only complex task; CI-stable strategy C requires types + immediate consumers in one commit per RESEARCH.md INV-8). Task 1 is the only large-context task (~30%); tasks 2-8 are each <1-page diffs to non-overlapping files (i18n bundles / post-essay / 4 test files / CLAUDE.md / new test) — each grep-verifiable in <30s. Splitting at task 1 | 2-8 with a wave dependency would add coordination overhead for zero bisection gain (the natural bisection unit is already the per-task commit). Total context ~50%, on-target for the upper bound."
+
 plan_notes: |
   COMMIT ORDER STRATEGY (locked):
     Per RESEARCH.md INV-8 + Pitfall 1: type-union edits trigger TS errors at every '=== "short"' narrowing site. Two viable strategies:
       (A) types-first → all usage sites in one big commit (1 monster commit; bad for bisection)
       (B) usage-sites-first → types-last (multiple atomic commits; tsc red between commits — bad for CI)
       (C) types AND immediate consumers in commit 1 → remaining cleanup commits don't touch unions (preferred — atomic per-file but CI green between commits)
-    Picked Strategy C. Commit 1 = types/index.ts + ALL files that contain '=== "short"' or 'short:' or 'sourceType: "short"' literals (5 files: types, youtube, concept-feed, style-assignment, InfoFlow, PostDetailScreen).
+    Picked Strategy C. Commit 1 = 6 files: types/index.ts, youtube.service.ts, concept-feed.service.ts, style-assignment.ts, InfoFlow.tsx, PostDetailScreen.tsx (types/index.ts + ALL files that contain '=== "short"' or 'short:' or 'sourceType: "short"' literals).
     Commits 2+ = i18n bundle deletions, post-essay cleanup, test updates, CLAUDE.md amendment, new invariant test.
     This makes commit 1 large but CI-stable; subsequent commits are small + bisection-friendly for any logic regressions.
 
@@ -226,7 +228,7 @@ type AppEvent =
 
 <tasks>
 
-<task type="auto" tdd="true">
+<task type="auto">
   <name>Task 1: Remove 'short' from type unions + delete all '=== short' narrowing sites + delete short-construction loop (one atomic commit; CI-stable)</name>
   <files>app/src/types/index.ts, app/src/services/youtube.service.ts, app/src/services/concept-feed.service.ts, app/src/services/style-assignment.ts, app/src/components/InfoFlow.tsx, app/src/screens/PostDetailScreen.tsx</files>
   <behavior>
@@ -249,6 +251,8 @@ type AppEvent =
     8. RESEARCH.md § INV-8 (TypeScript compilation cascade — all sites that MUST be deleted in the same commit).
     9. CLAUDE.md "Video & short post completion signals (Phase 36 GAP-C — load-bearing)" section (lines 107-132) — context for the GAP-C emit migration semantics. (CLAUDE.md text edit happens in Task 8, not here — but executor needs to understand the load-bearing rules being preserved.)
     10. plan_notes "COMMIT ORDER STRATEGY" + "D-02b INFOFLOW MERGE PROTOCOL" + "STYLE_WEIGHTS REBALANCE" sections at the top of this PLAN.
+
+    NOTE on test ordering: The youtube-no-short-classification.test.mjs in Task 6 is a POST-HOC regression guard against re-introduction of the short classifier; it does NOT precede this task as a red TDD test. (Reason: the invariant test asserts ABSENCE of classifier code — it can only meaningfully exist after Task 1 deletes that code. A pre-Task-1 invariant test would assert "absence" against present code and fail, then pass after Task 1 deletes — same end state, but the red→green flip is mechanical and bisection-uninteresting compared to running tsc red→green between commits. See plan_notes COMMIT ORDER STRATEGY for why CI-stability of tsc is the more useful gate.)
   </read_first>
   <action>
     This is the LARGE atomic commit. All 6 files edited together so tsc stays green between commits. Edits:
@@ -503,7 +507,7 @@ type AppEvent =
     ```
   </action>
   <verify>
-    <automated>cd app && node --test tests/locales/bundle-parity.test.mjs 2>&1 | tail -3 && grep -c "shortTag" src/locales/en.json src/locales/zh.json src/locales/es.json src/locales/ja.json</automated>
+    <automated>cd app && node --test tests/locales/bundle-parity.test.mjs 2>&1 | tail -3 && ! grep -q "shortTag" src/locales/en.json src/locales/zh.json src/locales/es.json src/locales/ja.json</automated>
   </verify>
   <acceptance_criteria>
     - `grep -c "shortTag" app/src/locales/en.json` returns 0
@@ -573,7 +577,7 @@ type AppEvent =
     ```
   </action>
   <verify>
-    <automated>cd app && grep -c "trellis_short_posts" src/services/post-essay.service.ts && cd app && grep -c "trellis_short_posts" tests/services/post-essay.service.test.mjs && cd app && node --test tests/services/post-essay.service.test.mjs 2>&1 | tail -3</automated>
+    <automated>cd app && ! grep -q "trellis_short_posts" src/services/post-essay.service.ts && ! grep -q "trellis_short_posts" tests/services/post-essay.service.test.mjs && node --test tests/services/post-essay.service.test.mjs 2>&1 | tail -3</automated>
   </verify>
   <acceptance_criteria>
     - `grep -c "trellis_short_posts" app/src/services/post-essay.service.ts` returns 0

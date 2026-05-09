@@ -26,6 +26,9 @@ plan_notes: |
   PER-TEST OS MATRIX:
     Per CONTEXT.md D-03b: iOS + Android both required. Each test's `expected:` block names both platforms; the single `result:` line records pass/fail with optional per-platform note in the failure case. Test design assumes operator will tap through on both devices and only mark `result: pass` if BOTH platforms passed.
 
+  DEVICE-ACCESS FALLBACK:
+    If physical-device access is unavailable when /gsd:verify-work 38 runs (e.g., operator on the road, no iOS device handy, Android emulator only), marking TECHDEBT-04 as `in-progress` rather than `complete` is an acceptable scoped exception. Rationale: the device-only behaviors being verified (touch-target feel + React.memo behavioral correctness) are NOT regressions introduced by Phase 38 — they are carry-over Phase 33 deferrals. Phase 38's deliverable for TECHDEBT-04 is the SCAFFOLD itself (38-HUMAN-UAT.md with status: pending and 2 well-formed test entries). Operator may close TECHDEBT-04 to in-progress and ship Phase 38, then run the device tests at next physical-device session and update result lines + status:complete in a follow-up commit. This is the operator's call at /gsd:verify-work time — NOT a planning-time decision. (If the deferral itself becomes a perpetual carry-over, surface it for explicit re-planning rather than letting it drift indefinitely.)
+
 must_haves:
   truths:
     - "38-HUMAN-UAT.md file exists in .planning/phases/38-v1-4-carry-over-cleanup/ with the canonical Phase 37 frontmatter shape (status, phase, source, started, updated)."

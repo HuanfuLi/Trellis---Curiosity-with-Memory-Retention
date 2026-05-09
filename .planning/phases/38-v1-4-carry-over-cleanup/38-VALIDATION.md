@@ -52,6 +52,7 @@ created: 2026-05-09
 | 38-02-04 | 02 | 1 | TECHDEBT-06 | source-read | `youtube-no-short-classification.test.mjs` test 3 — STYLE_WEIGHTS.short absent + sum=1.0 | ❌ W0 | ⬜ pending |
 | 38-02-05 | 02 | 1 | TECHDEBT-06 | source-read | Updated `InfoFlow.video-tap-emit.test.mjs` (renamed from short-tap-emit) | ✅ (rename) | ⬜ pending |
 | 38-02-06 | 02 | 1 | TECHDEBT-06 | full suite | `cd app && npm test` ≤3 fails (matches Phase 37 baseline) | ✅ | ⬜ pending |
+| 38-02-07 | 02 | 1 | TECHDEBT-06 | grep | `grep -c "Phase 36 GAP-C, generalized in Phase 38" CLAUDE.md` returns 1 AND `! grep -q "Short tap-to-play emit" CLAUDE.md` exits 0 | ❌ W0 | ⬜ pending |
 | 38-03-01 | 03 | 1 | TECHDEBT-04 | file presence | `test -f .planning/phases/38-v1-4-carry-over-cleanup/38-HUMAN-UAT.md` | ❌ W0 | ⬜ pending |
 | 38-03-02 | 03 | 1 | TECHDEBT-04 | grep | `grep -c "result: pass" 38-HUMAN-UAT.md` → 2 (filled in by human after device test) | ❌ W0 | ⬜ pending |
 
@@ -79,7 +80,7 @@ created: 2026-05-09
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies (12/13 tasks have grep/tsc/test command; 38-03-02 is human-fill-in)
+- [ ] All tasks have `<automated>` verify or Wave 0 dependencies (13/14 tasks have grep/tsc/test command; 38-03-02 is human-fill-in)
 - [ ] Sampling continuity: no 3 consecutive tasks without automated verify (Plan 38-01 has grep per task; Plan 38-02 has tsc per task; Plan 38-03 has file-presence per task)
 - [ ] Wave 0 covers all MISSING references (3 NEW test files listed above)
 - [ ] No watch-mode flags
