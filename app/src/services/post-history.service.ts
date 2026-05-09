@@ -3,6 +3,7 @@
 
 import type { DailyPost } from '../types/index.ts';
 import { settingsService } from './settings.service.ts';
+import { engagementService } from './engagement.service.ts';
 
 const STORAGE_KEY = 'trellis_post_history';
 
@@ -61,7 +62,11 @@ export const postHistoryService = {
     const retentionDays = settings.feed?.postRetentionDays;
     if (retentionDays == null || retentionDays <= 0) return; // keep all
     const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
-    const posts = loadPosts().filter(p => p.generatedAt > cutoff);
+    // Phase 39 D-04: pin saved/liked posts against retention purge so a post
+    // saved >retentionDays ago is not silently dropped from the snapshot store.
+    // engagementService.getPinnedIds() returns saved ∪ liked (NOT dismissed).
+    const pinned = engagementService.getPinnedIds();
+    const posts = loadPosts().filter(p => pinned.has(p.id) || p.generatedAt > cutoff);
     savePosts(posts);
   },
 
