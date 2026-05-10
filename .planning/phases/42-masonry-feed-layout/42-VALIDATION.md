@@ -1,9 +1,9 @@
 ---
 phase: 42
 slug: masonry-feed-layout
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-05-09
 ---
 
@@ -40,12 +40,12 @@ created: 2026-05-09
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| TBD     | TBD  | TBD  | MASONRY-01  | source-reading + behavioral | `node --test tests/components/MasonryFeed.layout.test.mjs` | ❌ W0 | ⬜ pending |
-| TBD     | TBD  | TBD  | MASONRY-01  | source-reading | `node --test tests/lib/no-card-slide-in.test.mjs` | ❌ W0 | ⬜ pending |
-| TBD     | TBD  | TBD  | MASONRY-01  | source-reading (regression) | `node --test tests/components/InfoFlow.video-tap-emit.test.mjs` | ✅ exists | ⬜ pending |
-| TBD     | TBD  | TBD  | MASONRY-02  | behavioral | `node --test tests/components/MasonryFeed.celebration.test.mjs` | ❌ W0 | ⬜ pending |
-| TBD     | TBD  | TBD  | MASONRY-02  | source-reading | `node --test tests/screens/HomeScreen.no-more-posts-toast.test.mjs` | ❌ W0 | ⬜ pending |
-| TBD     | TBD  | TBD  | MASONRY-02  | source-reading (regression) | `node --test tests/locales/bundle-parity.test.mjs` | ✅ exists | ⬜ pending |
+| 42-05-T1 | 42-05 | 3 | MASONRY-01 | source-reading + behavioral | `node --test tests/components/MasonryFeed.layout.test.mjs` | ✅ created plan 42-05 | ✅ green |
+| 42-03-T1+T2 | 42-03 | 2 | MASONRY-01 | source-reading | `node --test tests/lib/no-card-slide-in.test.mjs` | ✅ created plan 42-05 (test); plan 42-03 made it pass | ✅ green |
+| (existing) | (regression) | - | MASONRY-01 | source-reading (regression) | `node --test tests/components/InfoFlow.video-tap-emit.test.mjs` | ✅ pre-existing | ✅ green |
+| 42-05-T2 | 42-05 | 3 | MASONRY-02 | source-reading | `node --test tests/components/MasonryFeed.celebration.test.mjs` | ✅ created plan 42-05 | ✅ green |
+| 42-05-T3 | 42-05 | 3 | MASONRY-02 | source-reading | `node --test tests/screens/HomeScreen.no-more-posts-toast.test.mjs` | ✅ created plan 42-05 | ✅ green |
+| (existing) | (regression) | - | MASONRY-02 | source-reading (regression) | `node --test tests/locales/bundle-parity.test.mjs` | ✅ pre-existing | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -74,11 +74,11 @@ created: 2026-05-09
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 5s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 5s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-05-09
