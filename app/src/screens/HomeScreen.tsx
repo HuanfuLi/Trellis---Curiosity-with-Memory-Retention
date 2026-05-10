@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { BookOpen, CheckSquare, Headphones, Sparkles, AlertCircle } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
-import { InlineInfoFlow, type InfoFlowItem } from '../components/InfoFlow';
+import { type InfoFlowItem } from '../components/InfoFlow';
+import { MasonryFeed } from '../components/MasonryFeed';
 import { VineProgress } from '../components/VineProgress';
 import { Confetti } from '../components/Confetti';
 import { ScrollToTopFAB } from '../components/ScrollToTopFAB';
@@ -237,7 +238,8 @@ export function HomeScreen() {
         conceptFeedService.appendToCache(newPosts);
         setDailyPosts((prev) => [...prev, ...newPosts]);
       } else {
-        toast(t('home.toast.noMorePosts'), 'info');
+        // Phase 42 D-11: Toast removed; vine-bloom celebration card (plan 42-04) handles the
+        // "no more posts" state via allExplored prop passed to MasonryFeed.
       }
     } finally {
       isLoadingMoreRef.current = false;
@@ -467,6 +469,14 @@ export function HomeScreen() {
   const [exploredAnchors, setExploredAnchors] = useState<string[]>(() => dailyReadService.getExploredAnchors());
   const exploredCount = useMemo(() => exploredAnchors.filter(id => quotaAnchorIds.has(id)).length, [exploredAnchors, quotaAnchorIds]);
   const isComplete = conceptQuota > 0 && exploredCount >= conceptQuota;
+
+  // Phase 42 MASONRY-02: Compute allExplored locally (RESEARCH.md Pitfall 2 — NOT a service property).
+  // VineBloomCard renders only when allExplored && layout.nodes.length > 0; the layout.nodes>0 gate
+  // lives inside VineBloomCard via useTrellisData (per plan 42-04 design).
+  const allExplored = useMemo(() => {
+    const anchors = questions.filter((q) => q.isAnchorNode);
+    return anchors.length > 0 && anchors.every((a) => exploredAnchors.includes(a.id));
+  }, [questions, exploredAnchors]);
 
   // Build concepts list for VineProgress checklist
   const conceptList = useMemo(() => {
@@ -821,14 +831,15 @@ export function HomeScreen() {
           </div>
         )}
 
-        {/* Inline Info Flow */}
-        <InlineInfoFlow
+        {/* Phase 42 MASONRY-01: Pinterest-style 2-column masonry feed (replaces InlineInfoFlow). */}
+        <MasonryFeed
           items={infoFlowItems}
           onOpenConnection={handleOpenConnection}
           showConnectionScores={settingsSnapshot.showConnectionScores}
           onOpenPost={(postId, post) => {
             navigate(`/posts/${postId}`, { state: { post } });
           }}
+          allExplored={allExplored}
         />
 
         {/* Pull-up affordance — always reserves 80px, shows hint when at bottom */}
