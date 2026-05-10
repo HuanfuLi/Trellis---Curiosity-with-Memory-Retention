@@ -8,7 +8,7 @@ updated: 2026-05-09T02:30:00.000Z
 
 ## Current Test
 
-[awaiting operator retest of UAT-1..UAT-5 after fix commit `1de44017`]
+[awaiting operator retest of UAT-1..UAT-5 after fix commits `1de44017` (Bug A+B) and `5f8a77f9` (Bug C — column overflow)]
 
 ## Tests
 
@@ -30,8 +30,13 @@ result: [pending — blocked by UAT-5]
 
 ### 5. Two columns side-by-side (MASONRY-01 happy path)
 expected: With ≥2 tiles in the feed, the masonry renders both columns with tiles distributed across them via the height-accumulating split. Right column should have content, not be empty.
-result: RESOLVED — fix committed at `1de44017` (advance heights in Pass 1 + move assignment to render body). Two regression locks added in MasonryFeed.layout.test.mjs (test count 39 → 42, all green; tsc clean). Awaiting operator visual retest.
+result: RESOLVED — fix committed at `1de44017` (advance heights in Pass 1 + move assignment to render body). Two regression locks added in MasonryFeed.layout.test.mjs (test count 39 → 42, all green; tsc clean).
 evidence: Operator screenshot at retest after Wave 4 close-out showed ALL tiles piled into the LEFT column; right column was completely empty all the way down. Diagnosis below stays in record for posterity.
+
+### 5b. Columns adapt to screen width (MASONRY-01 fit)
+expected: Both masonry columns fit inside HomeScreen's 448px maxWidth content area. Right column does NOT overflow off-screen on any device width.
+result: RESOLVED — fix committed at `5f8a77f9` (minWidth: 0 on BOTH column wrappers + width: 100% on outer flex container). Same root cause as CLAUDE.md ChatInput rule. 1 new regression lock added (layout test count 10 → 11, all green; tsc clean). Awaiting operator visual retest.
+evidence: Operator screenshot 2026-05-09 after `1de44017` shows 2 columns rendering but right column overflows off the right edge of the viewport. Cards inside have intrinsic content width that flex refuses to shrink without minWidth: 0.
 
 ### 6. Card typography tuned for half-width (follow-up)
 expected: Existing card components (NewsCard, video card, etc.) were designed for full-width InlineInfoFlow. At 50% width inside masonry columns, font sizes / paddings / line-heights may need a half-width variant or shrink rule.
@@ -39,9 +44,9 @@ result: pending — surface only after UAT-5 fix lands and 2-column layout is vi
 
 ## Summary
 
-total: 6
+total: 7
 passed: 0
-issues: 1
+issues: 2
 pending: 5
 skipped: 0
 blocked: 0
