@@ -8,7 +8,7 @@ updated: 2026-05-09T02:30:00.000Z
 
 ## Current Test
 
-[awaiting operator retest of UAT-1..UAT-11 after `dec6241c` (UAT-8 round 4 letterbox baked-into-thumbnail → transform scale 1.34 + UAT-11 image post borderRadius mismatch)]
+[awaiting operator retest of UAT-1..UAT-11 after `d9f2af55` (UAT-11 round 2 — removed missed borderRadius from FeedPostImage aspectPadding branch)]
 
 ## Tests
 
@@ -54,9 +54,9 @@ result: RESOLVED across 4 rounds. Round 2 `db864ffa` used `aspectRatio: '5/4'` C
 evidence: Operator reports 2026-05-10 after rounds 2 + 3 both showed black bars top/bottom. Diagnosis at round 4: youtube.service.ts:210 selects `snippet.thumbnails.high.url` = hqdefault.jpg = 480×360 = 4:3 with baked-in bars. Operator explicit instruction in round 4 retest: "you should CROP the thumbnail, not using different thumbnail from youtube."
 
 ### 11. Image post borderRadius mismatch with new card chrome
-expected: AI-generated image posts (FeedPostImage) should have corner radius matching the card's new 8px (afe42922). Operator: "Images in image post still uses previous corner spec... more round shaped, causing empty space and weird looking."
-result: RESOLVED — fix committed at `dec6241c`. FeedPostImage was setting its OWN borderRadius: var(--radius-xl) (~16px) on its container, heavier than the new 8px on the parent ConceptCard. The image's tighter corner curves left visible card-background gradient between the image and the card edge. Fix: drop borderRadius from FeedPostImage entirely (single callsite confirmed via grep — only InfoFlow.tsx ConceptCard uses it). Parent ConceptCard's overflow: hidden + borderRadius: 8px clips the image to the card's corners cleanly. backgroundColor preserved for the brief moment between mount and image-load.
-evidence: Operator screenshot 2026-05-10 after `afe42922` (chrome tightening) showed image posts with visible card-background gradient bands between image and card edge — geometry consistent with image's heavier borderRadius double-rounding inside card's tighter borderRadius.
+expected: AI-generated image posts (FeedPostImage) should have NO own corner crop — let the parent ConceptCard's overflow: hidden + 8px borderRadius clip the image to the card corners (same pattern as the video thumbnail).
+result: RESOLVED across 2 rounds. Round 1 `dec6241c` used `replace_all: true` on the borderRadius line — but only one of two AspectBox branches got the comment-replacement. The aspectPadding branch (line 52, used by image posts via `<FeedPostImage aspectPadding="100%" />`) still had `borderRadius: 'var(--radius-xl)'`. Operator round-2 retest 2026-05-10 confirmed mismatch unresolved. Round 2 `d9f2af55` removed borderRadius from the aspectPadding branch too. Both AspectBox branches keep overflow: hidden as defense-in-depth (prevents absolute-positioned img from escaping its layout box during measurement). New regression test `tests/components/FeedPostImage.no-self-radius.test.mjs` locks NO borderRadius anywhere + overflow: hidden present on both branches.
+evidence: Operator screenshot 2026-05-10 round 2 retest showed image (library scene) inside card with visible card-background gradient between the image's rounded corners and the card's tighter corners. Operator clarifying instruction: "we should not add this corner crop for images in post faces, just let the post face container crop it like the way thumbnail in video post is cropped."
 
 ### 10. Buffer queue + per-swipe pop bumped for masonry consumption
 expected: Per operator 2026-05-10: "Should enlarge buffer queue to 24 and each swipe for more should pop 8 posts." Masonry half-width tiles consume twice as fast as the prior single-column InlineInfoFlow.
