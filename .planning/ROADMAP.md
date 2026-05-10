@@ -1063,7 +1063,7 @@ _Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round
 - [x] **Phase 39: Engagement Service + Walker Extension** — `engagement.service.ts` leaf module (save/dismiss/like, cross-day localStorage); `walkDerivedList` gains optional `dismissedIds` param; `ANCHOR_DISMISSED` event added to AppEvent union (completed 2026-05-09)
 - [x] **Phase 40: Source Diversity Leaf Module** — `source-diversity.ts` session-scoped leaf (filterForDiversity, recordServedDomain, scoreSource); bundled domain-tier allowlist (~200 entries); synchronous O(N) scan for mutex safety (completed 2026-05-09)
 - [x] **Phase 41: Pipeline Wiring + Essay Depth** — Wire engagement + diversity into refillQueue; add `EssayOptions.depth: 'standard' | 'deep'` to post-essay.service.ts (350-600w deep variant); raise body-slice cap 2000→4000; multi-snippet grounding + ReactMarkdown citation overrides _(Plan 41-01 + 41-02 complete; Phase 43 unblocked for Deep dive button)_
-- [ ] **Phase 42: Masonry Feed Layout** — `MasonryFeed.tsx` with CSS `column-count: 2` + `break-inside: avoid`; framer-motion entrance animations on leaf cards; vine-bloom end-of-content celebration card
+- [ ] **Phase 42: Masonry Feed Layout** — `MasonryFeed.tsx` with height-accumulating 2-column split (Pinterest/Rednote-style; tiles never move between columns on append); framer-motion entrance animations on leaf cards; vine-bloom end-of-content celebration card
 - [ ] **Phase 43: Engagement UI** — Like/save/dismiss action row on tiles via long-press menu; HomeScreen `ANCHOR_DISMISSED` subscription + `[location.pathname]` engagement resync; "Deep dive" button on PostDetailScreen; "N connections" graph-derived social proof micro-label; Force-New-Day handler updated with `engagementService.reset()`
 - [ ] **Phase 44: Dependency Version Sweep** — Capacitor 8.1→8.3, i18next 26.0.5→26.0.10, react-router-dom 7.13→7.15, eslint / typescript-eslint minor bumps; React 19.x minor bump consolidated here
 - [ ] **Phase 45: Code Quality Sweep** — `tsc` strict-mode audit, dead-code sweep, perf profiling pass (first-paint / queue refill / masonry scroll), project-wide TODO/FIXME triage, operator-note bug sweep
@@ -1138,11 +1138,11 @@ _Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round
   - [x] 41-02-essay-depth-citation-rendering-PLAN.md — EssayOptions.depth + bodyMarkdownDeep additive field on EssayContent + PostSnapshot; depth-aware prompts in 4 generators; sources.slice(0,3) news grounding + footnote prompt; meta cap 2000→4000; PostDetailScreen 3-branch abort threading audit; ReactMarkdown sup/a/section overrides + sanitize sup-attr spread fix (CONTENT-01, CONTENT-03, CONTENT-04)
 
 ### Phase 42: Masonry Feed Layout
-**Goal**: Pinterest-style 2-column masonry feed using CSS `column-count: 2` + `break-inside: avoid`; vine-bloom celebration replaces the bare "no more posts" toast.
+**Goal**: Pinterest-style 2-column masonry feed using a height-accumulating JS split (each new tile drops into the currently shorter column at append time and stays there); vine-bloom celebration replaces the bare "no more posts" toast.
 **Depends on**: Phase 41 (services + essay paths stable so UI renders against real data)
 **Requirements**: MASONRY-01, MASONRY-02
 **Success Criteria** (what must be TRUE):
-  1. HomeScreen feed renders as a 2-column masonry layout; no card splits across columns (visual snapshot + DOM-tree test asserting `column-count: 2` + `break-inside: avoid` are present in the rendered styles)
+  1. HomeScreen feed renders as a 2-column masonry layout; no card splits across columns (each tile is rendered atomically inside one of two flex-column wrappers); source-reading test asserts `MasonryFeed.tsx` does NOT use `column-count` / `break-inside` CSS (height-accumulating split chosen per CONTEXT.md D-02)
   2. Card heights vary naturally per content (image / text-art / video / short / news produce visually distinct tile heights without JS column rebalancing)
   3. Scroll position survives `/home` → `/posts/:id` → back navigation (HomeScreen always-mounted slot preserves `scrollTop` automatically; verified by manual back-nav check + DOM ref assertion)
   4. framer-motion entrance animations apply to leaf `<motion.div>` cards only, not to the scroll container or InfoFlow root (source-reading test enforces this)
