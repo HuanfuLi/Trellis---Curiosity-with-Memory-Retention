@@ -8,7 +8,7 @@ updated: 2026-05-09T02:30:00.000Z
 
 ## Current Test
 
-[awaiting operator retest of UAT-1..UAT-10 after `3a02c45d` (UAT-8 round 3 letterbox→paddingTop hack + UAT-10 queue 16→24 + swipe pop 4→8)]
+[awaiting operator retest of UAT-1..UAT-11 after `dec6241c` (UAT-8 round 4 letterbox baked-into-thumbnail → transform scale 1.34 + UAT-11 image post borderRadius mismatch)]
 
 ## Tests
 
@@ -50,8 +50,13 @@ evidence: Operator screenshot 2026-05-09 showed gray-circle play button overlay 
 
 ### 8. Video thumbnail aspect — 5:4 landscape crop
 expected: Per operator after rejecting portrait + native + hide-thumbnail options: "G sounds a little better if crop 5:4 (landscape) for landscape thumbnails. Vertical crop WILL DEFINITELY cause poor visual."
-result: RESOLVED across 2 rounds. Round 2 `db864ffa` used `aspectRatio: '5 / 4'` CSS — produced LETTERBOX (black bars top+bottom) instead of cropping (operator: "did not crop thumbnail but actually added black upper and lower edges"). Round 3 `3a02c45d` switched to the bulletproof `paddingTop: '80%'` hack (4/5 = 0.8) with the img absolute-positioned over the padding box. Forces a real computed height before the img lays out, so `object-fit: cover` correctly crops L+R and preserves vertical framing. Test contract updated from asserting the aspectRatio literal to asserting paddingTop + position absolute + objectFit cover (3 paired assertions).
-evidence: Operator report 2026-05-10 after `db864ffa` showed black bars top/bottom — letterbox geometry consistent with the img falling back to its intrinsic 16:9 ratio inside a 0-height container. CSS aspect-ratio property likely didn't compute a real height inside the flex column ancestor.
+result: RESOLVED across 4 rounds. Round 2 `db864ffa` used `aspectRatio: '5/4'` CSS — produced LETTERBOX. Round 3 `3a02c45d` switched to `paddingTop: '80%'` hack with object-fit: cover — operator reported still seeing black bars. Round 4 `dec6241c` diagnosed the root cause: bars are BAKED INTO YouTube's hqdefault.jpg (4:3 image with 16:9 video letterboxed → ~12.5% black bars). object-fit: cover on a 4:3 source in a 5:4 container only crops ~3% L+R, leaving the vertical bars visible. Per operator instruction (do NOT swap to mqdefault.jpg / 16:9 variant), zoom into the existing thumbnail with `transform: scale(1.34)` — crops ~16.7% each top/bottom edge, past the 12.5% bars with safety margin. Outer container's overflow: hidden clips the overscan.
+evidence: Operator reports 2026-05-10 after rounds 2 + 3 both showed black bars top/bottom. Diagnosis at round 4: youtube.service.ts:210 selects `snippet.thumbnails.high.url` = hqdefault.jpg = 480×360 = 4:3 with baked-in bars. Operator explicit instruction in round 4 retest: "you should CROP the thumbnail, not using different thumbnail from youtube."
+
+### 11. Image post borderRadius mismatch with new card chrome
+expected: AI-generated image posts (FeedPostImage) should have corner radius matching the card's new 8px (afe42922). Operator: "Images in image post still uses previous corner spec... more round shaped, causing empty space and weird looking."
+result: RESOLVED — fix committed at `dec6241c`. FeedPostImage was setting its OWN borderRadius: var(--radius-xl) (~16px) on its container, heavier than the new 8px on the parent ConceptCard. The image's tighter corner curves left visible card-background gradient between the image and the card edge. Fix: drop borderRadius from FeedPostImage entirely (single callsite confirmed via grep — only InfoFlow.tsx ConceptCard uses it). Parent ConceptCard's overflow: hidden + borderRadius: 8px clips the image to the card's corners cleanly. backgroundColor preserved for the brief moment between mount and image-load.
+evidence: Operator screenshot 2026-05-10 after `afe42922` (chrome tightening) showed image posts with visible card-background gradient bands between image and card edge — geometry consistent with image's heavier borderRadius double-rounding inside card's tighter borderRadius.
 
 ### 10. Buffer queue + per-swipe pop bumped for masonry consumption
 expected: Per operator 2026-05-10: "Should enlarge buffer queue to 24 and each swipe for more should pop 8 posts." Masonry half-width tiles consume twice as fast as the prior single-column InlineInfoFlow.
@@ -72,13 +77,13 @@ suggested next step: `/gsd:debug "feed dominated by news+video, text-art absent 
 
 ## Summary
 
-total: 10
+total: 11
 passed: 0
-issues: 6
+issues: 7
 pending: 4
 skipped: 0
 blocked: 0
-note: All 6 issues are RESOLVED with code commits awaiting operator visual retest. Once UAT-1..4 are confirmed (currently still pending behavioral verification independent of layout), phase verification can flip to `passed`.
+note: All 7 issues are RESOLVED with code commits awaiting operator visual retest. Once UAT-1..4 are confirmed (currently still pending behavioral verification independent of layout), phase verification can flip to `passed`.
 
 ## Gaps
 
