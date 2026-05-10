@@ -66,7 +66,11 @@ function AspectBox({
         minHeight,
         position: 'relative',
         overflow: 'hidden',
-        borderRadius: 'var(--radius-xl)',
+        // Phase 42 UAT-11 (2026-05-10): no own borderRadius. The parent
+        // ConceptCard's overflow: hidden + 8px borderRadius clips this for us;
+        // a self-applied radius (was `var(--radius-xl)` ~16px) double-rounded
+        // inside the card's tighter 8px and showed empty card-background
+        // gradient between the two curves.
         backgroundColor: 'var(--surface-variant)',
         ...style,
       }}

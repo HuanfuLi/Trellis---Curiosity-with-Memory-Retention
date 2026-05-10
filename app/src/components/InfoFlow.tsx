@@ -326,24 +326,34 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive: _isActive, onO
         {/* Video card thumbnail — Phase 42 UAT-7+8: inline-play removed. Card-level
             tap (parent <div> at line 303) navigates to PostDetailScreen, which owns
             the iframe AND Detector D (postMessage CONCEPT_EXPLORED on play ≥ 80%).
-            Aspect 5/4 (landscape, wider-than-tall) preserves vertical framing of
-            16:9 source thumbnails via object-fit: cover (~40px crop each horizontal
-            edge — most YouTube subjects center horizontally).
 
-            UAT-8 round 3 (2026-05-10): switched from CSS `aspect-ratio: 5/4` to
-            the paddingTop hack. The CSS property was producing letterbox (black
-            bars top/bottom) instead of cropping — likely because aspect-ratio
-            didn't compute a real container height inside the flex column ancestor,
-            so the img fell back to its intrinsic 16:9 ratio and `object-fit: cover`
-            had no taller box to crop into. paddingTop: '80%' (= 4/5 of width)
-            forces a real computed height before the absolute-positioned img
-            lays out, then `object-fit: cover` correctly crops L+R. */}
+            UAT-8 round 4 (2026-05-10): the BLACK BARS the operator kept seeing are
+            BAKED INTO YouTube's `hqdefault.jpg` thumbnail itself — YouTube wraps
+            16:9 video into a 4:3 (480×360) image with ~12.5% black bars top + bottom.
+            CSS object-fit: cover doesn't help: a 4:3 source in a 5:4 container
+            (1.333 vs 1.25) only crops ~3% L+R because cover needs to fill height.
+            The bars sit IN that visible vertical space.
+
+            Operator instruction: "you should CROP the thumbnail, not using different
+            thumbnail from youtube." So instead of swapping to mqdefault.jpg (16:9),
+            we zoom INTO the existing thumbnail with transform: scale(1.34). 1.34x
+            crops 16.7% off each top/bottom edge — comfortably past the 12.5% bars
+            with a small safety margin. transformOrigin defaults to center so the
+            crop is symmetric. Outer container's overflow: hidden clips the overscan. */}
         {isVideoPost && post.videoMeta?.videoId && post.videoMeta.thumbnailUrl && (
           <div style={{ position: 'relative', width: '100%', paddingTop: '80%', overflow: 'hidden' }}>
             <img
               src={post.videoMeta.thumbnailUrl}
               alt={normalizedTitle}
-              style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                transform: 'scale(1.34)',
+              }}
             />
           </div>
         )}
