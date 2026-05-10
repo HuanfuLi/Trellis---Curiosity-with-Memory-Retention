@@ -26,3 +26,6 @@ TBD. Two natural approaches:
 2. **Manual 2-column masonry** — track each column's running height in state, append the next post to the shorter column. Matches Rednote behavior exactly. Slightly more work but the right pattern.
 
 Recommend (2). Implement as a layout wrapper around the existing card components rather than rewriting the cards themselves. Verify on Android WebView since that's where layout regressions historically bite (CLAUDE.md best practice rule 3).
+
+---
+_Closed 2026-05-09 — folded into Phase 42 (MasonryFeed). Approach (2) shipped as `app/src/components/MasonryFeed.tsx` (height-accumulating 2-column split, 492 LOC). See `.planning/phases/42-masonry-feed-layout/42-PHASE-SUMMARY.md`._
