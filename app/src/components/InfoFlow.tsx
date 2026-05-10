@@ -70,7 +70,7 @@ interface ConceptCardProps {
   onOpen: (postId: string, post: DailyPost) => void;
 }
 
-function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen, videoPlaying, setVideoPlaying }: ConceptCardProps & { videoPlaying: string | null; setVideoPlaying: (id: string | null) => void }) {
+function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive: _isActive, onOpen, videoPlaying, setVideoPlaying }: ConceptCardProps & { videoPlaying: string | null; setVideoPlaying: (id: string | null) => void }) {
   const { t } = useTranslation();
 
   // ── Image generation state ──────────────────────────────────────────────────
@@ -194,7 +194,6 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen, videoP
           fontFamily: "Georgia, 'Times New Roman', 'Noto Serif', serif",
           position: 'relative',
           overflow: 'hidden',
-          animation: isActive ? 'card-slide-in 0.35s ease' : 'none',
         }}
       >
         {/* Subtle dot grid background pattern */}
@@ -326,7 +325,6 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive, onOpen, videoP
         cursor: 'pointer',
         transition: 'transform 0.18s ease, background 0.25s ease',
         textAlign: 'left',
-        animation: isActive ? 'card-slide-in 0.35s ease' : 'none',
         overflow: 'hidden',
       }}
     >
@@ -855,7 +853,6 @@ export function InlineInfoFlow({ items, onOpenConnection, showConnectionScores =
                 minHeight: item.kind === 'concept'
                   ? (item.post.presentationStyle === 'video' ? '320px' : 'auto')
                   : item.kind === 'milestone' ? '200px' : 'auto',
-                animation: shouldAnimate ? `card-slide-in 0.3s ease ${Math.min(index, 5) * 0.05}s both` : undefined,
               }}
             >
               {item.kind === 'concept' ? (
