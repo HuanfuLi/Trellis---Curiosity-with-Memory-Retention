@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: gap closure)
 status: executing
-stopped_at: Completed 42-01-masonry-feed-skeleton-PLAN.md
-last_updated: "2026-05-10T01:20:52.785Z"
+stopped_at: Completed 42-02-homescreen-swap-PLAN.md
+last_updated: "2026-05-10T01:29:38.918Z"
 last_activity: 2026-05-10
 progress:
   total_phases: 21
@@ -18,14 +18,14 @@ progress:
 ## Current Position
 
 Phase: 42 (masonry-feed-layout) — EXECUTING
-Plan: 3 of 7
+Plan: 4 of 7
 Status: Ready to execute
 Last activity: 2026-05-10
 
 ## Progress
 
-**Phases:** 2 / 9 complete (37 ✓; 38 ✓; 39 ready for verification; 40 ready for verification; 41 ready for verification 2/2 plans; 42-45 pending)
-**Plans:** 2 / 2 complete in Phase 41 (41-01 source-diversity-wiring ✓; 41-02 essay-depth-citation-rendering ✓); 1 / 1 complete in Phase 40 (40-01 source-diversity-service ✓); 1 / 1 complete in Phase 39 (39-01 engagement-service ✓)
+**Phases:** 2 / 9 complete (37 ✓; 38 ✓; 39 ready for verification; 40 ready for verification; 41 ready for verification 2/2 plans; 42 in flight 3/7 plans; 43-45 pending)
+**Plans:** 3 / 7 complete in Phase 42 (42-01 masonry-feed-skeleton ✓; 42-03 card-slide-in-removal ✓; 42-06 roadmap-requirements-wording-correction ✓; 42-02 / 42-04 / 42-05 / 42-07 pending); 2 / 2 complete in Phase 41 (41-01 source-diversity-wiring ✓; 41-02 essay-depth-citation-rendering ✓); 1 / 1 complete in Phase 40 (40-01 source-diversity-service ✓); 1 / 1 complete in Phase 39 (39-01 engagement-service ✓)
 
 ```
 [████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 38%
@@ -72,6 +72,15 @@ All carry-overs are scheduled into Wave 0:
 ## Resolved blockers
 
 All v1.4 blockers resolved at close. No open blockers.
+
+## Last decisions (Plan 42-03 close, 2026-05-10)
+
+- **Underscore-prefix rename of ConceptCard's destructured `isActive` → `_isActive` (Rule 1 auto-fix in Task 2).** The plan asserted `isActive` is "consumed elsewhere in the card body (e.g., for image loading state)" — empirically incorrect for ConceptCard specifically: the destructured local at line 73 was only consumed by the deleted animation expression at line 197. Once the animation was removed, tsc fired TS6133. Rename preserves the prop on `ConceptCardProps` (line 69), the React.memo equality comparator at line 563 (`prev.isActive === next.isActive`), and the JSX call site at line 862 (`isActive={shouldAnimate}`). The underscore prefix matches the project's existing unused-arg convention (sibling `_feedIndex` on the same line). Folded into Task 2 commit `2fb5df8c`.
+- **Pre-existing tsc errors in MasonryFeed.tsx are explicitly out of scope.** Twelve TS2345 errors reference `home.celebration.*` i18n keys not yet declared in `en.json` / `i18n.d.ts` — sibling-Wave Plan 42-04 (vine-bloom-card-and-i18n) territory. Per CLAUDE.md scope-boundary rule ("Only auto-fix issues DIRECTLY caused by the current task's changes"), NOT touched. Verified via `npx tsc -b --noEmit | grep InfoFlow` returning empty — Task 2 introduced zero new tsc errors in InfoFlow.tsx.
+- **Both commits used `--no-verify`** per the parallel-execution protocol declared by the orchestrator. Sibling Wave 2 agents (42-02 HomeScreen swap, 42-04 vine-bloom-card-and-i18n) are running concurrently; orchestrator validates pre-commit hooks once after all agents complete.
+- **Strict file-staging discipline** (lesson from Plan 38-02 close decision on parallelism artifact): explicit `git add app/src/index.css` (Task 1) and `git add app/src/components/InfoFlow.tsx` (Task 2) only — never `git add -A` or `.`. Sibling-agent in-progress writes (MasonryFeed.tsx, HomeScreen.tsx, .DS_Store, Android resource files) NOT captured by either commit.
+- **Cross-tree negative grep is the load-bearing acceptance check.** `grep -rn "card-slide-in" app/src/` exits 1 (no matches) across the entire src tree (was 4 occurrences — 1 in index.css + 3 in InfoFlow.tsx). D-06 satisfied (one animation system, not two; framer-motion at the MasonryFeed wrapper now owns ALL feed-entrance animation). Plan 42-05 will add `tests/lib/no-card-slide-in.test.mjs` to lock this against future drift.
+- **Plan 42-03 close-out: 2 atomic per-task commits + close-out commit.** No new tests added (this plan is pure-deletion; Plan 42-05 will add the source-reading invariant test). Test baseline preserved exactly — `app/tests/` had zero references to `card-slide-in` pre-deletion (verified via `grep -rn "card-slide-in" app/tests/` returning empty), so no test updates were required. Total deviations: 1 auto-fixed (Rule 1 — TS6133 on now-unused destructured local).
 
 ## Last decisions (Plan 41-02 close, 2026-05-09)
 
@@ -176,8 +185,28 @@ All v1.4 blockers resolved at close. No open blockers.
 
 ## Session Continuity
 
-**Stopped at:** Completed 42-01-masonry-feed-skeleton-PLAN.md
-**Next action:** `/gsd:verify-work 41 02` (verifier sweep over Plan 41-02 must-haves) → after verification, `/gsd:plan-phase 42` (masonry feed layout, Wave 3; depends on Phase 41 services + essay paths stable).
+**Stopped at:** Completed 42-03-card-slide-in-removal-PLAN.md
+**Next action:** Wave 2 sibling completions (42-02 HomeScreen swap, 42-04 vine-bloom-card-and-i18n) finalize → `/gsd:verify-work 42 03` (verifier sweep over Plan 42-03 must-haves) → after Wave 2 verification, Plan 42-05 (source-reading invariant tests) → Plan 42-07 (phase close-out).
+
+**Files written this session (Plan 42-03 close):**
+
+- `app/src/index.css` (MODIFIED — `@keyframes card-slide-in` block + preceding `/* Card entering the viewport */` comment removed; net 6 deletions; keyframes count 24 → 23)
+- `app/src/components/InfoFlow.tsx` (MODIFIED — 3 inline `animation:` properties removed at former lines 197 / 329 / 858; ConceptCard's destructured `isActive` renamed to `_isActive` to silence TS6133; net 4 deletions, 1 insertion)
+- `.planning/phases/42-masonry-feed-layout/42-03-card-slide-in-removal-SUMMARY.md` (NEW — close-out)
+- `.planning/STATE.md` (this file)
+- `.planning/ROADMAP.md` (Phase 42 plan-progress row updated)
+- `.planning/REQUIREMENTS.md` (MASONRY-01 marked complete)
+
+**Plan 42-03 commits:**
+
+- `6bf7f761` (Task 1: delete @keyframes card-slide-in from index.css — refactor)
+- `2fb5df8c` (Task 2: delete 3 card-slide-in animation callsites in InfoFlow.tsx + Rule 1 fold-in `_isActive` rename — refactor)
+
+**Test baseline (post-Plan-42-03):** No tests added or modified by this plan (pure-deletion plan; Plan 42-05 will add `tests/lib/no-card-slide-in.test.mjs` source-reading invariant test). `app/tests/` had zero references to `card-slide-in` pre-deletion (verified via `grep -rn "card-slide-in" app/tests/` returning empty), so the existing test suite is untouched. tsc -b --noEmit reports 12 errors — ALL in `MasonryFeed.tsx` (sibling-Wave Plan 42-04 home.celebration.* i18n keys not yet added) and `HomeScreen.tsx` (sibling-Wave Plan 42-02 swap in flight); zero tsc errors in InfoFlow.tsx after Task 2's `_isActive` rename. Cross-tree negative grep `grep -rn "card-slide-in" app/src/` exits 1 (zero matches) — D-06 acceptance criterion satisfied.
+
+**Stopped at:** Completed 42-03-card-slide-in-removal-PLAN.md
+
+---
 
 **Files written this session (Plan 41-02 close):**
 
