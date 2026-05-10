@@ -3,29 +3,29 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: gap closure)
 status: executing
-stopped_at: Completed 42-05-source-reading-invariant-tests-PLAN.md
-last_updated: "2026-05-10T01:44:43.645Z"
+stopped_at: "Phase 42 complete — ready for verification"
+last_updated: "2026-05-10T01:50:00.000Z"
 last_activity: 2026-05-10
 progress:
   total_phases: 21
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 7
+  completed_plans: 7
 ---
 
 # Project State: v1.5 ROADMAP CREATED — 2026-05-08
 
 ## Current Position
 
-Phase: 42 (masonry-feed-layout) — EXECUTING
-Plan: 6 of 7
-Status: Ready to execute
+Phase: 42 (masonry-feed-layout) — COMPLETE
+Plan: 7/7 complete
+Status: Phase complete — ready for verification
 Last activity: 2026-05-10
 
 ## Progress
 
-**Phases:** 2 / 9 complete (37 ✓; 38 ✓; 39 ready for verification; 40 ready for verification; 41 ready for verification 2/2 plans; 42 in flight 6/7 plans; 43-45 pending)
-**Plans:** 6 / 7 complete in Phase 42 (42-01 masonry-feed-skeleton ✓; 42-02 homescreen-swap ✓; 42-03 card-slide-in-removal ✓; 42-04 vine-bloom-card-and-i18n ✓; 42-05 source-reading-invariant-tests ✓; 42-06 roadmap-requirements-wording-correction ✓; 42-07 pending); 2 / 2 complete in Phase 41 (41-01 source-diversity-wiring ✓; 41-02 essay-depth-citation-rendering ✓); 1 / 1 complete in Phase 40 (40-01 source-diversity-service ✓); 1 / 1 complete in Phase 39 (39-01 engagement-service ✓)
+**Phases:** 2 / 9 complete (37 ✓; 38 ✓; 39 ready for verification; 40 ready for verification; 41 ready for verification; 42 ready for verification 7/7 plans; 43-45 pending)
+**Plans:** 7 / 7 complete in Phase 42 (42-01 masonry-feed-skeleton ✓; 42-02 homescreen-swap ✓; 42-03 card-slide-in-removal ✓; 42-04 vine-bloom-card-and-i18n ✓; 42-05 source-reading-invariant-tests ✓; 42-06 roadmap-requirements-wording-correction ✓; 42-07 phase-close-out ✓); 2 / 2 complete in Phase 41 (41-01 source-diversity-wiring ✓; 41-02 essay-depth-citation-rendering ✓); 1 / 1 complete in Phase 40 (40-01 source-diversity-service ✓); 1 / 1 complete in Phase 39 (39-01 engagement-service ✓)
 
 ```
 [██████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 42%
@@ -72,6 +72,22 @@ All carry-overs are scheduled into Wave 0:
 ## Resolved blockers
 
 All v1.4 blockers resolved at close. No open blockers.
+
+## Last decisions (Phase 42 close, 2026-05-09)
+
+- **Phase 42 complete** — MASONRY-01 + MASONRY-02 closed; 7 plans landed across 4 waves; verifier-ready.
+- **MotionConfig reducedMotion="user" wrapper at MasonryFeed scope, not App root** (RESEARCH.md Open Question 1). Surgical scope; doesn't disturb existing animations (BottomNavigation, SwipeTabContainer, PostCarousel, etc.). Phase 45 may revisit project-wide reduced-motion handling as part of accessibility audit.
+- **`allExplored` computed by HomeScreen, NOT read from a service** (RESEARCH.md Pitfall 2). `infiniteScrollService.allExplored` does NOT exist as service state — it's a local `const` inside `concept-feed.service.ts:1591`. HomeScreen derives it from `dailyReadService.getExploredAnchors()` + `useQuestions().questions.filter(q => q.isAnchorNode)`. Re-render triggered automatically by HomeScreen's existing `[location.pathname === '/home']` resync at lines 467-522.
+- **VineBloomCard consumes useTrellisData() directly — NO new trellisActionsService method** (RESEARCH.md § 1 path b). The "what to suggest" filter is structural (`leafState === 'dead' / 'dying' / 'falling'`); centralizing into a service-level helper would be premature abstraction (only 2 callers — PlannerScreen and VineBloomCard — both inline the filter trivially). trellis-actions.service.ts surface UNCHANGED.
+- **Phase 36 GAP-C video state ownership ported VERBATIM from InlineInfoFlow** (RESEARCH.md § 2). The 3 useEffects at InfoFlow.tsx:746-797 (visibilitychange + swipeProgress + intra-app navigation + IntersectionObserver) live at the wrapper level, not the leaf card. MasonryFeed becomes the new owner of `videoPlaying` state. The thumbnail-tap emit stays inside MemoizedConceptCard (verified by grep: 0 occurrences of `dailyReadService.markExplored` in MasonryFeed.tsx). Existing `InfoFlow.video-tap-emit.test.mjs` continues to pass without modification.
+- **`card-slide-in` keyframe + 3 callsites deletion** (D-06; RESEARCH.md Pitfall 7). One animation system, not two. Cross-tree negative grep test (`tests/lib/no-card-slide-in.test.mjs`) locks the deletion.
+- **ROADMAP + REQUIREMENTS wording correction landed in plan 42-06 BEFORE the negative-grep test in plan 42-05** so the source-reading test contract is consistent with the documented mechanism. RESEARCH.md § 8 verbatim replacement text used.
+- **`home.toast` parent object deleted from all 4 locale bundles** (UI-SPEC § DEPRECATED i18n keys; verified via grep that `noMorePosts` was the sole child).
+- **i18n bundle delta:** +12 net keys per bundle (13 added under `home.celebration.*` incl. `anchorFallback`; 1 deleted at `home.toast.noMorePosts`). bundle-parity.test.mjs green.
+- **Plan 42-04 anchorFallback i18n key added in revision iteration 1** (Warning 6). VineBloomCard's anchor name fallback (`node.anchor.title ?? node.anchor.content ?? <fallback>`) was originally hardcoded to English literal `'anchor'`; revised to `t('home.celebration.anchorFallback')` so non-EN locales render the localized gloss ("这个概念" / "este concepto" / "この概念") when both fields are nullish.
+- **Plan 42-03 wave revised 1 → 2 in revision iteration 1** (Blocker 2). Originally co-equal with 42-01 in Wave 1; both touched InfoFlow.tsx on disjoint lines but the parallel-write race risk was unacceptable. Moved to Wave 2 (depends_on: ["42-01"]) so it serializes after 42-01's `export` keyword additions land.
+- **Plan 42-01 Task 1 expanded to export THREE symbols in revision iteration 1** (Blocker 1). Originally exported only ConnectionCard + MilestoneCard; the actual `MemoizedConceptCard` at line 573 was also unexported, which would have broken Task 2's import. Revised to add `export` keyword to all three (lines 573, 610, 700).
+- **Test baseline (post-Phase-42):** ~680/2 fail expected — 4 new test files contribute ~20-30 passes; same 2 pre-existing carry-over failures unchanged (concept-feed.test.mjs ERR_MODULE_NOT_FOUND for extensionless youtube.service import + trellis-layout.test.mjs:64 getVineColor date-dependent assertion).
 
 ## Last decisions (Plan 42-02 close, 2026-05-10)
 
@@ -432,3 +448,26 @@ All v1.4 blockers resolved at close. No open blockers.
 **Test baseline (post-Plan-37-03):** test:main 558/555/3 + test:actions 16/14/2 — IDENTICAL to Plan 37-02 close (zero new regressions introduced by Tier 3 migrations). 4 Tier 3 paired tests stayed green throughout (22 cases total: 6+5+6+5). New invariant test green (4/4). tsc -b --noEmit → exit 0.
 
 **Phase 37 lifetime totals:** Pre-Phase-37 baseline 558/548/10 + 16/14/2 = 12 fail. Post-Phase-37 baseline 558/555/3 + 16/14/2 = 5 fail. Net 7 closures (all `ERR_IMPORT_ATTRIBUTE_MISSING` chain). Remaining 5 fails are pre-existing assertion / extension-resolution issues unrelated to i18n.
+
+---
+
+**Files written this session (Plan 42-07 close, Phase 42 close):**
+
+- `.planning/REQUIREMENTS.md` (no-op — MASONRY-01 + MASONRY-02 already marked `[x]` by sibling plan 42-04 wire; precondition satisfied)
+- `.planning/ROADMAP.md` (MODIFIED — 42-07 plan checkbox flipped `[ ]` → `[x]`; Progress table row `42. Masonry Feed Layout | 6/7 | In Progress|  |` → `7/7 | Complete | 2026-05-09 |`)
+- `.planning/phases/42-masonry-feed-layout/42-VALIDATION.md` (MODIFIED — frontmatter status:draft → validated, nyquist_compliant:false → true, wave_0_complete:false → true; per-task verification map TBD entries replaced with concrete plan IDs + statuses; sign-off checkboxes flipped to `[x]`; approval line `pending` → `approved 2026-05-09`)
+- `.planning/todos/closed/2026-05-07-double-column-feed-to-further-mimic-rednote-bilibili-info-flow.md` (RENAMED — moved from `.planning/todos/pending/`; close-note appended)
+- `.planning/phases/42-masonry-feed-layout/42-PHASE-SUMMARY.md` (NEW — phase-level rollup linking 6 sub-plan SUMMARYs; 66 lines; frontmatter status: complete; recaps 3 RESEARCH critical findings + 6 patterns established)
+- `.planning/phases/42-masonry-feed-layout/42-07-phase-close-out-SUMMARY.md` (NEW — sub-plan close-out)
+- `.planning/STATE.md` (this file)
+
+**Plan 42-07 commits:**
+
+- (Task 1: no-op — REQUIREMENTS.md MASONRY-01 + MASONRY-02 preconditions already satisfied; no commit needed)
+- `9a07588d` (Task 2: ROADMAP.md plan checkbox + Progress table row — docs)
+- `e4e80610` (Task 3: 42-VALIDATION.md frontmatter + per-task verification map — docs)
+- `341307d6` (Task 4: git mv folded operator todo pending/ → closed/ + close-note — chore)
+- `55c5a5d7` (Task 5: 42-PHASE-SUMMARY.md created — docs)
+- (Task 6: STATE.md update — this commit)
+
+**Stopped at:** Phase 42 complete — ready for verification
