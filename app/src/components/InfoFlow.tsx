@@ -206,16 +206,16 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive: _isActive, onO
           pointerEvents: 'none',
         }} />
 
-        <div style={{ padding: '24px 20px 0', position: 'relative' }}>
+        <div style={{ padding: '16px 14px 0', position: 'relative' }}>
           {/* Source attribution — uppercase, small */}
           {post.newsMeta?.sources?.[0] && (
             <span style={{
               display: 'block',
-              fontSize: '0.7rem',
+              fontSize: '0.6rem',
               color: 'var(--news-card-source)',
               textTransform: 'uppercase',
               letterSpacing: '0.08em',
-              marginBottom: '10px',
+              marginBottom: '8px',
               fontFamily: 'system-ui, -apple-system, sans-serif',
             }}>
               {(() => {
@@ -225,23 +225,23 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive: _isActive, onO
             </span>
           )}
 
-          {/* Headline */}
+          {/* Headline — sized for half-width masonry column (Phase 42 UAT-6). */}
           <h3 style={{
-            fontSize: '1.25rem',
+            fontSize: '0.95rem',
             fontWeight: 700,
-            lineHeight: 1.3,
+            lineHeight: 1.25,
             color: 'var(--news-card-headline)',
-            marginBottom: '12px',
+            marginBottom: '8px',
           }}>
             {normalizedTitle}
           </h3>
 
           {/* Preview text */}
           <p style={{
-            fontSize: '0.9rem',
-            lineHeight: 1.55,
+            fontSize: '0.78rem',
+            lineHeight: 1.45,
             color: 'var(--news-card-body)',
-            marginBottom: '20px',
+            marginBottom: '14px',
           }}>
             {normalizedPreview}
           </p>
@@ -250,7 +250,7 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive: _isActive, onO
         {/* Bottom rule line — newspaper divider */}
         <div style={{
           borderTop: '1px solid var(--news-card-divider)',
-          padding: '12px 20px 0',
+          padding: '10px 14px 0',
           position: 'relative',
         }}>
           {/* Bottom tags */}
@@ -448,22 +448,23 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive: _isActive, onO
         {effectivePresentationStyle === 'text-art' && (() => {
           const theme = pickTextArtTheme(post.id);
           const content = post.textArtContent?.split('\n').filter(Boolean).join(' ') || normalizedPreview;
-          const fontSize = content.length > 100 ? '1.25rem' : content.length > 60 ? '1.5rem' : '2rem';
+          // Half-width masonry sizing (Phase 42 UAT-6) — was 1.25/1.5/2rem at full width.
+          const fontSize = content.length > 100 ? '0.95rem' : content.length > 60 ? '1.15rem' : '1.5rem';
           return (
             <div
               style={{
                 position: 'relative',
                 width: '100%',
                 aspectRatio: '1/1',
-                maxHeight: '320px',
+                maxHeight: '240px',
                 overflow: 'hidden',
                 backgroundColor: theme.bg,
                 backgroundImage: `radial-gradient(circle, ${theme.dot} 0.8px, transparent 0.8px)`,
-                backgroundSize: '20px 20px',
+                backgroundSize: '16px 16px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                padding: '32px 28px',
+                padding: '20px 16px',
                 boxSizing: 'border-box',
               }}
             >
@@ -496,26 +497,26 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive: _isActive, onO
 
         {/* Hook, channel attribution, preview, and tags — rendered for all non-suggestion posts.
             (Phase 38 / TECHDEBT-06): the legacy short-post wrapper was removed — short type is gone. */}
-        <div style={{ padding: '0 20px' }}>
+        <div style={{ padding: '0 14px' }}>
           <p
             style={{
-              fontSize: '1.2rem',
+              fontSize: '0.95rem',
               fontWeight: 800,
               lineHeight: 1.25,
               color: 'var(--foreground)',
-              marginBottom: '10px',
+              marginBottom: '8px',
             }}
           >
             {normalizedHook}
           </p>
           {isVideoPost && post.videoMeta?.channelTitle && (
-            <p style={{ fontSize: '0.78rem', color: 'var(--muted-foreground)', marginBottom: '6px' }}>
+            <p style={{ fontSize: '0.7rem', color: 'var(--muted-foreground)', marginBottom: '6px' }}>
               {t('infoFlow.byChannel', { channel: post.videoMeta.channelTitle })}
             </p>
           )}
           {/* Preview: show when no image is present */}
           {!image && !isVideoPost && effectivePresentationStyle !== 'text-art' && (
-            <p style={{ fontSize: '0.9rem', color: 'var(--foreground)', lineHeight: 1.6, opacity: 0.88 }}>
+            <p style={{ fontSize: '0.8rem', color: 'var(--foreground)', lineHeight: 1.5, opacity: 0.88 }}>
               {normalizedPreview}
             </p>
           )}
