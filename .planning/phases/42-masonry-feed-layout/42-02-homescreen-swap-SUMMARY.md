@@ -144,6 +144,13 @@ Verifying claims before finalizing.
 
 **Self-Check: PASSED**
 
+Final verification (post-metadata-commit `c552a464`):
+- All 3 files exist (HomeScreen.tsx, HomeScreen.masonry-swap.test.mjs, 42-02-homescreen-swap-SUMMARY.md)
+- All 3 referenced commits exist (`f6f83856` test, `100be6c0` HomeScreen wire, `c552a464` metadata)
+- Source-reading test 10/10 green at HEAD
+
+## Self-Check: PASSED
+
 ---
 *Phase: 42-masonry-feed-layout*
 *Completed: 2026-05-10*
