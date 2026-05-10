@@ -185,8 +185,8 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive: _isActive, onO
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
-          padding: '0 0 16px 0',
-          borderRadius: 'var(--radius-xl)',
+          padding: '0 0 12px 0',
+          borderRadius: '8px',
           backgroundColor: 'var(--news-card-bg)',
           border: '1px solid var(--news-card-border)',
           boxShadow: 'var(--shadow-2)',
@@ -206,7 +206,7 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive: _isActive, onO
           pointerEvents: 'none',
         }} />
 
-        <div style={{ padding: '16px 14px 0', position: 'relative' }}>
+        <div style={{ padding: '12px 10px 0', position: 'relative' }}>
           {/* Source attribution — uppercase, small */}
           {post.newsMeta?.sources?.[0] && (
             <span style={{
@@ -215,7 +215,7 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive: _isActive, onO
               color: 'var(--news-card-source)',
               textTransform: 'uppercase',
               letterSpacing: '0.08em',
-              marginBottom: '8px',
+              marginBottom: '6px',
               fontFamily: 'system-ui, -apple-system, sans-serif',
             }}>
               {(() => {
@@ -231,7 +231,7 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive: _isActive, onO
             fontWeight: 700,
             lineHeight: 1.25,
             color: 'var(--news-card-headline)',
-            marginBottom: '8px',
+            marginBottom: '6px',
           }}>
             {normalizedTitle}
           </h3>
@@ -241,7 +241,7 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive: _isActive, onO
             fontSize: '0.78rem',
             lineHeight: 1.45,
             color: 'var(--news-card-body)',
-            marginBottom: '14px',
+            marginBottom: '10px',
           }}>
             {normalizedPreview}
           </p>
@@ -250,7 +250,7 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive: _isActive, onO
         {/* Bottom rule line — newspaper divider */}
         <div style={{
           borderTop: '1px solid var(--news-card-divider)',
-          padding: '10px 14px 0',
+          padding: '10px 10px 0',
           position: 'relative',
         }}>
           {/* Bottom tags */}
@@ -316,9 +316,9 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive: _isActive, onO
         display: 'flex',
         flexDirection: 'column',
         justifyContent: (image || isVideoPost || effectivePresentationStyle === 'text-art') ? 'space-between' : 'flex-start',
-        gap: '20px',
-        padding: (image || isVideoPost || effectivePresentationStyle === 'text-art') ? '0 0 20px' : '20px 0',
-        borderRadius: 'var(--radius-xl)',
+        gap: '12px',
+        padding: (image || isVideoPost || effectivePresentationStyle === 'text-art') ? '0 0 12px' : '12px 0',
+        borderRadius: '8px',
         background: 'linear-gradient(180deg, color-mix(in srgb, var(--primary-80) 20%, var(--surface-container-high)), var(--surface-container-high))',
         border: '1.5px solid color-mix(in srgb, var(--primary-40) 22%, var(--border))',
         boxShadow: 'var(--shadow-2)',
@@ -448,23 +448,26 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive: _isActive, onO
         {effectivePresentationStyle === 'text-art' && (() => {
           const theme = pickTextArtTheme(post.id);
           const content = post.textArtContent?.split('\n').filter(Boolean).join(' ') || normalizedPreview;
-          // Half-width masonry sizing (Phase 42 UAT-6) — was 1.25/1.5/2rem at full width.
-          const fontSize = content.length > 100 ? '0.95rem' : content.length > 60 ? '1.15rem' : '1.5rem';
+          // Half-width masonry sizing (Phase 42 UAT-6 round 2) — was 0.95/1.15/1.5rem.
+          // The ≤60 char branch was still too big in half-width columns ("Why the Dragon
+          // Can't Touch the Goat" wrapped to 4 lines). Companion 3B prompt change keeps
+          // text-art content ≤ 80 chars / 1 sentence so the >100 branch should rarely fire.
+          const fontSize = content.length > 100 ? '0.85rem' : content.length > 60 ? '1rem' : '1.25rem';
           return (
             <div
               style={{
                 position: 'relative',
                 width: '100%',
                 aspectRatio: '1/1',
-                maxHeight: '240px',
+                maxHeight: '200px',
                 overflow: 'hidden',
                 backgroundColor: theme.bg,
                 backgroundImage: `radial-gradient(circle, ${theme.dot} 0.8px, transparent 0.8px)`,
-                backgroundSize: '16px 16px',
+                backgroundSize: '14px 14px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                padding: '20px 16px',
+                padding: '14px 10px',
                 boxSizing: 'border-box',
               }}
             >
@@ -497,14 +500,14 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive: _isActive, onO
 
         {/* Hook, channel attribution, preview, and tags — rendered for all non-suggestion posts.
             (Phase 38 / TECHDEBT-06): the legacy short-post wrapper was removed — short type is gone. */}
-        <div style={{ padding: '0 14px' }}>
+        <div style={{ padding: '0 10px' }}>
           <p
             style={{
               fontSize: '0.95rem',
               fontWeight: 800,
               lineHeight: 1.25,
               color: 'var(--foreground)',
-              marginBottom: '8px',
+              marginBottom: '6px',
             }}
           >
             {normalizedHook}

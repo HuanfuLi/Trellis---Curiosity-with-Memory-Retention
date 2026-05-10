@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Sparkles, ChevronRight } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 
 function TopicButton({ topic, onTap }: { topic: string; onTap: (t: string) => void }) {
   const [pressed, setPressed] = useState(false);
@@ -14,29 +14,28 @@ function TopicButton({ topic, onTap }: { topic: string; onTap: (t: string) => vo
       onPointerLeave={() => setPressed(false)}
       style={{
         width: '100%',
-        minHeight: '48px',
+        minHeight: '40px',
         background: pressed ? 'var(--surface)' : 'var(--surface-variant)',
-        borderRadius: 'var(--radius)',
+        borderRadius: '6px',
         border: `1px solid ${pressed ? 'var(--primary-40)' : 'transparent'}`,
         cursor: 'pointer',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '0 16px',
+        padding: '6px 10px',
         textAlign: 'left',
         transition: 'background 150ms ease, border-color 150ms ease, transform 150ms ease',
         transform: pressed ? 'scale(0.98)' : 'scale(1)',
       }}
     >
       <span style={{
-        fontSize: '14px',
+        fontSize: '13px',
         fontWeight: 400,
+        lineHeight: 1.3,
         color: 'var(--foreground)',
         flex: 1,
       }}>
         {topic}
       </span>
-      <ChevronRight size={16} style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
     </button>
   );
 }
@@ -65,10 +64,9 @@ export function SuggestionCard({ topics }: SuggestionCardProps) {
         background:
           'linear-gradient(180deg, color-mix(in srgb, var(--primary-80) 20%, var(--surface-container-high)), var(--surface-container-high))',
         border: '1.5px solid color-mix(in srgb, var(--primary-40) 22%, var(--border))',
-        borderRadius: 'var(--radius-xl)',
+        borderRadius: '8px',
         boxShadow: 'var(--shadow-2)',
-        padding: '16px',
-        minHeight: '280px',
+        padding: '10px',
         display: 'flex',
         flexDirection: 'column',
       }}
@@ -77,12 +75,12 @@ export function SuggestionCard({ topics }: SuggestionCardProps) {
       <div style={{
         display: 'flex',
         alignItems: 'center',
-        gap: '8px',
-        marginBottom: '16px',
+        gap: '6px',
+        marginBottom: '8px',
       }}>
-        <Sparkles size={16} style={{ color: 'var(--primary-40)' }} />
+        <Sparkles size={13} style={{ color: 'var(--primary-40)' }} />
         <span style={{
-          fontSize: '14px',
+          fontSize: '12px',
           fontWeight: 600,
           color: 'var(--foreground)',
         }}>
@@ -94,8 +92,7 @@ export function SuggestionCard({ topics }: SuggestionCardProps) {
       <div style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: '8px',
-        flex: 1,
+        gap: '6px',
       }}>
         {displayTopics.map(topic => (
           <TopicButton key={topic} topic={topic} onTap={handleTopicTap} />
