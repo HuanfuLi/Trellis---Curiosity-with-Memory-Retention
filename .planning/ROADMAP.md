@@ -1147,7 +1147,14 @@ _Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round
   3. Scroll position survives `/home` → `/posts/:id` → back navigation (HomeScreen always-mounted slot preserves `scrollTop` automatically; verified by manual back-nav check + DOM ref assertion)
   4. framer-motion entrance animations apply to leaf `<motion.div>` cards only, not to the scroll container or InfoFlow root (source-reading test enforces this)
   5. When all anchors are explored, feed renders a vine-bloom celebration card with suggested-tomorrow plan in place of the prior empty toast
-**Plans**: TBD
+**Plans**: 7 plans
+  - [ ] 42-01-masonry-feed-skeleton-PLAN.md — MasonryFeed.tsx with height-accumulating split + framer-motion entrance + MotionConfig reduced-motion gate (MASONRY-01)
+  - [ ] 42-02-homescreen-swap-PLAN.md — InlineInfoFlow → MasonryFeed swap; noMorePosts toast deletion; allExplored locally computed (MASONRY-01 + MASONRY-02)
+  - [ ] 42-03-card-slide-in-removal-PLAN.md — Delete @keyframes card-slide-in + 3 callsites (D-06)
+  - [ ] 42-04-vine-bloom-card-and-i18n-PLAN.md — VineBloomCard with useTrellisData consumption + 12 home.celebration.* keys across 4 locales (MASONRY-02)
+  - [ ] 42-05-source-reading-invariant-tests-PLAN.md — 4 new test files locking 8 UI-SPEC + 1 Pitfall 1 invariants
+  - [ ] 42-06-roadmap-requirements-wording-correction-PLAN.md — 4 line edits aligning ROADMAP/REQUIREMENTS with D-02 height-accumulating split
+  - [ ] 42-07-phase-close-out-PLAN.md — STATE/REQUIREMENTS/ROADMAP/VALIDATION updates + PHASE-SUMMARY
 **UI hint**: yes
 
 ### Phase 43: Engagement UI
