@@ -641,6 +641,40 @@ eventBus.subscribe('LOCALE_CHANGED', () => {
 // assignPresentationStyles removed in Phase 31 — replaced by pre-style assignment via style-assignment.ts (D-18)
 
 /**
+ * Phase 42 UAT-6 (3B, 2026-05-09): tighten text-art content to ONE sentence ≤ 80 chars.
+ * Run on both LLM responses (which sometimes ignore the prompt constraint) AND on the
+ * fallback path (which previously used multi-sentence `teaser.preview`).
+ *
+ * Strategy: trim → drop trailing whitespace → keep only the first sentence (split on
+ * ./!/? boundary) → truncate to 80 chars on word boundary if still long. Returns the
+ * tightened string, or null if the input is unusably empty after processing.
+ */
+function tightenTextArtContent(raw: string): string | null {
+  if (!raw) return null;
+  let s = raw.trim();
+  if (!s) return null;
+  // Strip wrapping quotes some models emit ("Headline").
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith('“') && s.endsWith('”'))) {
+    s = s.slice(1, -1).trim();
+  }
+  // Keep only the first sentence. Split on terminator + whitespace, preserve the
+  // terminator on the first segment so 'Hot take.' stays 'Hot take.' (not 'Hot take').
+  const sentenceMatch = s.match(/^.*?[.!?](?:\s|$)/);
+  if (sentenceMatch) {
+    s = sentenceMatch[0].trim();
+  }
+  // Hard length cap: if still > 80 chars after sentence split, truncate at word
+  // boundary and add an ellipsis. Operator screenshot showed "Why the Smell of
+  // Safety Makes AI Unsafe" survives at 41 chars; longer LLM drift truncates here.
+  if (s.length > 80) {
+    const cut = s.slice(0, 80);
+    const lastSpace = cut.lastIndexOf(' ');
+    s = (lastSpace > 40 ? cut.slice(0, lastSpace) : cut).trim() + '…';
+  }
+  return s || null;
+}
+
+/**
  * Generate text-art content for posts assigned the 'text-art' presentationStyle.
  * Runs at feed-build time (not per-card) to avoid scroll lag.
  */
@@ -651,10 +685,15 @@ async function generateTextArtContent(posts: DailyPost[]): Promise<DailyPost[]> 
   const settings = settingsService.getSync();
   if (!settings.preferences.aiConsentGiven || !settings.llm.isConfigured) return posts;
 
-  // Batch all text-art prompts into parallel requests
+  // Batch all text-art prompts into parallel requests.
+  // Phase 42 UAT-6 (3B, 2026-05-09): operator wants text-art kept SHORT — was
+  // wrapping 4+ lines in half-width masonry tiles. Constraint tightened from
+  // "under 12 words" to "≤ 80 characters AND exactly 1 sentence". Post-LLM
+  // validation strips trailing extra sentences (some models emit follow-ups
+  // despite the constraint) and falls back if length still violates.
   const results = await Promise.allSettled(
     textArtPosts.map(async (post) => {
-      const prompt = `Write ONE punchy headline about: "${post.title}"
+      const prompt = `Write ONE concise headline about: "${post.title}"
 
 Pick one style:
 - Breaking news: "Gemma 4 released — will it beat QWEN 3.5? 🔥"
@@ -665,40 +704,41 @@ Pick one style:
 - Conversation starter: "Your brain is lying to you about rereading 🧠"
 
 Rules:
-- ONE line only, under 12 words
+- EXACTLY ONE sentence (≤ 80 characters)
 - Emojis are OPTIONAL — use 0, 1, or 2 emojis placed naturally (middle, end, or nowhere). Never always at the start.
 - Sound like a real headline, tweet, or podcast title
 - Be specific to the topic
 
-Return ONLY the single line, nothing else.`;
+Return ONLY the single sentence, nothing else.`;
 
       const result = await chatCompletion(
         [{ role: 'user', content: prompt }],
         settings.llm,
-        { maxTokens: 256, serviceName: 'text-art' },
+        { maxTokens: 80, serviceName: 'text-art' },
       );
       return { postId: post.id, content: result };
     }),
   );
 
-  // Build a map of post ID -> text-art content
+  // Build a map of post ID -> text-art content (validated to ≤ 80 chars / 1 sentence).
   const contentMap = new Map<string, string>();
   results.forEach((r) => {
-    if (r.status === 'fulfilled' && r.value.content) {
-      contentMap.set(r.value.postId, r.value.content);
-    }
+    if (r.status !== 'fulfilled' || !r.value.content) return;
+    const tightened = tightenTextArtContent(r.value.content);
+    if (tightened) contentMap.set(r.value.postId, tightened);
   });
 
-  // Apply text-art content to posts; use fallback for failed generations
+  // Apply text-art content to posts; use fallback for failed generations.
+  // Phase 42 UAT-6 (3B): fallback drops `teaser.preview` (multi-sentence summary)
+  // and uses hook OR title — both are naturally short.
   return posts.map(p => {
     if (p.presentationStyle !== 'text-art') return p;
     if (contentMap.has(p.id)) {
       return { ...p, textArtContent: contentMap.get(p.id)! };
     }
-    // Fallback: if LLM generation failed but post needs text-art, use preview as content
     if (!p.textArtContent) {
-      const fallback = p.teaser.preview?.trim() || p.teaser.hook?.trim() || p.title;
-      return { ...p, textArtContent: fallback };
+      const fallback = p.teaser.hook?.trim() || p.title;
+      return { ...p, textArtContent: tightenTextArtContent(fallback) || fallback };
     }
     return p;
   });
