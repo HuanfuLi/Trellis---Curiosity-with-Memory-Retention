@@ -371,19 +371,27 @@ export function MasonryFeed({
   }, [items]);
 
   // ===== Height-accumulator algorithm (D-02 verbatim from UI-SPEC.md § Layout Algorithm) =====
-  // Pass 1: append-only assignment for new items — once an id has a column, it stays.
-  // Tie-breaker: column 0 wins when heights are equal (deterministic for SSR/hydration).
-  // Pass 2: re-measure all column heights from clientHeight to absorb async growth
-  // (images decoding, carousel cells mounting, etc.).
+  // Pass 1: append-only assignment runs DURING render (not useLayoutEffect) so first-render
+  // filters at the bottom of this function see populated assignments — refs don't trigger
+  // re-renders, so a ref-only post-commit assignment would leave the first paint empty.
+  // The has() check makes the loop idempotent under StrictMode double-invocation.
+  // Estimate of 280px per unmeasured tile lets the comparator zigzag during the initial
+  // batch (without it, [0,0] + <= tie-breaker would pile every new item into column 0).
+  for (const item of items) {
+    const itemId = getId(item);
+    if (!itemId) continue;
+    if (tileColumnAssignmentsRef.current.has(itemId)) continue;
+    const heights = columnHeightsRef.current;
+    const col: 0 | 1 = heights[0] <= heights[1] ? 0 : 1;
+    tileColumnAssignmentsRef.current.set(itemId, col);
+    const measured = tileRefsMap.current.get(itemId)?.clientHeight;
+    columnHeightsRef.current[col] += (measured ?? 280) + 12;
+  }
+
+  // Pass 2: post-paint, re-measure all column heights from clientHeight to absorb async
+  // growth (images decoding, carousel cells mounting). Refines the estimate that Pass 1
+  // used for the NEXT batch of newly-appended tiles.
   useLayoutEffect(() => {
-    for (const item of items) {
-      const itemId = getId(item);
-      if (!itemId) continue;
-      if (tileColumnAssignmentsRef.current.has(itemId)) continue;
-      const heights = columnHeightsRef.current;
-      const col: 0 | 1 = heights[0] <= heights[1] ? 0 : 1;
-      tileColumnAssignmentsRef.current.set(itemId, col);
-    }
     columnHeightsRef.current = [0, 0];
     for (const [id, el] of tileRefsMap.current) {
       if (!el) continue;

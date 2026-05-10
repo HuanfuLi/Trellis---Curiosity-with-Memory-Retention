@@ -128,4 +128,42 @@ describe('MasonryFeed layout invariants (Phase 42)', () => {
       'MasonryFeed.tsx must NOT emit CONCEPT_EXPLORED — Pitfall 4 from RESEARCH.md; the canonical emit lives inside MemoizedConceptCard.',
     );
   });
+
+  // UAT-5 regression lock (Phase 42 post-execute fix) — Bug A.
+  // Pass 1 MUST advance columnHeightsRef per iteration so the comparator
+  // zigzags during the initial batch. Without this, [0,0] + <= tie-breaker
+  // piles every newly-assigned item into column 0.
+  it('Pass 1 advances columnHeightsRef during the assignment loop (UAT-5 Bug A regression lock)', () => {
+    assert.ok(
+      /columnHeightsRef\.current\[col\]\s*\+=/.test(masonrySource),
+      'MasonryFeed.tsx Pass 1 must advance columnHeightsRef.current[col] += <height> after each assignment — without it, the first batch piles into column 0 (UAT-5 from 2026-05-09 retest).',
+    );
+  });
+
+  // UAT-5 regression lock (Phase 42 post-execute fix) — Bug B.
+  // Pass 1 (assignment loop) must run during render (not exclusively inside a
+  // useLayoutEffect) so first-paint filters see populated assignments.
+  // Refs do not trigger re-renders, so a ref-only post-commit assignment
+  // would leave the first paint with empty columns.
+  it('Pass 1 assignment loop runs during render, not exclusively inside useLayoutEffect (UAT-5 Bug B regression lock)', () => {
+    // The assignment loop signature is `tileColumnAssignmentsRef.current.set(itemId, col)`.
+    // Find its position. Pass 1 must run during render so first-paint filters see
+    // populated assignments — refs do not trigger re-renders, so a ref-only post-commit
+    // assignment leaves first paint with empty columns. Proxy: assignment must appear
+    // BEFORE the first `useLayoutEffect(` call site (skips the import-line match).
+    const assignmentIdx = masonrySource.indexOf('tileColumnAssignmentsRef.current.set');
+    const layoutEffectCallMatch = masonrySource.match(/useLayoutEffect\s*\(/);
+    assert.ok(
+      assignmentIdx > 0,
+      'MasonryFeed.tsx must contain a tileColumnAssignmentsRef.current.set() call (the column assignment).',
+    );
+    assert.ok(
+      layoutEffectCallMatch && layoutEffectCallMatch.index !== undefined,
+      'MasonryFeed.tsx must contain at least one useLayoutEffect( call site (Pass 2 DOM re-measure).',
+    );
+    assert.ok(
+      assignmentIdx < layoutEffectCallMatch.index,
+      'MasonryFeed.tsx Pass 1 (tileColumnAssignmentsRef.current.set) must appear BEFORE the first useLayoutEffect( call site — render-time assignment is required so first-paint filters see populated assignments (refs do not trigger re-renders). UAT-5 Bug B from 2026-05-09 retest.',
+    );
+  });
 });
