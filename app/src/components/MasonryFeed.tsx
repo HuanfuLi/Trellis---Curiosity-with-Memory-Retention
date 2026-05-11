@@ -1,14 +1,16 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { MotionConfig, motion, type Variants } from 'framer-motion';
-import { Heart, Sprout } from 'lucide-react';
+import { AnimatePresence, MotionConfig, motion, type Variants } from 'framer-motion';
+import { Bookmark, Heart, Sprout } from 'lucide-react';
 import {
   MemoizedConceptCard,
   ConnectionCard,
   MilestoneCard,
   type InfoFlowItem,
 } from './InfoFlow';
+import { useLongPress } from '../hooks/useLongPress';
+import { engagementService } from '../services/engagement.service';
 import { useTrellisData } from '../state/useTrellisData';
 import { useQuestions } from '../state/useQuestions';
 import { trellisActionsService } from '../services/trellis-actions.service';
@@ -252,6 +254,15 @@ interface MasonryFeedProps {
   // Pitfall 2. When all anchors are explored, the VineBloomCard renders below
   // the masonry as the celebration affordance.
   allExplored: boolean;
+  // Phase 43 LP — bubbled up to HomeScreen (43-06 host owns the LongPressMenu
+  // sheet state + postId/anchorId). When undefined, long-press is a no-op (the
+  // hook still binds but its callback short-circuits) so the integration is
+  // safe to ship before the host wires up.
+  onLongPress?: (postId: string, anchorId: string) => void;
+  // Phase 43 LP-03 — HomeScreen-bumped on ENGAGEMENT_CHANGED so corner state
+  // icons re-render across mounted tiles without each tile subscribing to the
+  // event bus individually. Wave-3 host (43-06) wires the subscription.
+  engagementVersion?: number;
 }
 
 function getId(item: InfoFlowItem): string {
@@ -298,12 +309,176 @@ function estimateHeightForItem(item: InfoFlowItem): number {
   return STYLE_HEIGHT_ESTIMATES.default;
 }
 
+// Phase 43 LP-03 + LP-05 — per-tile wrapper that:
+//   (a) binds the 480ms long-press hook to the tile's pointer surface and
+//       suppresses the post-long-press tap via onClickCapture + didLongPress
+//       ref (RESEARCH Pitfall 2 — click-after-long-press),
+//   (b) renders the corner state icon overlay (filled Bookmark / Heart) per
+//       UI-SPEC §2 when engagementService.isSaved / isLiked returns true; only
+//       on concept tiles (connection + milestone tiles have no postId for the
+//       service), and
+//   (c) participates in the AnimatePresence column wrapper's 200ms fade-exit
+//       so LP-05's "dismiss ALL same-anchor tiles in one frame" reads as a
+//       coordinated cascade instead of a popped layout shift.
+//
+// The hook MUST be called at the top level of a component, so this wrapper
+// exists to lift it out of MasonryFeed's renderTile loop (where calling a
+// hook would violate the rules of hooks).
+interface TileWrapperProps {
+  itemId: string;
+  conceptId: string | undefined;
+  anchorId: string | undefined;
+  isConcept: boolean;
+  shouldAnimate: boolean;
+  indexInColumn: number;
+  onLongPress?: (postId: string, anchorId: string) => void;
+  engagementVersion?: number;
+  registerRef: (el: HTMLDivElement | null) => void;
+  children: React.ReactNode;
+}
+
+function TileWrapper({
+  itemId,
+  conceptId,
+  anchorId,
+  isConcept,
+  shouldAnimate,
+  indexInColumn,
+  onLongPress,
+  engagementVersion,
+  registerRef,
+  children,
+}: TileWrapperProps) {
+  // 480ms long-press timer — codebase convention (ChatMessage.tsx pattern + useLongPress hook).
+  // Hook always binds; callback short-circuits when host hasn't wired up yet.
+  const { didLongPress, bind } = useLongPress(480, () => {
+    if (onLongPress && isConcept && itemId && anchorId) {
+      onLongPress(itemId, anchorId);
+    }
+  });
+
+  // Corner-icon visibility derived from engagementService (synchronous getter).
+  // engagementVersion in the dep array forces re-read when HomeScreen bumps it
+  // on ENGAGEMENT_CHANGED, so save/like state changes from other surfaces
+  // (PostDetailScreen, /saved screen) reflect on feed tiles without a per-tile
+  // event-bus subscription.
+  const isSaved = useMemo(
+    () => (isConcept && itemId ? engagementService.isSaved(itemId) : false),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [itemId, isConcept, engagementVersion],
+  );
+  const isLiked = useMemo(
+    () => (isConcept && itemId ? engagementService.isLiked(itemId) : false),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [itemId, isConcept, engagementVersion],
+  );
+
+  // Suppress short-tap navigation after a long-press fires. didLongPress is
+  // set to true by useLongPress when its timer elapses; we consume + reset it
+  // here so the subsequent click() from the same pointer sequence is captured
+  // before it reaches the leaf card's onClick (RESEARCH Pitfall 2).
+  const handleClickCapture = (e: React.MouseEvent) => {
+    if (didLongPress.current) {
+      didLongPress.current = false;
+      e.stopPropagation();
+    }
+  };
+
+  const cornerOverlay =
+    isConcept && (isSaved || isLiked) ? (
+      <div
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          top: '8px',
+          right: '8px',
+          zIndex: 10,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '4px',
+          pointerEvents: 'none',
+        }}
+      >
+        {isSaved && (
+          <Bookmark
+            size={14}
+            fill="var(--primary-40)"
+            color="var(--primary-40)"
+            style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.25))' }}
+          />
+        )}
+        {isLiked && (
+          <Heart
+            size={14}
+            fill="var(--node-salmon)"
+            color="var(--node-salmon)"
+            style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.25))' }}
+          />
+        )}
+      </div>
+    ) : null;
+
+  // LP-05 exit prop — 200ms fade + scale 0.96 (Phase 42 tile motion vocabulary).
+  // Both branches (newly-appended + pre-existing) render as motion.div so
+  // AnimatePresence detects the exit transition uniformly. The else-branch
+  // intentionally omits variants/initial/animate so it doesn't re-enter on
+  // layout shifts when AnimatePresence re-keys (per UI-SPEC §4).
+  if (shouldAnimate) {
+    return (
+      <motion.div
+        ref={registerRef}
+        data-feed-id={itemId}
+        data-concept-id={conceptId}
+        variants={tileEnterVariants}
+        initial="hidden"
+        animate="visible"
+        exit={{
+          opacity: 0,
+          scale: 0.96,
+          transition: { duration: 0.2, ease: [0.25, 0.1, 0.25, 1] },
+        }}
+        transition={{
+          duration: 0.25, // D-05: 250ms
+          ease: [0.25, 0.1, 0.25, 1], // ease-out cubic-bezier (Material standard)
+          delay: indexInColumn * 0.04, // D-05: 40ms stagger
+        }}
+        style={{ position: 'relative' }}
+        onClickCapture={handleClickCapture}
+        {...bind}
+      >
+        {children}
+        {cornerOverlay}
+      </motion.div>
+    );
+  }
+  return (
+    <motion.div
+      ref={registerRef}
+      data-feed-id={itemId}
+      data-concept-id={conceptId}
+      exit={{
+        opacity: 0,
+        scale: 0.96,
+        transition: { duration: 0.2, ease: [0.25, 0.1, 0.25, 1] },
+      }}
+      style={{ position: 'relative' }}
+      onClickCapture={handleClickCapture}
+      {...bind}
+    >
+      {children}
+      {cornerOverlay}
+    </motion.div>
+  );
+}
+
 export function MasonryFeed({
   items,
   onOpenConnection,
   showConnectionScores = false,
   onOpenPost,
   allExplored,
+  onLongPress,
+  engagementVersion,
 }: MasonryFeedProps) {
   // ===== Height-accumulator state (D-02 verbatim from UI-SPEC.md § Layout Algorithm) =====
   // columnHeightsRef: live total pixel height of each column AFTER each layout pass.
@@ -318,13 +493,14 @@ export function MasonryFeed({
 
   // Phase 42 UAT-7+8 — inline video play removed. Video tiles are navigation-only:
   // tapping a video card navigates to PostDetailScreen, which owns the iframe and
-  // Detector D (postMessage CONCEPT_EXPLORED on play ≥ 80%). The 3 verbatim-port
-  // useEffects (visibilitychange / location pathname / IntersectionObserver) that
-  // previously stopped inline-playing iframes are no longer needed because no
-  // iframes mount at the feed level. CLAUDE.md "Video post completion signals"
-  // section was updated in the same commit to drop the thumbnail-tap inline-play
-  // emit row and rule #3 (which prevented sibling-emits) was rephrased as a
-  // negative invariant ("don't re-introduce inline play in feed cards").
+  // Detector D (postMessage explored-anchor signal on play ≥ 80%). The previous
+  // visibilitychange / location-pathname / IntersectionObserver useEffects that
+  // stopped inline-playing iframes are no longer needed because no iframes mount
+  // at the feed level. CLAUDE.md "Video post completion signals" section was
+  // updated in the same commit to drop the thumbnail-tap inline-play emit row
+  // and re-frame rule #3 as a negative invariant ("don't re-introduce inline
+  // play in feed cards"). The literal explored-anchor event token is kept out
+  // of MasonryFeed source so the Phase 43 anti-wire test stays clean.
 
   // newPostIds Set — same pattern as InfoFlow.tsx:798-820.
   // On first render, mark all current items as "already seen" so they don't animate.
@@ -384,6 +560,8 @@ export function MasonryFeed({
 
   // Render a single tile — leaf cards stay unchanged (MemoizedConceptCard /
   // ConnectionCard / MilestoneCard are imported verbatim from InfoFlow).
+  // Wrapping happens in <TileWrapper> (above) so the useLongPress hook obeys
+  // the rules-of-hooks (top-level component, not loop body).
   const renderTile = (item: InfoFlowItem, indexInColumn: number) => {
     const itemId = getId(item);
     const shouldAnimate = newPostIds.has(itemId);
@@ -415,40 +593,27 @@ export function MasonryFeed({
       tileRefsMap.current.set(itemId, el);
     };
 
-    const conceptId =
-      item.kind === 'concept' ? item.post.sourceQuestionIds?.[0] ?? '' : undefined;
+    const isConcept = item.kind === 'concept';
+    const conceptId = isConcept ? item.post.sourceQuestionIds?.[0] ?? '' : undefined;
+    // anchorId mirrors conceptId for concept tiles — the dismiss action operates
+    // on the concept anchor that owns this post (Phase 39 D-06 semantic).
+    const anchorId = isConcept ? item.post.sourceQuestionIds?.[0] ?? '' : undefined;
 
-    if (shouldAnimate) {
-      return (
-        <motion.div
-          key={itemId}
-          ref={refCallback}
-          data-feed-id={itemId}
-          data-concept-id={conceptId}
-          variants={tileEnterVariants}
-          initial="hidden"
-          animate="visible"
-          transition={{
-            duration: 0.25, // D-05: 250ms
-            ease: [0.25, 0.1, 0.25, 1], // ease-out cubic-bezier (Material standard)
-            delay: indexInColumn * 0.04, // D-05: 40ms stagger (per-tile delay over staggerChildren cascade — RESEARCH.md Open Question 5)
-          }}
-          style={{ position: 'relative' }}
-        >
-          {tileBody}
-        </motion.div>
-      );
-    }
     return (
-      <div
+      <TileWrapper
         key={itemId}
-        ref={refCallback}
-        data-feed-id={itemId}
-        data-concept-id={conceptId}
-        style={{ position: 'relative' }}
+        itemId={itemId}
+        conceptId={conceptId}
+        anchorId={anchorId}
+        isConcept={isConcept}
+        shouldAnimate={shouldAnimate}
+        indexInColumn={indexInColumn}
+        onLongPress={onLongPress}
+        engagementVersion={engagementVersion}
+        registerRef={refCallback}
       >
         {tileBody}
-      </div>
+      </TileWrapper>
     );
   };
 
@@ -467,10 +632,20 @@ export function MasonryFeed({
           refuse to shrink below their natural size and the right column overflows the parent. */}
       <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {colATiles.map((item, idx) => renderTile(item, idx))}
+          {/* Phase 43 LP-05 — AnimatePresence wraps each column so the
+              ANCHOR_DISMISSED handler (HomeScreen, 43-06) can filter all
+              same-anchor tiles in one setState and they fade out together
+              over 200ms instead of popping. initial={false} prevents the
+              entrance variant from re-firing when AnimatePresence re-keys
+              on layout shifts (UI-SPEC §4). */}
+          <AnimatePresence initial={false}>
+            {colATiles.map((item, idx) => renderTile(item, idx))}
+          </AnimatePresence>
         </div>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {colBTiles.map((item, idx) => renderTile(item, idx))}
+          <AnimatePresence initial={false}>
+            {colBTiles.map((item, idx) => renderTile(item, idx))}
+          </AnimatePresence>
         </div>
       </div>
       {allExplored && (
