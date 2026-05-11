@@ -776,7 +776,6 @@
     }
   },
   "infoFlow": {
-    "newsTag": "NOTICIAS",
     "byChannel": "por {{channel}}",
     "concept": "Concepto",
     "postImageAlt": "Vídeo corto",

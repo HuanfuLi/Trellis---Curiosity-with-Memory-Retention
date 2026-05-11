@@ -248,20 +248,10 @@ function ConceptCard({ post, feedIndex: _feedIndex = 0, isActive: _isActive, onO
           position: 'relative',
         }}>
           {/* Bottom tags */}
+          {/* TS-01 (Phase 43-02): NEWS presentation-style chip removed.
+              Operator-bounded simplification — "tiles already too rich; simplify".
+              See .planning/phases/43-engagement-ui/43-CONTEXT.md §"Tile simplification (TS-*)". */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-            <span style={{
-              fontSize: '0.65rem',
-              fontWeight: 700,
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              color: 'var(--news-card-tag-text)',
-              fontFamily: 'system-ui, -apple-system, sans-serif',
-              backgroundColor: 'var(--news-card-tag-bg)',
-              padding: '3px 8px',
-              borderRadius: '100px',
-            }}>
-              {t('infoFlow.newsTag')}
-            </span>
             {post.sourceQuestionTitles?.slice(0, 1).map((title, idx) => (
               <span
                 key={idx}
