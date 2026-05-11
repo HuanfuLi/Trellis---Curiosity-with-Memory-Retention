@@ -207,4 +207,31 @@ export const engagementService = {
   reset(): void {
     saveState(freshState());
   },
+
+  /**
+   * Wipe ONLY the dismissed-anchor list (saved + liked are user archives —
+   * persist across days per operator intent confirmed during Phase 43 UAT).
+   * Phase 43 (gap-closure 43-13) wires this into Force-New-Day in
+   * SettingsDataScreen so the dev affordance produces the intended
+   * "previously-hidden tiles return tomorrow" UX without nuking the user's
+   * saved/liked archives.
+   *
+   * Idempotent: no-op + no event when dismissed.length === 0.
+   *
+   * Emits EXACTLY ONE ENGAGEMENT_CHANGED with kind: 'undismiss' and sentinel
+   * id: '*' to signal "bulk reset" to subscribers. HomeScreen Effect B
+   * (Phase 43-06 dual-effect canonical shape) re-reads
+   * getDismissedAnchorIds() on this emit and refills dismissed-anchor tiles
+   * in the feed.
+   *
+   * `reset()` (above) stays as the wholesale wipe for Clear-All-Data /
+   * settingsService.reset() — that path still wants saved + liked cleared.
+   */
+  resetDismissedOnly(): void {
+    const state = loadState();
+    if (state.dismissed.length === 0) return; // idempotent — no-op + no event
+    state.dismissed = [];
+    saveState(state);
+    eventBus.emit({ type: 'ENGAGEMENT_CHANGED', payload: { kind: 'undismiss', id: '*' } });
+  },
 };
