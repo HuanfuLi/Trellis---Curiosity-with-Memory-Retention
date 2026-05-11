@@ -54,21 +54,21 @@ Trellis already operates on multiples of 4 inline. The contract for new Phase 43
 
 ## Typography
 
-Phase 43 uses 3 sizes + 2 weights (within project budget). Values match existing patterns at the referenced source.
+Phase 43 uses 3 sizes + 2 weights (within project budget). Sizes: 12px, 14px, 15px. Weights: 500 (body / inactive / meta) + 700 (active / accent). Values match existing patterns at the referenced source.
 
 | Role | Size | Weight | Line Height | Source pattern |
 |------|------|--------|-------------|----------------|
 | Sheet row label | `15px` (0.9375rem) | 500 | 1.4 | Matches `PostHistoryScreen.tsx:63` (`fontSize: '14px', fontWeight: 500`); bumped one notch for primary tap targets |
-| Tab label (active) | `0.9rem` | 700 | 1 | Matches RESEARCH §6 tab pattern |
-| Tab label (inactive) | `0.9rem` | 400 | 1 | Same family, lighter weight |
+| Tab label (active) | `14px` | 700 | 1 | Matches RESEARCH §6 tab pattern |
+| Tab label (inactive) | `14px` | 500 | 1 | Same family, lighter weight |
 | Toast text | inherited from existing `<ToastContainer>` | — | — | Do not override |
-| Deep-dive button label | `15px` | 600 | 1.3 | Mid-prominence; lighter than h3 (`18px/600`) heavier than body label |
-| Segmented control segment | `14px` | 600 (active) / 500 (inactive) | 1 | Compact pill labels |
-| SavedScreen empty heading | `15px` | 600 | 1.4 | Matches `PostHistoryScreen.tsx:174` |
-| SavedScreen empty body | `13px` | 400 | 1.45 | Matches `PostHistoryScreen.tsx:177` |
+| Deep-dive button label | `15px` | 700 | 1.3 | Accent-colored interactive label; pairs with active-state strength |
+| Segmented control segment | `14px` | 700 (active) / 500 (inactive) | 1 | Compact pill labels |
+| SavedScreen empty heading | `15px` | 700 | 1.4 | Matches `PostHistoryScreen.tsx:174` |
+| SavedScreen empty body | `12px` | 500 | 1.45 | Mirrors list-meta size; muted body |
 | SavedScreen list title | `14px` | 500 | 1.4 | Verbatim `PostHistoryScreen.tsx:63-69` |
-| SavedScreen list meta | `12px` | 400 | 1 | Verbatim `PostHistoryScreen.tsx:74-77` |
-| Restore-standard link | `13px` | 600 | 1 | Subtle but tappable |
+| SavedScreen list meta | `12px` | 500 | 1 | Verbatim `PostHistoryScreen.tsx:74-77` (weight rebased to 500 for typography-budget conformance) |
+| Restore-standard link | `12px` | 700 | 1 | Subtle but tappable; accent-colored |
 
 **Heading line-height:** 1.2–1.4 (consistent with project chrome).
 **Body line-height:** 1.45–1.5 (consistent with project chrome).
@@ -385,9 +385,9 @@ HomeScreen has **no** `<Header>` component (RESEARCH §13 verified). The icon sh
 |----------|-------|
 | Container | `<div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '16px' }}>` |
 | Tab button | `<button>` per tab |
-| Tab style | `flex: 1; padding: '12px 0'; background: none; border: none; cursor: pointer; fontSize: '0.9rem'` |
+| Tab style | `flex: 1; padding: '12px 0'; background: none; border: none; cursor: pointer; fontSize: '14px'` |
 | Active weight | `700` |
-| Inactive weight | `400` |
+| Inactive weight | `500` |
 | Active color | `var(--primary-40)` |
 | Inactive color | `var(--muted-foreground)` |
 | Active indicator | `borderBottom: '2px solid var(--primary-40)'`; for inactive: `borderBottom: '2px solid transparent'` |
@@ -407,7 +407,7 @@ HomeScreen has **no** `<Header>` component (RESEARCH §13 verified). The icon sh
 | Thumbnail | 52×52, `borderRadius: 8px; objectFit: cover; flexShrink: 0` — verbatim `PostHistoryScreen.tsx:46-49` |
 | Thumbnail fallback | `var(--surface-variant)` background + emoji per `presentationStyle` (`'✎'` for text-art, `'📄'` otherwise) — verbatim `PostHistoryScreen.tsx:51-58` |
 | Title | `fontSize: 14px; fontWeight: 500; color: var(--foreground); WebkitLineClamp: 2` — verbatim `PostHistoryScreen.tsx:63-71` |
-| Meta line | `post.contextLabel` rendered as `fontSize: 12px; color: var(--muted-foreground); marginTop: 3px` — verbatim `PostHistoryScreen.tsx:74-77` |
+| Meta line | `post.contextLabel` rendered as `fontSize: 12px; fontWeight: 500; color: var(--muted-foreground); marginTop: 3px` — verbatim `PostHistoryScreen.tsx:74-77` (weight rebased to 500 for typography-budget conformance) |
 | Tap action | `navigate(\`/posts/\${post.id}\`)` |
 | Press state | `transform: scale(0.98); background: var(--surface-variant)` on `onPointerDown` — verbatim `PostHistoryScreen.tsx:27-36` |
 | Entrance animation | `opacity: 0 → 1; translateY(8px) → 0; duration: 300ms; ease; delay: index * 40ms` — verbatim `PostHistoryScreen.tsx:128-132` keyframes block |
@@ -419,8 +419,8 @@ HomeScreen has **no** `<Header>` component (RESEARCH §13 verified). The icon sh
 | Trigger | List for active tab is `[]` |
 | Container | `<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '200px', gap: '8px' }}>` |
 | Icon | `<Bookmark size={40} color="var(--muted-foreground)">` (Saved tab) OR `<Heart size={40} color="var(--muted-foreground)">` (Liked tab) |
-| Heading | `fontSize: 15px; fontWeight: 600; color: var(--muted-foreground)` — `t('saved.empty.savedTitle')` / `t('saved.empty.likedTitle')` |
-| Body | `fontSize: 13px; color: var(--muted-foreground)` — `t('saved.empty.savedBody')` / `t('saved.empty.likedBody')` |
+| Heading | `fontSize: 15px; fontWeight: 700; color: var(--muted-foreground)` — `t('saved.empty.savedTitle')` / `t('saved.empty.likedTitle')` |
+| Body | `fontSize: 12px; fontWeight: 500; color: var(--muted-foreground)` — `t('saved.empty.savedBody')` / `t('saved.empty.likedBody')` |
 
 **Loading state:** none — engagement service reads are synchronous (in-memory ID arrays + sync localStorage). No skeleton needed.
 
@@ -454,7 +454,7 @@ Inserted between the scroll-sentinel div (`PostDetailScreen.tsx:839`) and the ta
 | Label | `t('posts.detail.deepDive.cta')` → "Deep dive into this concept" |
 | Label color | `var(--primary-40)` |
 | Label font-size | `15px` |
-| Label font-weight | 600 |
+| Label font-weight | 700 |
 | Icon | `<Sparkles size={16} color="var(--primary-40)" />` (leading) |
 | Press state | `background: color-mix(in srgb, var(--primary-40) 8%, var(--surface-variant))` on `onPointerDown`; revert on up/leave |
 | Active state during stream | Replace label with `t('posts.detail.deepDive.streamingLabel')` ("Streaming deeper version…") + spinner icon (`<Loader2 size={16}>` with `animation: spin 1s linear infinite`); disable click |
@@ -480,8 +480,8 @@ While `isStreamingDeep === true`:
 | Background | `none` |
 | Border | `none` |
 | Color | `var(--primary-40)` |
-| Font-size | `13px` |
-| Font-weight | 600 |
+| Font-size | `12px` |
+| Font-weight | 700 |
 | Cursor | `pointer` |
 | onClick | `deepAbortControllerRef.current?.abort(); setIsStreamingDeep(false); setActiveVariant('standard'); setStreamingDeep('')` |
 | Hit target | `minHeight: 44px` (WCAG floor) |
@@ -507,7 +507,7 @@ Renders in the same slot as the deep-dive button, **only** once `typeof post.bod
 | Segment min-height | `44px` (WCAG floor) |
 | Active segment bg | `var(--primary-40)` |
 | Active segment color | `#FFFFFF` (literal white — readable on `--primary-40` in both light + dark; matches existing project pattern at primary-action buttons) |
-| Active segment weight | 600 |
+| Active segment weight | 700 |
 | Active segment font-size | `14px` |
 | Inactive segment bg | `transparent` |
 | Inactive segment color | `var(--muted-foreground)` |
