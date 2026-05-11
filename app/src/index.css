@@ -79,6 +79,13 @@
   --shadow-2: 0 3px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
   --shadow-3: 0 10px 20px rgba(0, 0, 0, 0.12), 0 3px 6px rgba(0, 0, 0, 0.08);
 
+  /* Phase 43 (gap closure 43-10): saved/liked corner-icon chip vocabulary.
+     Backdrop is a semi-transparent dark scrim (light theme); fg colors are
+     operator-tuned to remain legible on light + dark tile thumbnails. */
+  --corner-chip-bg: rgba(0, 0, 0, 0.55);
+  --corner-chip-fg-saved: #FFFFFF;
+  --corner-chip-fg-liked: #E57373;
+
   --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif;
 
   /* ─── i18n font stack (D-23 — system fonts only, no webfont downloads) ──── */
@@ -234,6 +241,13 @@ body.keyboard-open #bottom-navigation {
   --node-lilac: #1E2128;
   --node-peach: #232320;
   --node-sky: #182428;
+
+  /* Phase 43 (gap closure 43-10): corner-chip backdrop flips to a light
+     scrim in dark theme so the icons read against dark-tinted thumbnails.
+     fg-liked uses a brighter pink (#FF8A80) for dark-mode contrast. */
+  --corner-chip-bg: rgba(255, 255, 255, 0.20);
+  --corner-chip-fg-saved: #FFFFFF;
+  --corner-chip-fg-liked: #FF8A80;
 
   /* News card — dark surfaces with light text */
   --news-card-bg: #1A1A1A;
