@@ -25,23 +25,50 @@ const __dirname = path.dirname(__filename);
 const appRoot = path.resolve(__dirname, '..', '..');
 const src = readFileSync(path.join(appRoot, 'src/screens/PostDetailScreen.tsx'), 'utf8');
 
-test('DD-01: deep-dive controls slot rendered between scroll sentinel and takeaway', () => {
-  const sentinelIdx = src.indexOf('scrollSentinelRef');
+test('DD-01: deep-dive controls slot rendered ABOVE the essay body (operator placement update 2026-05-11)', () => {
+  // Placement decision change per UAT Test 7 (gap-closure plan 43-12): the
+  // Deep Dive button + Standard|Deep segmented toggle now render ABOVE the
+  // essay body so users see the depth-control affordance BEFORE reading.
+  // Originally Phase 43-05 placed the invocation between the scroll-sentinel
+  // and the takeaway; UAT Test 7 confirmed operator's updated preference is
+  // "above essay body". See .planning/debug/deep-dive-toggle-below-essay-body.md.
+
   const renderIdx = src.indexOf('renderDeepDiveControls');
   const takeawayIdx = src.indexOf('takeawayHeading');
-  assert.ok(sentinelIdx > 0, 'scrollSentinelRef must exist in source');
   assert.ok(renderIdx > 0, 'renderDeepDiveControls must be declared');
   assert.ok(takeawayIdx > 0, 'takeawayHeading i18n key must be referenced');
-  // The renderDeepDiveControls INVOCATION must appear after the sentinel JSX and
-  // before the takeaway block. Find the *invocation* (last occurrence) — the
-  // function declaration comes earlier in the file.
+
+  // The renderDeepDiveControls INVOCATION (last occurrence — function
+  // declaration comes earlier).
   const invocationIdx = src.lastIndexOf('renderDeepDiveControls()');
   assert.ok(invocationIdx > 0, 'renderDeepDiveControls() must be invoked in the render tree');
-  // Locate the scroll-sentinel JSX line (different from the ref declaration above).
+
+  // Essay body container anchor: the first `minHeight: '200px'` literal in
+  // the file is the essay-body shell's inline style. This anchor is unique
+  // to the essay body container and stable across other placement edits.
+  const essayBodyIdx = src.indexOf("minHeight: '200px'");
+  assert.ok(essayBodyIdx > 0, 'essay body container with minHeight: 200px must exist');
+
+  // New placement contract: invocation appears BEFORE the essay body container
+  // AND BEFORE the takeaway block. The scroll sentinel (Detector A) stays in
+  // its current position immediately after the essay body and is NOT part of
+  // the placement contract anymore.
+  assert.ok(
+    invocationIdx < essayBodyIdx,
+    'renderDeepDiveControls() must render BEFORE the essay body container (minHeight: 200px anchor)',
+  );
+  assert.ok(
+    invocationIdx < takeawayIdx,
+    'renderDeepDiveControls() must render BEFORE the takeaway block (naturally satisfied by above-body placement)',
+  );
+
+  // Verify Detector A scroll-sentinel is still present (placement move did
+  // NOT regress the sentinel — DD-A invariant from Phase 30 D-04 preserved).
   const sentinelJsxIdx = src.indexOf('ref={scrollSentinelRef}');
-  assert.ok(sentinelJsxIdx > 0, 'scrollSentinelRef must be attached to a JSX element');
-  assert.ok(sentinelJsxIdx < invocationIdx, 'renderDeepDiveControls() must render AFTER the scroll-sentinel JSX');
-  assert.ok(invocationIdx < takeawayIdx, 'renderDeepDiveControls() must render BEFORE the takeaway block');
+  assert.ok(
+    sentinelJsxIdx > 0,
+    'scrollSentinelRef JSX must still be present — Detector A (CONCEPT_EXPLORED emit) is unrelated to the controls placement',
+  );
 });
 
 test('DD-02: DeepDiveButton uses posts.detail.deepDive.cta + Sparkles icon + primary-40 text', () => {
