@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: gap closure)
 status: executing
-stopped_at: Completed 43-06-homescreen-wiring-PLAN.md
-last_updated: "2026-05-11T08:15:53.554Z"
+stopped_at: Completed 43-07-force-new-day-engagement-reset-PLAN.md
+last_updated: "2026-05-11T08:19:54.300Z"
 last_activity: 2026-05-11
 progress:
   total_phases: 21
@@ -18,14 +18,14 @@ progress:
 ## Current Position
 
 Phase: 43 (engagement-ui) — EXECUTING
-Plan: 7 of 8
+Plan: 8 of 8
 Status: Ready to execute
 Last activity: 2026-05-11
 
 ## Progress
 
 **Phases:** 2 / 9 complete (37 ✓; 38 ✓; 39 ready for verification; 40 ready for verification; 41 ready for verification; 42 ready for verification 8/8 plans; 43-45 pending)
-**Plans:** 6 / 8 complete in Phase 43 (43-01 shared-infra-and-locales ✓; 43-02 trim-presentation-style-tag ✓; 43-03 longpress-menu-and-masonry-integration ✓; 43-04 saved-screen-and-route ✓; 43-05 postdetail-deep-dive-trigger ✓; 43-06 homescreen-wiring ✓); 8 / 8 complete in Phase 42 (42-01 masonry-feed-skeleton ✓; 42-02 homescreen-swap ✓; 42-03 card-slide-in-removal ✓; 42-04 vine-bloom-card-and-i18n ✓; 42-05 source-reading-invariant-tests ✓; 42-06 roadmap-requirements-wording-correction ✓; 42-07 phase-close-out ✓; 42-08 heal-review-empty-anchor-fix ✓ [gap-closure]); 2 / 2 complete in Phase 41 (41-01 source-diversity-wiring ✓; 41-02 essay-depth-citation-rendering ✓); 1 / 1 complete in Phase 40 (40-01 source-diversity-service ✓); 1 / 1 complete in Phase 39 (39-01 engagement-service ✓)
+**Plans:** 7 / 8 complete in Phase 43 (43-01 shared-infra-and-locales ✓; 43-02 trim-presentation-style-tag ✓; 43-03 longpress-menu-and-masonry-integration ✓; 43-04 saved-screen-and-route ✓; 43-05 postdetail-deep-dive-trigger ✓; 43-06 homescreen-wiring ✓; 43-07 force-new-day-engagement-reset ✓); 8 / 8 complete in Phase 42 (42-01 masonry-feed-skeleton ✓; 42-02 homescreen-swap ✓; 42-03 card-slide-in-removal ✓; 42-04 vine-bloom-card-and-i18n ✓; 42-05 source-reading-invariant-tests ✓; 42-06 roadmap-requirements-wording-correction ✓; 42-07 phase-close-out ✓; 42-08 heal-review-empty-anchor-fix ✓ [gap-closure]); 2 / 2 complete in Phase 41 (41-01 source-diversity-wiring ✓; 41-02 essay-depth-citation-rendering ✓); 1 / 1 complete in Phase 40 (40-01 source-diversity-service ✓); 1 / 1 complete in Phase 39 (39-01 engagement-service ✓)
 
 ```
 [████████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 46%
@@ -72,6 +72,14 @@ All carry-overs are scheduled into Wave 0:
 ## Resolved blockers
 
 All v1.4 blockers resolved at close. No open blockers.
+
+## Last decisions (Plan 43-07 close, 2026-05-11)
+
+- **SettingsDataScreen.handleForceNewDay extended with `engagementService.reset()`** — single new call at line 138, positioned AFTER `dailyReadService.reset()` (line 134) and BEFORE the success toast (line 139). Two narrow source edits: import line + 4-line call block (3-line explanatory comment + 1-line call). Granularity stays Phase 39 D-08 full-reset (saves + likes + dismisses in one call) — no `resetDismissedOnly()` opportunistic addition. Toast copy left verbatim per minimal-diff principle (refinement is operator-UAT-gated).
+- **Source-reading test scope anchored on `const handleForceNewDay` + `  };` body terminator** — function-body slice prevents false-positive matches on the `dailyReadService.reset()` callsite at line 306 (the "Reset Today" button handler). Phase 36-14/15 anchor-pair pattern preserved. 4 source-reading invariants land in the filled test (was 1-test skip stub from 43-01 Wave 0): (1) import grep, (2) reset() inside handleForceNewDay, (3) ordering — reset → reset → toast (indexOf comparison), (4) exactly-one call.
+- **No audit of other handlers needed.** `handleClearAllData` (line 51) already wipes engagement state structurally — it clears all `trellis_*` localStorage keys including `trellis_engagement_v1` directly. The "Reset Today" button handler (line 297-309) intentionally only resets `dailyReadService` + `postQueueService` (today-scoped, NOT cold-start). `handleForceNewDay` is the ONLY new wire site.
+- **2 atomic commits in source→test cadence:** `9cf26914` feat(handleForceNewDay extension) → `a65019cd` test(engagement-reset assertions). `tsc -b --noEmit` exits 0; `node --test` exits 0 with 4/4 tests pass; sole test-file delta is the scaffold fill-in (no other test file touched).
+- **Phase 43 SC-6 closed.** All 6 success criteria (SC-1 long-press LP-* + SC-2 saved-view SV-* + SC-3 deep-dive DD-* + SC-5 ANCHOR_DISMISSED re-sync + SC-6 engagementService.reset() + SC-7 TS-01 tile simplification) now structurally complete across plans 43-01..43-07. Only 43-08 (phase close-out) remains.
 
 ## Last decisions (Plan 43-06 close, 2026-05-11)
 
@@ -300,7 +308,7 @@ All v1.4 blockers resolved at close. No open blockers.
 
 ## Session Continuity
 
-**Stopped at:** Completed 43-06-homescreen-wiring-PLAN.md
+**Stopped at:** Completed 43-07-force-new-day-engagement-reset-PLAN.md
 **Next action:** `/gsd:verify-work 42 04` (verifier sweep over Plan 42-04 must-haves) → after Wave 2 verification, Plan 42-05 (source-reading invariant tests) → Plan 42-07 (phase close-out).
 
 **Files written this session (Plan 42-04 close):**
