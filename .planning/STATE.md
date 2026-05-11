@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: gap closure)
 status: executing
-stopped_at: Completed 43-04-saved-screen-and-route-PLAN.md
-last_updated: "2026-05-11T07:54:19.820Z"
+stopped_at: Completed 43-05-postdetail-deep-dive-trigger-PLAN.md
+last_updated: "2026-05-11T08:03:17.454Z"
 last_activity: 2026-05-11
 progress:
   total_phases: 21
@@ -18,14 +18,14 @@ progress:
 ## Current Position
 
 Phase: 43 (engagement-ui) — EXECUTING
-Plan: 5 of 8
+Plan: 6 of 8
 Status: Ready to execute
 Last activity: 2026-05-11
 
 ## Progress
 
 **Phases:** 2 / 9 complete (37 ✓; 38 ✓; 39 ready for verification; 40 ready for verification; 41 ready for verification; 42 ready for verification 8/8 plans; 43-45 pending)
-**Plans:** 4 / 8 complete in Phase 43 (43-01 shared-infra-and-locales ✓; 43-02 trim-presentation-style-tag ✓; 43-03 longpress-menu-and-masonry-integration ✓; 43-04 saved-screen-and-route ✓); 8 / 8 complete in Phase 42 (42-01 masonry-feed-skeleton ✓; 42-02 homescreen-swap ✓; 42-03 card-slide-in-removal ✓; 42-04 vine-bloom-card-and-i18n ✓; 42-05 source-reading-invariant-tests ✓; 42-06 roadmap-requirements-wording-correction ✓; 42-07 phase-close-out ✓; 42-08 heal-review-empty-anchor-fix ✓ [gap-closure]); 2 / 2 complete in Phase 41 (41-01 source-diversity-wiring ✓; 41-02 essay-depth-citation-rendering ✓); 1 / 1 complete in Phase 40 (40-01 source-diversity-service ✓); 1 / 1 complete in Phase 39 (39-01 engagement-service ✓)
+**Plans:** 5 / 8 complete in Phase 43 (43-01 shared-infra-and-locales ✓; 43-02 trim-presentation-style-tag ✓; 43-03 longpress-menu-and-masonry-integration ✓; 43-04 saved-screen-and-route ✓; 43-05 postdetail-deep-dive-trigger ✓); 8 / 8 complete in Phase 42 (42-01 masonry-feed-skeleton ✓; 42-02 homescreen-swap ✓; 42-03 card-slide-in-removal ✓; 42-04 vine-bloom-card-and-i18n ✓; 42-05 source-reading-invariant-tests ✓; 42-06 roadmap-requirements-wording-correction ✓; 42-07 phase-close-out ✓; 42-08 heal-review-empty-anchor-fix ✓ [gap-closure]); 2 / 2 complete in Phase 41 (41-01 source-diversity-wiring ✓; 41-02 essay-depth-citation-rendering ✓); 1 / 1 complete in Phase 40 (40-01 source-diversity-service ✓); 1 / 1 complete in Phase 39 (39-01 engagement-service ✓)
 
 ```
 [████████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 46%
@@ -72,6 +72,19 @@ All carry-overs are scheduled into Wave 0:
 ## Resolved blockers
 
 All v1.4 blockers resolved at close. No open blockers.
+
+## Last decisions (Plan 43-05 close, 2026-05-11)
+
+- **PostDetailScreen.tsx ships at 1182 LOC** (+208 from 43-05). New deep-dive surface adds 5 state slots (`streamingDeep`, `isStreamingDeep`, `setDeepError`, `activeVariant`, `deepAbortControllerRef`), 2 useCallback handlers (`handleStartDeepDive`, `handleRestoreStandard`), 1 render helper (`renderDeepDiveControls`), 1 body-slot branch (5-way: error / streaming-on-enter / streaming-deep / cached-deep / standard), and a cleanup cascade extension that aborts BOTH controllers on unmount + postId change. The on-enter `AbortController` (existing Phase 41-02) and the new dedicated `deepAbortControllerRef` are independently cancellable.
+- **DD-05 AbortController contract extended without regression.** Pre-call guard count grew from 3 → 16 (regex counts both standalone `if (signal.aborted) return` lines AND per-loop-iteration guards across all 4 streaming call sites); signal-arg pass count grew from 4 → 6 (`generatePostEssay` deep call adds `{ depth: 'deep', signal: ctrl.signal }`; existing 4 sites unchanged). `patchPostEssayInCache` invocation count is 2 (standard + deep), each preceded by a `!signal.aborted` guard so `bodyMarkdownDeep` cache is NEVER written from a partial / aborted stream.
+- **Dedicated `deepAbortControllerRef` over reuse** — RESEARCH Pitfall 3: reusing the on-enter `abortController` would immediately bail because the on-enter effect's cleanup runs whenever `post?.bodyMarkdown` changes, and once the on-enter stream patches the cache, that dep changes and the controller is `.abort()`ed before the user ever taps Deep Dive. Separate ref guarantees a fresh, unaborted controller every tap. Pattern documented in `handleStartDeepDive`'s leading comment for future maintainers.
+- **Dedicated test file per DD sub-decision** (VALIDATION.md line 53) — DD-04 segmented-toggle lives in its own `PostDetailScreen.segmented-toggle.test.mjs`, separate from DD-01..DD-03 in `deep-dive-trigger.test.mjs` and DD-05 in `abort-contract.test.mjs`. Failure attribution at test-run time is unambiguous: a DD-04 regression fails exactly one file. 19/19 new tests pass; 20/20 pre-existing PostDetailScreen tests pass; 17/17 post-essay tests pass.
+- **Test region anchor scoped on `useCallback` declaration, not bare identifier** — initial abort-contract test failed because `src.indexOf('handleStartDeepDive')` matched the JSDoc comment occurrence first (Phase 43 DD-03 — comment), slicing too wide and capturing skeleton-post `bodyMarkdown: ''` literals from the connection/discover useEffect. Anchored on `handleStartDeepDive = useCallback` to scope the region. Cosmetic test-authoring correction; no source change. Captures a recurrence-prevention pattern for future source-reading negative-grep tests.
+- **`setDeepError` reserved-but-unused** — state slot exists for future error-toast parity with `onEnterError` retry surface. Currently destructured as `[, setDeepError]`. No render consumer; UI parity deferred until device UAT shows partial-stream errors are user-visible. Tests don't assert error-surface behavior so the minimal-diff principle holds.
+- **Body slot extended in-place** — 4-way conditional (error / streaming-deep / cached-deep / standard) inserted before the existing standard `post.bodyMarkdown ?` branch. No sub-component extraction; preserves Phase 41-02 + Phase 36 GAP-C render branches verbatim. Diff strictly additive.
+- **renderDeepDiveControls placed AFTER scroll-sentinel JSX, BEFORE takeaway block** per DD-01 — natural reading endpoint; doesn't interfere with Detector A IntersectionObserver. Gate: `!isStreamingOnEnter && (post.bodyMarkdown || streamingBody) && renderDeepDiveControls()` — controls never show during initial essay warm-up.
+- **4 atomic commits in source→test cadence:** `be0a1585` feat(PostDetailScreen Deep Dive) → `1735be2d` test(deep-dive-trigger DD-01..03) → `217b21d8` test(abort-contract DD-05) → `f2d131ad` test(segmented-toggle DD-04). `tsc -b --noEmit` clean throughout; `npm run build` exits 0; bundle-parity unchanged (i18n keys already shipped by 43-01).
+- **Wave 1 of Phase 43 continues.** 43-05 ships the PostDetailScreen deep-dive surface. 43-06 (HomeScreen wiring: Bookmark header icon + ANCHOR_DISMISSED re-sync) and 43-07 (handleForceNewDay engagement reset) and 43-08 (phase close-out) all remain — file-touch separation makes 43-06/07 parallel-safe with each other.
 
 ## Last decisions (Plan 43-04 close, 2026-05-11)
 
