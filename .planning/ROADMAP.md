@@ -1170,7 +1170,15 @@ _Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round
   4. _(Descoped 2026-05-11 per DS-01: "N connections in your graph" micro-label dropped — operator framing "tiles already too rich". See `.planning/phases/43-engagement-ui/43-CONTEXT.md` DS-01.)_
   5. HomeScreen subscribes to `ANCHOR_DISMISSED` and re-syncs engagement state on `[location.pathname]` effect (Phase 36-14 canonical pattern)
   6. `handleForceNewDay` in `SettingsDataScreen` calls `engagementService.reset()` alongside existing post-queue + cache + dailyRead resets; dismissed anchors do not carry over after Force-New-Day
-**Plans**: TBD
+**Plans**: 8 plans (4 waves)
+  - [x] 43-01-shared-infra-and-locales-PLAN.md — Wave 0: useLongPress hook + BottomSheet compact prop + 14 i18n keys × 4 locales + 9 test scaffolds + DS-01 doc edits (ROADMAP + REQUIREMENTS per revision 2026-05-11)
+  - [x] 43-02-trim-presentation-style-tag-PLAN.md — Wave 1: TS-01 trim NEWS chip from InfoFlow.tsx + remove `infoFlow.newsTag` from 4 locale bundles
+  - [x] 43-03-longpress-menu-and-masonry-integration-PLAN.md — Wave 1: LongPressMenu component (LP-01..LP-04) + MasonryFeed long-press wrapper + corner-icon overlay + AnimatePresence column wrapping (LP-05)
+  - [x] 43-04-saved-screen-and-route-PLAN.md — Wave 1: SavedScreen with Saved | Liked tabs (SV-01..SV-04) + `/saved` route registration
+  - [x] 43-05-postdetail-deep-dive-trigger-PLAN.md — Wave 1: Deep Dive button + Standard | Deep segmented control + dedicated deepAbortControllerRef (DD-01..DD-05); 3 test surfaces (deep-dive-trigger + segmented-toggle + abort-contract)
+  - [x] 43-06-homescreen-wiring-PLAN.md — Wave 2: HomeScreen Bookmark icon + LongPressMenu host + dual-effect ANCHOR_DISMISSED (stable listener + `[location.pathname]` resync) + ENGAGEMENT_CHANGED subscription (SV-02 + LP-03/05)
+  - [x] 43-07-force-new-day-engagement-reset-PLAN.md — Wave 2: SettingsDataScreen `engagementService.reset()` (DS-01 doc edits moved to 43-01 Wave 0 per revision 2026-05-11)
+  - [x] 43-08-phase-close-out-PLAN.md — Wave 3: 43-PHASE-SUMMARY.md + STATE.md / ROADMAP.md / VALIDATION.md close-out edits
 **UI hint**: yes
 
 ### Phase 44: Dependency Version Sweep
@@ -1206,7 +1214,7 @@ _Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round
 | 40. Source Diversity Leaf Module | 1/1 | Complete    | 2026-05-09 |
 | 41. Pipeline Wiring + Essay Depth | 2/2 | Complete    | 2026-05-09 |
 | 42. Masonry Feed Layout | 9/8 | Complete    | 2026-05-10 |
-| 43. Engagement UI | 7/8 | In Progress|  |
+| 43. Engagement UI | 8/8 | Complete    | 2026-05-11 |
 | 44. Dependency Version Sweep | 0/0 | Not started | - |
 | 45. Code Quality Sweep | 0/0 | Not started | - |
 
