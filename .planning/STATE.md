@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: gap closure)
 status: executing
-stopped_at: Completed 43-12-deep-dive-controls-above-essay-body-PLAN.md
-last_updated: "2026-05-11T10:35:39.925Z"
+stopped_at: Completed 43-13 gap-closure plan (engagement-reset-dismissed-only)
+last_updated: "2026-05-11T10:39:14.697Z"
 last_activity: 2026-05-11
 progress:
   total_phases: 21
@@ -26,7 +26,7 @@ Phase summary: `.planning/phases/43-engagement-ui/43-PHASE-SUMMARY.md`
 ## Progress
 
 **Phases:** 2 / 9 complete (37 ✓; 38 ✓; 39 ready for verification; 40 ready for verification; 41 ready for verification; 42 ready for verification 8/8 plans; 43 ready for verification 8/8 plans; 44-45 pending)
-**Plans:** 9 / 13 complete in Phase 43 (43-01 shared-infra-and-locales ✓; 43-02 trim-presentation-style-tag ✓; 43-03 longpress-menu-and-masonry-integration ✓; 43-04 saved-screen-and-route ✓; 43-05 postdetail-deep-dive-trigger ✓; 43-06 homescreen-wiring ✓; 43-07 force-new-day-engagement-reset ✓; 43-08 phase-close-out ✓; 43-09 bottomsheet-portal-and-nav-clearance ✓ [gap-closure]); 8 / 8 complete in Phase 42 (42-01 masonry-feed-skeleton ✓; 42-02 homescreen-swap ✓; 42-03 card-slide-in-removal ✓; 42-04 vine-bloom-card-and-i18n ✓; 42-05 source-reading-invariant-tests ✓; 42-06 roadmap-requirements-wording-correction ✓; 42-07 phase-close-out ✓; 42-08 heal-review-empty-anchor-fix ✓ [gap-closure]); 2 / 2 complete in Phase 41 (41-01 source-diversity-wiring ✓; 41-02 essay-depth-citation-rendering ✓); 1 / 1 complete in Phase 40 (40-01 source-diversity-service ✓); 1 / 1 complete in Phase 39 (39-01 engagement-service ✓)
+**Plans:** 10 / 13 complete in Phase 43 (43-01 shared-infra-and-locales ✓; 43-02 trim-presentation-style-tag ✓; 43-03 longpress-menu-and-masonry-integration ✓; 43-04 saved-screen-and-route ✓; 43-05 postdetail-deep-dive-trigger ✓; 43-06 homescreen-wiring ✓; 43-07 force-new-day-engagement-reset ✓; 43-08 phase-close-out ✓; 43-09 bottomsheet-portal-and-nav-clearance ✓ [gap-closure]; 43-13 engagement-reset-dismissed-only ✓ [gap-closure]); 8 / 8 complete in Phase 42 (42-01 masonry-feed-skeleton ✓; 42-02 homescreen-swap ✓; 42-03 card-slide-in-removal ✓; 42-04 vine-bloom-card-and-i18n ✓; 42-05 source-reading-invariant-tests ✓; 42-06 roadmap-requirements-wording-correction ✓; 42-07 phase-close-out ✓; 42-08 heal-review-empty-anchor-fix ✓ [gap-closure]); 2 / 2 complete in Phase 41 (41-01 source-diversity-wiring ✓; 41-02 essay-depth-citation-rendering ✓); 1 / 1 complete in Phase 40 (40-01 source-diversity-service ✓); 1 / 1 complete in Phase 39 (39-01 engagement-service ✓)
 
 ```
 [████████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 46%
@@ -94,6 +94,16 @@ All v1.4 blockers resolved at close. No open blockers.
 - **6 source-reading assertions** at `app/tests/components/BottomSheet.portal.test.mjs` (92 LOC): createPortal import + document.body invocation + SSR guard + clearance offset + position-absolute preserved + negative `bottom: 0` invariant. 105/105 component-suite tests pass post-landing.
 - **3 atomic commits** in source → docs → test cadence: `d4d5b0f1` fix(portal+clearance) → `01c43791` docs(HomeScreen comment) → `eff0adba` test(regression). Plan-level commit count budget (2-3) hit at 3.
 - **Cross-plan TS6133 noise** from 43-12's partial `renderDeepDiveControls` extraction in PostDetailScreen.tsx logged to `.planning/phases/43-engagement-ui/deferred-items.md` per scope boundary; resolved naturally by 43-12's subsequent commit `0033073c`. Not a regression caused by 43-09.
+
+## Last decisions (Plan 43-10 close, 2026-05-11)
+
+- **Engagement corner icons now sit inside a chip** — `MasonryFeed.tsx` cornerOverlay (lines 387-450) wraps each `<Bookmark>` / `<Heart>` in a 26x26 circular `<span>` with `backgroundColor: var(--corner-chip-bg)` + `boxShadow: var(--shadow-1)`. Replaces the previous per-icon `filter: drop-shadow(...)` which was insufficient against busy image/video/news thumbnails. Closes Phase 43 UAT Test 3 (cosmetic).
+- **--node-salmon → --corner-chip-fg-liked migration on Heart icon** is a second-bug fix stacked on top of the missing-backdrop fix: `.dark { --node-salmon: #1E2326 }` is intentionally a dark-mode block tint (used by `--bento-review-bg`) — so Heart's old `fill="var(--node-salmon)"` rendered near-black in dark mode regardless of backdrop. New token `--corner-chip-fg-liked` declares `#E57373` in `:root` and `#FF8A80` in `.dark` for legible contrast in both themes.
+- **Three new CSS vars in BOTH theme blocks** — `--corner-chip-bg` / `--corner-chip-fg-saved` / `--corner-chip-fg-liked` declared at `index.css:85-87` (`:root`) and `index.css:248-250` (`.dark`). Additive only — no existing tokens altered; `--node-salmon` semantics preserved for other consumers.
+- **Rule 1 deviation** — `MasonryFeed.dismiss-fade-all.test.mjs:44` previously asserted the literal `drop-shadow(0 1px 2px rgba(0,0,0,0.25))` substring as the corner-icon visibility guarantee. Task 2 removed that filter; assertion rewired to `var(--corner-chip-bg)` to keep the same spirit (corner-icon visibility on busy thumbnails) under the new execution. The full chip invariant set is owned by the new `MasonryFeed.corner-chip.test.mjs` (6 tests).
+- **Plan-checker-flagged TS annotation dropped** — new `.mjs` test file's `cornerOverlayRegion()` helper ships WITHOUT a `: string` return-type annotation; `node --test` parses plain `.mjs` without a TS loader, so the annotation would have been a syntax error.
+- **3 atomic commits** in source → fix → test cadence: `9723f020` feat(--corner-chip-* vars in :root + .dark) → `9a42322b` fix(cornerOverlay chip rewrite + Rule-1 test deviation) → `38e320c7` test(corner-chip source-reading regression). Plan-level commit count budget (2-3) hit at 3 (slightly over because Task 2 batched the source rewrite with the dependent test-update deviation — clean single-purpose commits in spirit).
+- **Pre-existing test failures observed and logged** — broader `npm run test:main` sweep shows pre-existing failures in `tests/concept-feed.test.mjs` + `tests/services/post-queue.test.mjs` referencing stale `16`-vs-`24` walker/refill thresholds (contradicts CLAUDE.md's post-2026-05-10 canonical values). Confirmed via `git stash` + re-run to be pre-existing (not caused by 43-10). Out of scope per the scope boundary rule; logged to `.planning/phases/43-engagement-ui/deferred-items.md` for a future hygiene plan or verifier sweep.
 
 ## Last decisions (Plan 43-07 close, 2026-05-11)
 
@@ -330,7 +340,7 @@ All v1.4 blockers resolved at close. No open blockers.
 
 ## Session Continuity
 
-**Stopped at:** Completed 43-12-deep-dive-controls-above-essay-body-PLAN.md
+**Stopped at:** Completed 43-13 gap-closure plan (engagement-reset-dismissed-only)
 **Next action:** `/gsd:verify-work 42 04` (verifier sweep over Plan 42-04 must-haves) → after Wave 2 verification, Plan 42-05 (source-reading invariant tests) → Plan 42-07 (phase close-out).
 
 **Files written this session (Plan 42-04 close):**
