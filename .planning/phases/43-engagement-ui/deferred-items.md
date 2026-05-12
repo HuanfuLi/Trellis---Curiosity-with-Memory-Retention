@@ -20,3 +20,15 @@ The following test failures were observed during the `npm run test:main` sweep a
   - `getVineColor returns one of the 5 --node-* variables`
 
 These look like a coordinated stale-numeric-constants set (16 vs 24) plus an unrelated `getVineColor` and `hasImageGenKey` drift. Likely candidates for a Wave 4 hygiene plan or verifier sweep. Not touched by 43-10 because the scope boundary rule forbids it (43-10 only touches `app/src/index.css`, `app/src/components/MasonryFeed.tsx`, and a new test file).
+
+## Logged by 43-14 executor (2026-05-12, parallel sub-wave 5)
+
+The same 5 pre-existing failures observed during 43-10 reproduce against the pre-43-14 baseline (`238b59ea`):
+
+- `tests/concept-feed.test.mjs` (`ERR_MODULE_NOT_FOUND` on `youtube.service`)
+- `tests/services/concept-feed-source-diversity-wiring.test.mjs` — `walkDerivedList(16, ...)` assertion (code has 24)
+- `tests/services/image-gen-key-gate.test.mjs` — `hasImageGenKey` regex drift
+- `tests/services/post-queue.test.mjs` — `needsRefill` threshold-16 assertion (code has 24)
+- `tests/services/trellis-layout.test.mjs` — `getVineColor` returns non-listed value
+
+Reproduced by temporarily reverting `app/src/services/concept-feed.service.ts` to the pre-43-14 commit and re-running the failing tests — same failures, same line numbers. 43-14 does not touch `post-queue.service.ts`, `trellis-state.service.ts`, image-gen, or YouTube paths; out of scope per the scope_boundary rule.

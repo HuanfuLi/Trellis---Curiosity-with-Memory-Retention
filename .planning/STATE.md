@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: gap closure)
 status: executing
-stopped_at: Phase 43 gap closure complete (43-09..43-13); all 5 UAT gaps resolved; verifier passed 11/11
-last_updated: "2026-05-11T10:56:35.811Z"
-last_activity: 2026-05-11
+stopped_at: Completed Plan 43-14 (dismiss-filter-at-read-boundary) — UAT Test 4 closed; awaiting 43-15 parallel completion before phase-close verifier
+last_updated: "2026-05-12T07:48:50Z"
+last_activity: 2026-05-12
 progress:
   total_phases: 21
   completed_phases: 0
@@ -18,15 +18,15 @@ progress:
 ## Current Position
 
 Phase: 43 (engagement-ui) — EXECUTING
-Plan: 4 of 13
+Plan: 2 of 15
 Status: Ready to execute
-Last activity: 2026-05-11
+Last activity: 2026-05-12
 Phase summary: `.planning/phases/43-engagement-ui/43-PHASE-SUMMARY.md`
 
 ## Progress
 
 **Phases:** 2 / 9 complete (37 ✓; 38 ✓; 39 ready for verification; 40 ready for verification; 41 ready for verification; 42 ready for verification 8/8 plans; 43 ready for verification 8/8 plans; 44-45 pending)
-**Plans:** 13 / 13 complete in Phase 43 (43-01 shared-infra-and-locales ✓; 43-02 trim-presentation-style-tag ✓; 43-03 longpress-menu-and-masonry-integration ✓; 43-04 saved-screen-and-route ✓; 43-05 postdetail-deep-dive-trigger ✓; 43-06 homescreen-wiring ✓; 43-07 force-new-day-engagement-reset ✓; 43-08 phase-close-out ✓; 43-09 bottomsheet-portal-and-nav-clearance ✓ [gap-closure]; 43-10 engagement-corner-icon-chip-backdrop ✓ [gap-closure]; 43-11 homescreen-bookmark-inline-with-greeting ✓ [gap-closure]; 43-12 deep-dive-controls-above-essay-body ✓ [gap-closure]; 43-13 engagement-reset-dismissed-only ✓ [gap-closure]); 8 / 8 complete in Phase 42 (42-01 masonry-feed-skeleton ✓; 42-02 homescreen-swap ✓; 42-03 card-slide-in-removal ✓; 42-04 vine-bloom-card-and-i18n ✓; 42-05 source-reading-invariant-tests ✓; 42-06 roadmap-requirements-wording-correction ✓; 42-07 phase-close-out ✓; 42-08 heal-review-empty-anchor-fix ✓ [gap-closure]); 2 / 2 complete in Phase 41 (41-01 source-diversity-wiring ✓; 41-02 essay-depth-citation-rendering ✓); 1 / 1 complete in Phase 40 (40-01 source-diversity-service ✓); 1 / 1 complete in Phase 39 (39-01 engagement-service ✓)
+**Plans:** 14 / 15 complete in Phase 43 (43-01 shared-infra-and-locales ✓; 43-02 trim-presentation-style-tag ✓; 43-03 longpress-menu-and-masonry-integration ✓; 43-04 saved-screen-and-route ✓; 43-05 postdetail-deep-dive-trigger ✓; 43-06 homescreen-wiring ✓; 43-07 force-new-day-engagement-reset ✓; 43-08 phase-close-out ✓; 43-09 bottomsheet-portal-and-nav-clearance ✓ [gap-closure]; 43-10 engagement-corner-icon-chip-backdrop ✓ [gap-closure]; 43-11 homescreen-bookmark-inline-with-greeting ✓ [gap-closure]; 43-12 deep-dive-controls-above-essay-body ✓ [gap-closure]; 43-13 engagement-reset-dismissed-only ✓ [gap-closure]; 43-14 dismiss-filter-at-read-boundary ✓ [gap-closure]); 8 / 8 complete in Phase 42 (42-01 masonry-feed-skeleton ✓; 42-02 homescreen-swap ✓; 42-03 card-slide-in-removal ✓; 42-04 vine-bloom-card-and-i18n ✓; 42-05 source-reading-invariant-tests ✓; 42-06 roadmap-requirements-wording-correction ✓; 42-07 phase-close-out ✓; 42-08 heal-review-empty-anchor-fix ✓ [gap-closure]); 2 / 2 complete in Phase 41 (41-01 source-diversity-wiring ✓; 41-02 essay-depth-citation-rendering ✓); 1 / 1 complete in Phase 40 (40-01 source-diversity-service ✓); 1 / 1 complete in Phase 39 (39-01 engagement-service ✓)
 
 ```
 [████████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 46%
@@ -84,6 +84,16 @@ All v1.4 blockers resolved at close. No open blockers.
 - **HomeScreen dual-effect dismiss resync** — canonical Phase 36-14 sibling-effects shape: Effect A stable `ANCHOR_DISMISSED` listener (deps `[]`) handles fast-path in-the-moment dismiss; Effect B `[location.pathname]` re-read via `engagementService.getDismissedAnchorIds()` handles cross-screen dismiss return. Both filter `dailyPosts` in-place; NEITHER calls `conceptFeedService.getDailyPosts()`. `[location.pathname]` effect count grew 2 → 3 (matches existing exploredAnchors + warm-start-refallback siblings).
 - **9 new test scaffolds (Wave 0) + 8 filled-in source-reading tests** — deep-dive-trigger + segmented-toggle + abort-contract count as 3 distinct DD-* surfaces per VALIDATION.md line 53 (dedicated file per sub-decision for failure attribution). `nyquist_compliant: true` flipped in `.planning/phases/43-engagement-ui/43-VALIDATION.md` frontmatter; all 6 sign-off checkboxes filled with [x]; Approval flipped from pending to "validated 2026-05-11."
 - **8/8 plans complete in Phase 43.** Final per-task atomic commit count: 30 across 43-01..43-07; +4 from 43-08 close-out = ~34 phase total. Cadence held throughout (no squash, no amend). Plan-level retrospective: `.planning/phases/43-engagement-ui/43-PHASE-SUMMARY.md`.
+
+## Last decisions (Plan 43-14 close, 2026-05-12)
+
+- **Dismiss filter centralized at the READ BOUNDARY** — new `applyDismissedFilter(posts: DailyPost[]): DailyPost[]` helper in `concept-feed.service.ts` (after `saveCache`, ~25 LOC incl. operator-validated comment header) called from THREE cache-read sites: `getCachedDailyPosts()` (between sourceType filter and `filterDecayedStarters`), `getDailyPosts()` cache-hit branch, and `getDailyPosts()` fingerprint-mismatch same-day branch. Closes Phase 43 UAT Test 4 (major).
+- **Drain branch UNCHANGED** — `queuedPosts` come from `postQueueService.dequeue()` whose source `_state.posts` was already walker-filtered per Phase 39 D-07. Drain branch has no `applyDismissedFilter` call; Test 6 in `concept-feed-dismiss-filter.test.mjs` enforces this as a region-scoped negative assertion.
+- **Walker dismiss-skip + `loadCache()` Phase 36-11 stale-cache rejection UNCHANGED** — load-bearing invariants from CLAUDE.md preserved with negative-invariant regex tests (`!exploredIds.has(id) && !dismissedIds.has(id)` predicate and walker signature). Source-reading tests assert directly against the file text so any future regression breaks the build.
+- **Effect A live `ANCHOR_DISMISSED` filter preserved** — AnimatePresence exit transition depends on items leaving `prev` synchronously. Effect B `[location.pathname]` re-read kept as defense-in-depth even though now strictly redundant (read boundary also filters). Pattern: read-boundary filter + Effect A live filter + Effect B defense-in-depth = three layers; any one failing still produces correct behavior.
+- **12 new source-reading test assertions** across 2 new files (`concept-feed-dismiss-filter.test.mjs` 7 + `HomeScreen.dismiss-resync.test.mjs` 5). All source-reading because concept-feed.service.ts dynamic-import under `node --test` crashes via the i18next chain — pattern-matches CLAUDE.md "Phase 27 locale tests" guidance and `refill-mutex.test.mjs` workaround.
+- **3 atomic commits** in source → behavioral → invariants cadence: `4cbecdd9` fix(centralize) → `d67607c6` test(behavioral) → `d47cb733` test(HomeScreen invariants). No deviations from plan; the dynamic-import fallback to source-reading was explicitly authorized in Task 2's action prompt.
+- **5 pre-existing test failures** (concept-feed.test.mjs ERR_MODULE_NOT_FOUND, concept-feed-source-diversity-wiring `walkDerivedList(16, ...)`, image-gen-key-gate regex drift, post-queue.test.mjs `needsRefill` threshold-16 assertion, trellis-layout.test.mjs `getVineColor`) reproduced against pre-43-14 baseline (`238b59ea`) — out of scope per scope_boundary rule. Already documented in `deferred-items.md` 43-10 entry; appended 43-14 re-confirmation note.
 
 ## Last decisions (Plan 43-09 close, 2026-05-11)
 
