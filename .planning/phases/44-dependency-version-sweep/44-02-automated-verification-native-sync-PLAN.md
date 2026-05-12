@@ -141,6 +141,7 @@ Output: `44-VERIFY.md` with command evidence and any Capacitor-generated Android
     app/package.json
     app/package-lock.json
     app/capacitor.config.ts
+    app/android/
   </read_first>
   <action>
     From `app/`, run:
