@@ -217,6 +217,36 @@ function saveCache(cache: CachedDailyPosts): void {
   }
 }
 
+// Phase 43 gap-closure 43-14 — centralize the dismiss filter at the READ
+// BOUNDARY (operator-validated direction from .planning/debug/dismiss-not-
+// propagating-to-same-anchor-tiles.md). The walker dismiss-skip in
+// post-queue.service.ts walkDerivedList handles FUTURE refill cycles
+// (anchors not yet popped to in-memory _state.posts / cached.posts), but
+// for posts ALREADY popped or cached, the filter must run at every read
+// site that HomeScreen consumes. Doing it once here means the four
+// HomeScreen write paths (warm-start initializer, main effect, refreshFeed
+// via PLANNER_UPDATED + 8s delayed timer, [location.pathname] re-sync)
+// are dismiss-aware by construction — no per-consumer post-filter is
+// needed. Effect A's live ANCHOR_DISMISSED filter in HomeScreen.tsx:567-574
+// remains in place for the AnimatePresence fade-out animation (LP-05
+// fast path); Effect B at HomeScreen.tsx:584-591 is now strictly
+// redundant but kept as defense-in-depth.
+//
+// Filter shape: post.sourceQuestionIds[0] is the anchor.id (text/image/news/
+// video paths all assign sourceQuestionIds = [a.conceptId] per the pipeline;
+// see concept-feed.service.ts construction sites). A post with no
+// sourceQuestionIds (e.g., legacy starter posts) passes the filter
+// (cannot be matched against a dismissed-anchor id).
+function applyDismissedFilter(posts: DailyPost[]): DailyPost[] {
+  const dismissed = new Set(engagementService.getDismissedAnchorIds());
+  if (dismissed.size === 0) return posts;
+  return posts.filter((p) => {
+    const anchorId = p.sourceQuestionIds?.[0];
+    if (!anchorId) return true; // posts without an anchor are not dismissable
+    return !dismissed.has(anchorId);
+  });
+}
+
 // ─── Persistent connection post store ────────────────────────────────────────
 // Connection posts are stored in sessionStorage (separate 5MB quota from
 // localStorage) so they survive daily cache invalidation and don't compete
@@ -1487,10 +1517,14 @@ export const conceptFeedService = {
     // Cache hit: return cached posts with background enrichment
     if (cached?.date === date && cached.fingerprint === fingerprint && cached.posts.length > 0) {
       const feedPosts = cached.posts.filter((p) => p.sourceType !== 'connection');
+      // Phase 43 gap-closure 43-14 — dismiss filter at read boundary. Applied
+      // BEFORE the decay heuristic so the organic-post count used by
+      // filterDecayedStarters reflects what the user actually sees.
+      const visible = applyDismissedFilter(feedPosts);
       // G4 / D-12: drop starter posts once the cache contains 3+ organic posts; also
       // write the trimmed cache back so they don't reappear on the next call.
-      const decayed = filterDecayedStarters(feedPosts);
-      if (decayed.length < feedPosts.length) {
+      const decayed = filterDecayedStarters(visible);
+      if (decayed.length < visible.length) {
         saveCache({ ...cached, posts: cached.posts.filter((p) => !STARTER_POST_IDS.has(p.id)) });
       }
       _backgroundGenerateTextArt(decayed);
@@ -1507,9 +1541,14 @@ export const conceptFeedService = {
         : cached.posts.filter((p) => !STARTER_POST_IDS.has(p.id));
       saveCache({ ...cached, fingerprint, posts: trimmedPosts });
       const feedPosts = trimmedPosts.filter((p) => p.sourceType !== 'connection');
-      _backgroundGenerateTextArt(feedPosts);
+      // Phase 43 gap-closure 43-14 — dismiss filter at read boundary
+      // (symmetric with cache-hit branch above; covers the case where the
+      // question set changed but the cached payload for today still holds
+      // dismissed-anchor posts from before the dismiss).
+      const visible = applyDismissedFilter(feedPosts);
+      _backgroundGenerateTextArt(visible);
       refillQueue(questions).catch(console.error);
-      return feedPosts;
+      return visible;
     }
 
     // No cache for today — drain queue if it has posts (D-10).
@@ -1592,8 +1631,13 @@ export const conceptFeedService = {
 
   getCachedDailyPosts(): DailyPost[] {
     const allPosts = (loadCache()?.posts ?? []).filter((p) => p.sourceType !== 'connection');
+    // Phase 43 gap-closure 43-14 — dismiss filter at read boundary. Applied
+    // BEFORE filterDecayedStarters so the decay heuristic's organic-post count
+    // reflects what the user actually sees (dismissed posts are not "in play"
+    // for the starter-decay decision).
+    const visible = applyDismissedFilter(allPosts);
     // G4 / D-12: HomeScreen warm-start initializer also drops starters when 3+ organic exist.
-    const feedPosts = filterDecayedStarters(allPosts);
+    const feedPosts = filterDecayedStarters(visible);
     _backgroundGenerateTextArt(feedPosts);
     return feedPosts;
   },
