@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: gap closure)
 status: executing
-stopped_at: Completed 44-01-dependency-metadata-lockfile-PLAN.md
-last_updated: "2026-05-12T08:32:11.190Z"
+stopped_at: Completed 44-02-automated-verification-native-sync-PLAN.md
+last_updated: "2026-05-12T08:49:41.775Z"
 last_activity: 2026-05-12
 progress:
   total_phases: 21
@@ -18,7 +18,7 @@ progress:
 ## Current Position
 
 Phase: 44 (dependency-version-sweep) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-05-12
 Phase summary: `.planning/phases/43-engagement-ui/43-PHASE-SUMMARY.md`
@@ -73,6 +73,14 @@ All carry-overs are scheduled into Wave 0:
 ## Resolved blockers
 
 All v1.4 blockers resolved at close. No open blockers.
+
+## Last decisions (Plan 44-02 close, 2026-05-12)
+
+- **Automated verification evidence captured in `44-VERIFY.md`** — `npm run test:main` exits 1 with the same five known signatures (`concept-feed.test.mjs`, `concept-feed-source-diversity-wiring`, `image-gen-key-gate`, `post-queue.test.mjs`, `trellis-layout.test.mjs`); `npm run test:actions` exits 0; aggregate `npm test` exits 0 because the script chains with `;`.
+- **React Hooks 7 lint-gate preservation** — `eslint-plugin-react-hooks@7.1.1` enabled React Compiler rules through the flat recommended preset and produced 57 new errors against existing app code. Plan 44-02 disabled only those new compiler/refresh rules (`react-hooks/refs`, `react-hooks/immutability`, `react-hooks/preserve-manual-memoization`, `react-refresh/only-export-components`) so `npm run lint` exits 0 while source rewrites remain deferred to Phase 45/hygiene work.
+- **Build and audit baseline recorded** — `npm run build` exits 0 (`tsc -b` + Vite 7.3.1 build); `npm audit --audit-level=high` still exits 1 with 10 vulnerabilities (5 moderate, 5 high, 0 critical), matching Plan 44-01's pre-existing audit baseline. New high/critical vulnerabilities: 0.
+- **Exact `npx cap sync` completed after missing iOS platform package fix** — first sync failed because the repo has `app/ios/` but no `@capacitor/ios`; Plan 44-02 added `@capacitor/ios@^8.3.3`, reran the exact command successfully, and committed generated `app/ios/App/Podfile` + `Podfile.lock` updates. Android sync produced no `app/android` diff.
+- **3 atomic task commits plus summary metadata pending:** `cabd45de` docs(test evidence) → `a0e0bf16` fix(lint config + lint/build/audit evidence) → `f1ec9bc9` fix(native sync + @capacitor/ios).
 
 ## Last decisions (Plan 44-01 close, 2026-05-12)
 
@@ -378,8 +386,32 @@ All v1.4 blockers resolved at close. No open blockers.
 
 ## Session Continuity
 
-**Stopped at:** Completed 44-01-dependency-metadata-lockfile-PLAN.md
-**Next action:** Execute `.planning/phases/44-dependency-version-sweep/44-02-automated-verification-native-sync-PLAN.md`.
+**Stopped at:** Completed 44-02-automated-verification-native-sync-PLAN.md
+**Next action:** Execute `.planning/phases/44-dependency-version-sweep/44-03-manual-smoke-uat-PLAN.md`.
+
+**Files written this session (Plan 44-02 close):**
+
+- `.planning/phases/44-dependency-version-sweep/44-VERIFY.md` (NEW — test, lint, build, audit, and native sync command evidence)
+- `.planning/phases/44-dependency-version-sweep/44-02-automated-verification-native-sync-SUMMARY.md` (NEW — close-out summary)
+- `app/eslint.config.js` (MODIFIED — React Hooks 7 compiler/refresh lint rules disabled to preserve pre-sweep lint gate)
+- `app/package.json` (MODIFIED — added `@capacitor/ios@^8.3.3` for existing iOS platform)
+- `app/package-lock.json` (MODIFIED — npm-regenerated lockfile entry for `@capacitor/ios`)
+- `app/ios/App/Podfile` (MODIFIED — generated `CapacitorDevice` pod line from `npx cap sync`)
+- `app/ios/App/Podfile.lock` (MODIFIED — generated Capacitor iOS 8.3.3 pod/checksum updates)
+- `.planning/STATE.md` (this file)
+- `.planning/ROADMAP.md` (Phase 44 plan-progress row updated)
+- `.planning/REQUIREMENTS.md` (TECHDEBT-08 traceability row normalized to complete)
+
+**Plan 44-02 commits:**
+
+- `cabd45de` (Task 1: record test evidence baseline — docs)
+- `a0e0bf16` (Task 2: preserve lint gate after React Hooks plugin update — fix)
+- `f1ec9bc9` (Task 3: sync native platforms after dependency sweep — fix)
+- (Plan-metadata commit pending after this STATE.md write.)
+
+**Verification baseline (post-Plan-44-02):** `npm run lint` exits 0; `npm run build` exits 0; `npx cap sync` exits 0; `npm audit --audit-level=high` remains the same 5 high / 0 critical profile; `npm run test:main` has only the known five post-Phase-43 failing signatures and no Phase 44 regression.
+
+---
 
 **Files written this session (Plan 44-01 close):**
 

@@ -84,7 +84,7 @@
 | TECHDEBT-05 | Phase 38 | Wave 0 | ✓ Complete |
 | TECHDEBT-06 | Phase 38 | Wave 0 | ✓ Complete |
 | TECHDEBT-07 | Phase 45 | Wave 4 | Pending |
-| TECHDEBT-08 | Phase 44 | Wave 4 | Pending |
+| TECHDEBT-08 | Phase 44 | Wave 4 | ✓ Complete |
 | TECHDEBT-09 | Phase 45 | Wave 4 | Pending |
 | TECHDEBT-10 | Phase 45 | Wave 4 | Pending |
 | TECHDEBT-11 | Phase 45 | Wave 4 | Pending |
