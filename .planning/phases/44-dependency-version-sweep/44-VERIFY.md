@@ -139,3 +139,37 @@ High-severity advisories reported:
 Comparison to `44-DEPENDENCY-SWEEP.md`: Plan 44-01 documented the same audit profile against the pre-install package metadata: 10 vulnerabilities, 5 moderate, 5 high, 0 critical.
 
 new high/critical vulnerabilities: 0
+
+Post-Rule-3 audit recheck after adding `@capacitor/ios@^8.3.3` for `npx cap sync`: exit code: 1, same 10 vulnerabilities (5 moderate, 5 high), new high/critical vulnerabilities: 0.
+
+## Native Sync Evidence
+
+### `npx cap sync`
+
+exit code: 0
+
+summary output:
+
+```text
+copy android: ok
+update android: ok
+copy ios: ok
+update ios: ok
+copy web: ok
+update web: ok
+Sync finished in 7.083s
+```
+
+Android files changed: none
+
+iOS files changed by the same `npx cap sync` run:
+
+- `app/ios/App/Podfile`
+- `app/ios/App/Podfile.lock`
+
+Rule 3 blocking issue fixed before the successful sync: the first `npx cap sync` attempt exited 1 after Android sync because the repo has an existing `app/ios/` platform but `@capacitor/ios` was not installed. Added `@capacitor/ios@^8.3.3` to match the existing Capacitor 8.3 package family, then reran the exact command successfully.
+
+Package files changed by the Rule 3 fix:
+
+- `app/package.json`
+- `app/package-lock.json`
