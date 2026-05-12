@@ -1,9 +1,9 @@
 ---
-status: diagnosed
+status: resolved
 phase: 43-engagement-ui
 source: [43-01..43-08 SUMMARYs (initial UAT) + 43-09..43-13 gap-closure SUMMARYs + post-gap follow-ups]
 started: 2026-05-11T09:35:43Z
-updated: 2026-05-12T00:00:00Z
+updated: 2026-05-12T04:00:00Z
 ---
 
 ## Current Test
@@ -89,7 +89,7 @@ blocked: 0
 ### New gaps from this re-test cycle
 
 - truth: "Dismissing any one tile of a multi-tile anchor concept fades out ALL tiles sharing that anchor (text + image + video) — not just the tapped tile. Behavior persists across page refresh."
-  status: failed
+  status: resolved-by: 43-14
   reason: "User reported: Fail: Dismissing one post of a concept did not clear other post tiles of same concept. Refreshing page did not change behavior"
   severity: major
   test: 4
@@ -110,7 +110,7 @@ blocked: 0
   debug_session: ".planning/debug/dismiss-not-propagating-to-same-anchor-tiles.md"
 
 - truth: "After Force-New-Day, the home feed does not render duplicate post entries — React renders each post id exactly once across initial dailyPosts + any freshly-popped queue batches. No 'Encountered two children with the same key' DEV warnings."
-  status: failed
+  status: resolved-by: 43-15
   reason: "User reported: many React duplicate-key warnings after Force New Day. Same post IDs (UUID-suffixed, e.g. post-2026-05-12-video-anchor-1778057902568-jrvoc-972cd67c-6730-4de6-9049-58de1e5ef6b5) appear twice in the rendered children array."
   severity: blocker
   test: 12
