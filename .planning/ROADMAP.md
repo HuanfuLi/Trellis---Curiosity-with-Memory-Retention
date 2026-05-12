@@ -1197,7 +1197,11 @@ _Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round
   2. `npm install` completes without peer-dep warnings; `npm audit` reports no new high/critical
   3. `npm test` baseline equals or improves vs. the post-Phase-43 number (no regressions)
   4. `tsc -b --noEmit` exits 0; `npm run build` succeeds; locale switch + Ask streaming + queue refill smoke-tested manually
-**Plans**: TBD
+**Plans**: 4 plans
+  - [ ] 44-01-dependency-metadata-lockfile-PLAN.md — Apply the approved dependency target set, regenerate npm metadata, and document held-back majors
+  - [ ] 44-02-automated-verification-native-sync-PLAN.md — Run tests, lint, build, audit, and `npx cap sync`; record verification evidence
+  - [ ] 44-03-manual-smoke-uat-PLAN.md — Capture manual smoke results for locale switch, Ask streaming, queue refill, saved route navigation, and Android sync sanity
+  - [ ] 44-04-phase-close-out-PLAN.md — Sign off validation, mark TECHDEBT-08 complete, and create the phase summary
 
 ### Phase 45: Code Quality Sweep
 **Goal**: Mechanical hygiene pass: tsc strictness audit, dead-code sweep, perf profiling, TODO/FIXME triage, operator-note bug sweep.
@@ -1222,7 +1226,7 @@ _Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round
 | 41. Pipeline Wiring + Essay Depth | 2/2 | Complete    | 2026-05-09 |
 | 42. Masonry Feed Layout | 9/8 | Complete    | 2026-05-10 |
 | 43. Engagement UI | 15/15 | Complete    | 2026-05-12 |
-| 44. Dependency Version Sweep | 0/0 | Not started | - |
+| 44. Dependency Version Sweep | 0/4 | Planning Complete | - |
 | 45. Code Quality Sweep | 0/0 | Not started | - |
 
 ---
