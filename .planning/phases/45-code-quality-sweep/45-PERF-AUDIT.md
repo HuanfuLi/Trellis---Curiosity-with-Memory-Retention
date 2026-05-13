@@ -7,7 +7,7 @@
 | first paint | `cd app && npm run build` exits 0. Vite reports static/dynamic import chunk warnings, `dist/assets/trellis-bg-default-Ca5mjVu5.png` at 4,554.99 kB, and `dist/assets/index-BnDXUYbv.js` at 1,289.85 kB minified / 382.72 kB gzip, followed by `Some chunks are larger than 500 kB after minification`. No browser or Android first-paint trace was available in this plan. | P2-defer | defer broad code-splitting to v1.6 unless device trace proves P0/P1 |
 | queue refill | `cd app && node --test tests/services/refill-mutex.test.mjs tests/services/refill-queue-integration.test.mjs` exits 0 after a localized stale source-reading regex fix. Source inspection confirms `postQueueService.needsRefill()` is `_state.posts.length < REFILL_THRESHOLD` with `REFILL_THRESHOLD = 24`, `refillQueue` keeps the cheap pre-check before `_refillMutex.run(async () => { ... })`, and `generateMorePosts` awaits `refillQueue(questions)` only on empty-dequeue retry while fire-and-forgetting background refill when below threshold. | P3-no-code | no code change; existing mutex and threshold guards cover the synchronous-loop regression class |
 | masonry scroll | Source inspection confirms `MasonryFeed.tsx` uses calibrated per-style height estimates, splits items into columns by accumulated height, records tile heights via layout effects, and wraps the feed in `MotionConfig reducedMotion="user"` with scoped `AnimatePresence` column animation. No frame-drop trace was available. | P2-manual-follow-up | no speculative animation rewrite |
-| GraphScreen Android drag lag | `adb devices` returned only the `List of devices attached` header with no attached device/emulator rows. The existing operator note remains the only symptom evidence: Android-only warm-up lag, perceptible but usable, most visible at drag start, stabilizing after a few seconds. Required attached-device manual evidence was not collectable in this execution. | blocked-device-evidence-required | TECHDEBT-10 completion blocked: GraphScreen Android manual evidence missing |
+| GraphScreen Android drag lag | GraphScreen Android manual evidence: present. `adb devices` returned `emulator-5554 device`; emulator details were Android 16, model `sdk_gphone64_arm64`, WebView `com.google.android.webview 142.0.7444.171`. Current repo web bundle was installed via Capacitor, then a 24-node local graph was seeded in WebView localStorage. Cold first-drag `gfxinfo` after reset rendered 39 frames with 37 janky frames (94.87%), 81ms p50, 121ms p90, 150ms p95, 30 missed vsync, 31 slow UI thread, and 37 slow draw/frame-deadline misses. Warmed subsequent drag rendered 21 frames with 12 janky frames (57.14%), 46ms p50, 133ms p90, 150ms p95, 6 missed vsync, 6 slow UI thread, and 12 slow draw/frame-deadline misses. | P1-local-fix-candidate | apply only localized MindElixir container layer/touch mitigation; no Header ancestor or broad graph rewrite |
 
 ## Baseline Commands
 
@@ -15,7 +15,7 @@
 |---|---|---:|---|
 | `npm run build` | `app/` | 0 | `tsc -b` and `vite build` succeed in 1.73s; Vite emits large asset/chunk and static/dynamic import warnings. |
 | `node --test tests/services/refill-mutex.test.mjs tests/services/refill-queue-integration.test.mjs` | `app/` | 1 then 0 | First run exposed a stale source-reading import regex; after Rule 3 test correction, rerun passed 16/16. |
-| `adb devices` | repo root | 0 | No attached Android device/emulator rows. |
+| `adb devices` | repo root | 0 | Attached emulator row present: `emulator-5554 device`. |
 
 ### `cd app && npm run build`
 
@@ -83,6 +83,7 @@ duration_ms 91.44525
 
 ```text
 List of devices attached
+emulator-5554	device
 ```
 
 ## Source Inspection Notes
@@ -111,28 +112,82 @@ List of devices attached
 ```
 
 - No layer-promotion mitigation was applied because the plan requires actual attached Android device/emulator manual evidence before deciding whether the lag is a P1 local fix candidate.
-- The required positive manual-evidence marker is intentionally absent because no attached device/emulator evidence was collectable.
+- GraphScreen Android manual evidence: present.
+- Android evidence shows cold first-drag jank improves after warm-up but does not disappear, supporting a P1 localized container mitigation rather than a broad MindElixir rewrite.
 
 ## P0/P1 Closure Decisions
 
 - First paint: P2-defer. Build warnings identify plausible startup weight, but without browser/Android paint evidence this plan should not ship broad code-splitting or asset rewrites.
 - Queue refill: P3-no-code. Targeted queue/refill tests pass after the stale test regex correction, and source inspection confirms the mutex and threshold guards remain in place.
 - Masonry scroll: P2-manual-follow-up. Source structure is already the height-balanced/reduced-motion design; no frame trace proves a P0/P1 scroll issue.
-- GraphScreen Android drag lag: blocked-device-evidence-required. TECHDEBT-10 completion blocked: GraphScreen Android manual evidence missing.
+- GraphScreen Android drag lag: P1-local-fix-candidate. Attached-emulator evidence reproduced the Android-only drag-start/warm-up lag and supports a localized MindElixir container layer/touch mitigation only.
 
 ## Manual Android Evidence
 
-TECHDEBT-10 completion blocked: GraphScreen Android manual evidence missing.
+GraphScreen Android manual evidence: present.
 
-Required evidence still needed before TECHDEBT-10 can close:
+Evidence source:
 
-- Attached Android device or emulator identifier.
-- Android version and WebView version if available.
-- App opened to GraphScreen on device/emulator.
-- Cold first-drag observation.
-- Warmed subsequent-drag observation.
-- Evidence source and reproduction steps.
-- Add the positive manual-evidence marker only after the above evidence exists.
+- Device/emulator: `emulator-5554 device`.
+- Android version: 16.
+- Product model: `sdk_gphone64_arm64`.
+- WebView: `com.google.android.webview 142.0.7444.171` (`targetSdkVersion=36`).
+- App bundle source: current repo production web build installed through Capacitor on the attached emulator.
+- Local graph seed: 24 WebView localStorage nodes, including 6 cluster nodes, 6 anchor nodes, and 12 QA children, used only for reproducible device evidence.
+
+Reproduction steps:
+
+1. Confirmed `adb devices` showed `emulator-5554 device`.
+2. Confirmed emulator boot, Android version, model, and WebView package via `adb shell getprop` and `adb shell dumpsys webviewupdate`.
+3. Ran `cd app && npx cap sync android`.
+4. Ran `cd app && npx cap run android --target emulator-5554 --no-sync`.
+5. Seeded onboarding-complete settings and the local graph through WebView DevTools `Runtime.evaluate`.
+6. Opened GraphScreen with the bottom navigation.
+7. Reset frame stats, recorded screen, and captured cold first-drag using `adb shell input swipe 830 900 240 900 1000` followed by `adb shell input swipe 780 1020 300 1020 800`.
+8. Performed warm-up pan gestures, reset frame stats, recorded screen, and captured the warmed subsequent drag with the same swipe sequence.
+
+Cold first-drag evidence:
+
+```text
+Total frames rendered: 39
+Janky frames: 37 (94.87%)
+Janky frames (legacy): 39 (100.00%)
+50th percentile: 81ms
+90th percentile: 121ms
+95th percentile: 150ms
+99th percentile: 150ms
+Number Missed Vsync: 30
+Number High input latency: 4
+Number Slow UI thread: 31
+Number Slow issue draw commands: 37
+Number Frame deadline missed: 37
+```
+
+Warmed subsequent-drag evidence:
+
+```text
+Total frames rendered: 21
+Janky frames: 12 (57.14%)
+Janky frames (legacy): 20 (95.24%)
+50th percentile: 46ms
+90th percentile: 133ms
+95th percentile: 150ms
+99th percentile: 150ms
+Number Missed Vsync: 6
+Number High input latency: 16
+Number Slow UI thread: 6
+Number Slow issue draw commands: 12
+Number Frame deadline missed: 12
+```
+
+Evidence artifacts collected locally:
+
+- `/tmp/graph-cold.mp4`
+- `/tmp/graph-warm.mp4`
+- `/tmp/graph-cold-gfxinfo.txt`
+- `/tmp/graph-warm-gfxinfo.txt`
+- `/tmp/trellis-graph-after-cold-drag.png`
+- `/tmp/trellis-graph-after-warm-drag.png`
 
 ## Decision Coverage
 
