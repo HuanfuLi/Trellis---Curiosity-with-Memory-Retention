@@ -188,7 +188,7 @@ Do not broaden scope into Tavily ranking/domain scoring, prompt wording, domain-
     - `sources: mapNewsSourcesToNewsMeta(topSources)`
     - `const chosen = topSources[0]` is allowed only for title/domain selection; `const chosen = filtered[0]` must be absent.
 
-    Keep the existing Phase 39 walker and Phase 41 source-diversity assertions intact. This task intentionally creates a RED regression before Task 2 changes production code.
+    Keep the existing Phase 39 walker and non-obsolete Phase 41 source-diversity assertions intact. Task 2 will replace the old direct `filterForDiversity` invocation-count assertion because the production call moves into `news-source-metadata.ts`. This task intentionally creates a RED regression before Task 2 changes production code.
   </action>
   <verify>
     <automated>cd app && (node --test tests/services/concept-feed-source-diversity-wiring.test.mjs; test "$?" -ne 0)</automated>
@@ -246,6 +246,10 @@ Do not broaden scope into Tavily ranking/domain scoring, prompt wording, domain-
        - `preFetched.news.set(a.conceptId, topSources);`
        Keep `const domain = extractDomain(chosen.url); if (domain) sourceDiversityService.recordServedDomain(a.conceptId, domain);` after the cache set.
     5. Update only adjacent comments that now lie about Tavily `maxResults:1`, single chosen result storage, or one-element cached `topSources`. The new comments must say the prefetch loop stores the filtered top 2-3 results and the cached branch maps up to three entries into `newsMeta.sources`.
+    6. Update `app/tests/services/concept-feed-source-diversity-wiring.test.mjs` to remove or replace the obsolete Phase 41 assertion that expected exactly two direct `sourceDiversityService.filterForDiversity(...)` calls inside `concept-feed.service.ts`. Preserve the same invariant with three checks instead:
+       - Read `app/src/services/news-source-metadata.ts` and assert it calls `sourceDiversityService.filterForDiversity(results, usedDomains).slice(0, 3)` or the exact equivalent split across adjacent statements.
+       - Assert `app/src/services/concept-feed.service.ts` calls `selectNewsTopSources(searchResult.data.results, usedDomains)` in the direct no-prefetch path and `selectNewsTopSources(results.data.results, usedDomains)` in the queued-prefetch path.
+       - Keep the behavioral regression that proves `newsMetaSources.length >= 2` and stable indexes `[1, 2, ...]` from `mapNewsSourcesToNewsMeta(topSources)`.
 
     Do not edit `post-essay.service.ts`, Tavily ranking/domain scoring, prompt wording, style assignment, queue sizing, or `bodyMarkdown: ''`.
   </action>
@@ -256,6 +260,10 @@ Do not broaden scope into Tavily ranking/domain scoring, prompt wording, domain-
     - `rg -n "export function selectNewsTopSources|export function mapNewsSourcesToNewsMeta" app/src/services/news-source-metadata.ts` returns 2 matches.
     - `rg -n "filterForDiversity\\(results, usedDomains\\)\\.slice\\(0, 3\\)" app/src/services/news-source-metadata.ts` returns exactly 1 match.
     - `rg -n "index: i \\+ 1" app/src/services/news-source-metadata.ts` returns exactly 1 match.
+    - `rg -n "filterForDiversity\\(results, usedDomains\\).*slice\\(0, 3\\)|filterForDiversity\\(results, usedDomains\\)" app/tests/services/concept-feed-source-diversity-wiring.test.mjs` returns at least 1 match proving the test now verifies `news-source-metadata.ts`, not only `concept-feed.service.ts`.
+    - `rg -n "expected exactly 2 actual filterForDiversity invocations|callSiteMatches\\.length,\\s*2" app/tests/services/concept-feed-source-diversity-wiring.test.mjs` returns no matches.
+    - `rg -n "selectNewsTopSources\\(searchResult\\.data\\.results, usedDomains\\)|selectNewsTopSources\\(results\\.data\\.results, usedDomains\\)" app/tests/services/concept-feed-source-diversity-wiring.test.mjs` returns at least 2 matches.
+    - `rg -n "newsMetaSources\\.length.*>= 2|newsMetaSources\\.map\\(s => s\\.index\\)|\\[1, 2, 3\\]" app/tests/services/concept-feed-source-diversity-wiring.test.mjs` returns at least 2 matches.
     - `rg -n "selectNewsTopSources|mapNewsSourcesToNewsMeta" app/src/services/concept-feed.service.ts` returns at least 4 matches.
     - `rg -n "news: Map<string, WebSearchResult\\[\\]>" app/src/services/concept-feed.service.ts` returns exactly 1 match.
     - `rg -n "topSources = cached\\.slice\\(0, 3\\)" app/src/services/concept-feed.service.ts` returns exactly 1 match.
