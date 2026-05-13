@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: gap closure)
 status: executing
-stopped_at: Completed 44-02-automated-verification-native-sync-PLAN.md
-last_updated: "2026-05-12T08:49:41.775Z"
-last_activity: 2026-05-12
+stopped_at: Completed 44-03-manual-smoke-uat-PLAN.md
+last_updated: "2026-05-13T04:49:51.714Z"
+last_activity: 2026-05-13
 progress:
   total_phases: 21
   completed_phases: 0
@@ -18,9 +18,9 @@ progress:
 ## Current Position
 
 Phase: 44 (dependency-version-sweep) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
-Last activity: 2026-05-12
+Last activity: 2026-05-13
 Phase summary: `.planning/phases/43-engagement-ui/43-PHASE-SUMMARY.md`
 
 ## Progress
@@ -73,6 +73,13 @@ All carry-overs are scheduled into Wave 0:
 ## Resolved blockers
 
 All v1.4 blockers resolved at close. No open blockers.
+
+## Last decisions (Plan 44-03 close, 2026-05-13)
+
+- **Manual smoke/UAT evidence complete in `44-UAT.md`** — exactly one row exists for each required id (`locale-switch`, `ask-streaming`, `queue-refill`, `saved-route-navigation`, `android-sync-sanity`), and every row status is exactly `pass`.
+- **No Phase 44 UAT blocker recorded** — `rg -n "Phase 44 UAT blocker:" .planning/phases/44-dependency-version-sweep/44-UAT.md` returns no matches, so Plan 44-04 may proceed.
+- **Runtime surfaces covered by human verification** — locale switching across EN/ZH/ES/JA, Ask streaming, queue refill/no duplicate React key warning, `/saved` navigation tabs/back to `/home`, and Android sync sanity all have one-sentence evidence and tester recorded.
+- **Task commits now complete for Plan 44-03:** `c59bb79c` docs(manual smoke scaffold) → `0d0c8ff4` test(UAT completed, 5 passed / 0 issues).
 
 ## Last decisions (Plan 44-02 close, 2026-05-12)
 
@@ -386,8 +393,23 @@ All v1.4 blockers resolved at close. No open blockers.
 
 ## Session Continuity
 
-**Stopped at:** Completed 44-02-automated-verification-native-sync-PLAN.md
-**Next action:** Execute `.planning/phases/44-dependency-version-sweep/44-03-manual-smoke-uat-PLAN.md`.
+**Stopped at:** Completed 44-03-manual-smoke-uat-PLAN.md
+**Next action:** Execute `.planning/phases/44-dependency-version-sweep/44-04-phase-close-out-PLAN.md`.
+
+**Files written this session (Plan 44-03 close):**
+
+- `.planning/phases/44-dependency-version-sweep/44-UAT.md` (MODIFIED by UAT verifier — five manual smoke rows marked pass)
+- `.planning/phases/44-dependency-version-sweep/44-03-manual-smoke-uat-SUMMARY.md` (NEW — close-out summary)
+- `.planning/STATE.md` (this file)
+- `.planning/ROADMAP.md` (Phase 44 plan-progress row updated to 3/4)
+
+**Plan 44-03 commits:**
+
+- `c59bb79c` (Task 1: add manual smoke UAT scaffold — docs)
+- `0d0c8ff4` (Task 2: complete UAT, 5 passed / 0 issues — test)
+- (Plan-metadata commit pending after this STATE.md write.)
+
+**Verification baseline (post-Plan-44-03):** Required scaffold `rg` exits 0; Node pass-row validator exits 0; no `Phase 44 UAT blocker:` line exists. `44-UAT.md` records 5 passed, 0 issues, 0 blocked.
 
 **Files written this session (Plan 44-02 close):**
 
