@@ -23,7 +23,7 @@ must_haves:
   artifacts:
     - path: ".planning/phases/45-code-quality-sweep/45-DEAD-CODE-SWEEP.md"
       provides: "TECHDEBT-09 dead-code and removed-feature residue evidence"
-      contains: "Removed Feature Residue"
+      contains: "Orphan Export Inventory"
     - path: ".planning/phases/45-code-quality-sweep/45-TODO-TRIAGE.md"
       provides: "TECHDEBT-11 final TODO/suppression dispositions"
       contains: "Final Disposition"
@@ -92,7 +92,7 @@ Output: `45-DEAD-CODE-SWEEP.md` plus finalized triage/operator artifacts.
     app/src/locales/ja.json
   </read_first>
   <action>
-    Create `.planning/phases/45-code-quality-sweep/45-DEAD-CODE-SWEEP.md` with sections `# Phase 45 Dead-Code Sweep`, `## Commands`, `## Removed Feature Residue`, `## Orphan Export Notes`, `## Compatibility Residue Preserved`, and `## Final Disposition`.
+    Create `.planning/phases/45-code-quality-sweep/45-DEAD-CODE-SWEEP.md` with sections `# Phase 45 Dead-Code Sweep`, `## Commands`, `## Removed Feature Residue`, `## Orphan Export Inventory`, `## Unreachable Helper Inventory`, `## Stale I18n Key Inventory`, `## Compatibility Residue Preserved`, and `## Final Disposition`.
 
     Run and record these commands and exit codes:
 
@@ -100,26 +100,50 @@ Output: `45-DEAD-CODE-SWEEP.md` plus finalized triage/operator artifacts.
     rg -n "sourceType: 'short'|presentationStyle: 'short'|probePortrait|trellis_short_posts|infoFlow.shortTag" app/src app/tests
     rg -n "home.toast.noMorePosts|card-slide-in|infoFlow.newsTag" app/src app/tests app/src/locales
     rg -n "InlineInfoFlow" app/src/screens/HomeScreen.tsx app/src/components app/tests
+    rg -n "export (async function|function|const|class|interface|type|enum) [A-Za-z0-9_]+" app/src
+    rg -n "^(const|function) [A-Za-z0-9_]+|const [A-Za-z0-9_]+ = (async )?\\(" app/src
+    rg -n "\"[A-Za-z0-9_.-]+\"\\s*:" app/src/locales/en.json app/src/locales/zh.json app/src/locales/es.json app/src/locales/ja.json
+    rg -n "t\\(['\"][A-Za-z0-9_.-]+['\"]\\)|i18nKey=['\"][A-Za-z0-9_.-]+['\"]" app/src app/tests
     cd app && npm run lint
+    cd app && npx tsc -b --noEmit --pretty false
     cd app && node --test tests/components/InfoFlow.video-tap-emit.test.mjs tests/screens/HomeScreen.no-more-posts-toast.test.mjs tests/lib/no-card-slide-in.test.mjs tests/components/InfoFlow.no-presentation-style-tag.test.mjs
     ```
 
     In `## Removed Feature Residue`, include one row each for `short post classifier`, `trellis_short_posts`, `home.toast.noMorePosts`, `card-slide-in`, `infoFlow.newsTag`, and `InlineInfoFlow live HomeScreen wiring`. Use status `absent`, `historical-comment-only`, or `needs-fix`.
 
+    Add a short disposition legend before the inventory tables listing all disposition labels used by this task.
+
+    In `## Orphan Export Inventory`, inventory exported symbols from the `rg -n "export ..."` command. For each candidate that looks unused, run a targeted source-reading check of the exact symbol name across both runtime and tests:
+
+    ```bash
+    rg -n "\\bSYMBOL_NAME\\b" app/src app/tests
+    ```
+
+    Give every candidate one of these dispositions: `used-by-runtime`, `used-by-tests-contract`, `public-compatibility-export-preserved`, `true-orphan-removed`, or `deferred-needs-domain-review`. Remove an export only when the targeted `rg` evidence shows no runtime use, no test-contract use, and no compatibility reason from `CLAUDE.md` or `45-CONTEXT.md` D-09. When removing a true orphan export, delete the smallest safe surface: remove the export keyword if the helper is locally used, or delete the declaration/import if it has zero references.
+
+    In `## Unreachable Helper Inventory`, use the helper command plus `npm run lint` and `npx tsc -b --noEmit --pretty false` as the primary evidence for unused locals/imports. For each suspected helper or import, run a targeted `rg -n "\\bHELPER_NAME\\b" app/src app/tests` check before editing. Give every row one of these dispositions: `reachable-runtime-path`, `used-by-tests-contract`, `true-unreachable-removed`, or `deferred-needs-domain-review`. Remove only true unreachable helpers/imports; do not inline or reshape reachable helpers for aesthetics.
+
+    In `## Stale I18n Key Inventory`, compare locale keys across `en`, `zh`, `es`, and `ja`, then compare keys against source/test usage from `t('...')` and `i18nKey="..."` evidence. Give every key one of these dispositions: `used-by-runtime`, `locale-parity-key-preserved`, `true-stale-key-removed`, or `deferred-needs-domain-review`. Remove only keys that are present in all locale bundles but have no runtime/test usage and are not documented compatibility residue. If a key is removed from one locale, remove the same key from all four locale files and run the relevant i18n/source-reading tests if present.
+
     In `## Compatibility Residue Preserved`, explicitly preserve these strings unless a later requirement says otherwise: `EchoLearn on-disk path`, `SQLite connection name 'echolearn'`, and legacy localStorage migration behavior. Cite `CLAUDE.md` brand history and `45-CONTEXT.md` D-09.
 
-    If any row is `needs-fix`, delete only the live code/key residue for that row, run the matching source-reading test from the command list, and document the exact deleted file path in `## Final Disposition`.
+    If any row is `needs-fix`, `true-orphan-removed`, `true-unreachable-removed`, or `true-stale-key-removed`, delete only the live code/import/key residue for that row, run the matching source-reading test from the command list plus `cd app && npx tsc -b --noEmit --pretty false`, and document the exact deleted file path in `## Final Disposition`. Keep scope conservative per D-07/D-09: remove true orphan exports/imports/helpers/residue only, avoid aesthetic refactors, and preserve EchoLearn compatibility.
   </action>
   <verify>
-    <automated>test -f .planning/phases/45-code-quality-sweep/45-DEAD-CODE-SWEEP.md &amp;&amp; rg -n "short post classifier|trellis_short_posts|home.toast.noMorePosts|card-slide-in|infoFlow.newsTag|InlineInfoFlow live HomeScreen wiring|EchoLearn on-disk path|SQLite connection name 'echolearn'|Final Disposition" .planning/phases/45-code-quality-sweep/45-DEAD-CODE-SWEEP.md</automated>
+    <automated>test -f .planning/phases/45-code-quality-sweep/45-DEAD-CODE-SWEEP.md &amp;&amp; rg -n "short post classifier|trellis_short_posts|home.toast.noMorePosts|card-slide-in|infoFlow.newsTag|InlineInfoFlow live HomeScreen wiring|Orphan Export Inventory|Unreachable Helper Inventory|Stale I18n Key Inventory|true-orphan-removed|true-unreachable-removed|true-stale-key-removed|EchoLearn on-disk path|SQLite connection name 'echolearn'|Final Disposition" .planning/phases/45-code-quality-sweep/45-DEAD-CODE-SWEEP.md</automated>
   </verify>
   <acceptance_criteria>
     - `45-DEAD-CODE-SWEEP.md` contains all six residue row labels from the action text.
     - Every residue row in `45-DEAD-CODE-SWEEP.md` contains one of these exact statuses: `absent`, `historical-comment-only`, or `needs-fix`.
+    - `45-DEAD-CODE-SWEEP.md` contains the sections `Orphan Export Inventory`, `Unreachable Helper Inventory`, and `Stale I18n Key Inventory`.
+    - Every orphan export row in `45-DEAD-CODE-SWEEP.md` uses one of these exact dispositions: `used-by-runtime`, `used-by-tests-contract`, `public-compatibility-export-preserved`, `true-orphan-removed`, or `deferred-needs-domain-review`.
+    - Every unreachable helper/import row in `45-DEAD-CODE-SWEEP.md` uses one of these exact dispositions: `reachable-runtime-path`, `used-by-tests-contract`, `true-unreachable-removed`, or `deferred-needs-domain-review`.
+    - Every stale i18n row in `45-DEAD-CODE-SWEEP.md` uses one of these exact dispositions: `used-by-runtime`, `locale-parity-key-preserved`, `true-stale-key-removed`, or `deferred-needs-domain-review`.
     - `45-DEAD-CODE-SWEEP.md` contains `EchoLearn on-disk path`, `SQLite connection name 'echolearn'`, and `legacy localStorage migration behavior`.
     - `45-DEAD-CODE-SWEEP.md` contains the exact command `cd app && npm run lint`.
+    - `45-DEAD-CODE-SWEEP.md` contains the exact command `cd app && npx tsc -b --noEmit --pretty false`.
   </acceptance_criteria>
-  <done>TECHDEBT-09 has explicit residue evidence and any live residue is either removed or named as a follow-up.</done>
+  <done>TECHDEBT-09 has explicit orphan-export, unused-import/helper, stale-i18n, and removed-feature residue evidence; true dead code is removed conservatively or deferred with rationale.</done>
 </task>
 
 <task type="auto">
@@ -142,12 +166,12 @@ Output: `45-DEAD-CODE-SWEEP.md` plus finalized triage/operator artifacts.
     app/src/state/useDailyRefresh.ts
   </read_first>
   <action>
-    Update `.planning/phases/45-code-quality-sweep/45-TODO-TRIAGE.md` so every inventory row has a `Final Disposition` value using exactly one of these labels: `closed-in-phase-45`, `deferred-v1.6`, `in-scope-v1.5-closed`, `justified-permanent-guard`, `not-a-todo`, or `future-work-note`.
+    Update `.planning/phases/45-code-quality-sweep/45-TODO-TRIAGE.md` so every inventory row has both a D-14 `Classification` and a separate `Final Disposition`. The `Final Disposition` value must use exactly one of these labels: `closed-in-phase-45`, `deferred-v1.6`, `in-scope-v1.5-closed`, `justified-permanent-guard`, `not-a-todo`, or `future-work-note`.
 
     For the known explicit-`any` sites, use these concrete dispositions unless the source has changed:
 
     - `app/src/main.tsx` `bindI18nLeaf(i18n.t.bind(i18n) as any, ...)` -> `justified-permanent-guard` with reason `i18next t overload bridge`.
-    - `app/src/services/settings.service.ts` `(result as any)[key]` -> `narrowable local typing issue`; close only if a local typed helper avoids `any` without changing merge behavior.
+    - `app/src/services/settings.service.ts` `(result as any)[key]` -> classification `narrowable local typing issue`; use Final Disposition `in-scope-v1.5-closed` if a local typed helper avoids `any` without changing merge behavior, otherwise use Final Disposition `deferred-v1.6` with a rationale. Do not put `narrowable local typing issue` in the Final Disposition column.
     - `app/src/providers/llm/index.ts` JSON parse/extract `any` -> `justified-permanent-guard` with reason `provider JSON payload boundary`.
     - `app/src/components/trellis/TrellisLeaf.tsx` `shakeControls` any -> `justified-permanent-guard` with reason `framer-motion control shape accepts variant objects`.
 

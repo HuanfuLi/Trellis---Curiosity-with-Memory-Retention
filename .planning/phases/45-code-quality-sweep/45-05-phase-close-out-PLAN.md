@@ -22,6 +22,7 @@ requirements:
 must_haves:
   truths:
     - "All Phase 45 audit artifacts exist and contain final dispositions."
+    - "TECHDEBT-10 is not marked complete unless GraphScreen Android manual/device evidence is present."
     - "Full verification evidence is recorded before marking requirements complete."
     - "Roadmap, requirements, validation, state, and phase summary agree that Phase 45 is complete."
   artifacts:
@@ -102,13 +103,17 @@ Output: `45-VERIFY.md`, validated `45-VALIDATION.md`, `45-PHASE-SUMMARY.md`, and
 
     In `## Artifact Presence`, list these exact files and mark each `present`: `45-TSC-AUDIT.md`, `45-TODO-TRIAGE.md`, `45-OPERATOR-NOTES.md`, `45-DEAD-CODE-SWEEP.md`, and `45-PERF-AUDIT.md`.
 
+    In `## Requirement Evidence`, add a TECHDEBT-10 gate row that quotes the exact `45-PERF-AUDIT.md` marker `GraphScreen Android manual evidence: present`. If `45-PERF-AUDIT.md` is missing that marker, or contains `blocked-device-evidence-required` or `TECHDEBT-10 completion blocked`, classify TECHDEBT-10 as `pending-device-evidence`, add that status to `## Remaining Failures`, and stop before Task 2. Do not mark the phase complete with TECHDEBT-10 pending.
+
     In `## Remaining Failures`, if any command exits non-zero, list each failing test file or command with a status of `known-deferred`, `new-regression`, or `fixed-in-phase-45`. Do not mark the phase complete if any row is `new-regression`.
   </action>
   <verify>
-    <automated>test -f .planning/phases/45-code-quality-sweep/45-VERIFY.md &amp;&amp; rg -n "45-TSC-AUDIT.md.*present|45-TODO-TRIAGE.md.*present|45-OPERATOR-NOTES.md.*present|45-DEAD-CODE-SWEEP.md.*present|45-PERF-AUDIT.md.*present|npm run test:main|npm run test:actions|Requirement Evidence" .planning/phases/45-code-quality-sweep/45-VERIFY.md</automated>
+    <automated>test -f .planning/phases/45-code-quality-sweep/45-VERIFY.md &amp;&amp; rg -n "45-TSC-AUDIT.md.*present|45-TODO-TRIAGE.md.*present|45-OPERATOR-NOTES.md.*present|45-DEAD-CODE-SWEEP.md.*present|45-PERF-AUDIT.md.*present|GraphScreen Android manual evidence: present|npm run test:main|npm run test:actions|Requirement Evidence" .planning/phases/45-code-quality-sweep/45-VERIFY.md &amp;&amp; ! rg -n "pending-device-evidence|blocked-device-evidence-required|TECHDEBT-10 completion blocked" .planning/phases/45-code-quality-sweep/45-VERIFY.md .planning/phases/45-code-quality-sweep/45-PERF-AUDIT.md</automated>
   </verify>
   <acceptance_criteria>
     - `45-VERIFY.md` contains all five artifact names with status `present`.
+    - `45-VERIFY.md` contains `GraphScreen Android manual evidence: present` copied from `45-PERF-AUDIT.md`.
+    - `45-VERIFY.md` and `45-PERF-AUDIT.md` contain no `pending-device-evidence`, `blocked-device-evidence-required`, or `TECHDEBT-10 completion blocked` before proceeding to Task 2.
     - `45-VERIFY.md` contains command rows for `npx tsc -b --noEmit --pretty false`, `npm run lint`, `npm run build`, `npm run test:main`, and `npm run test:actions`.
     - `rg -n "new-regression" .planning/phases/45-code-quality-sweep/45-VERIFY.md` returns zero matches before proceeding to Task 2.
   </acceptance_criteria>
@@ -137,18 +142,19 @@ Output: `45-VERIFY.md`, validated `45-VALIDATION.md`, `45-PHASE-SUMMARY.md`, and
     - `45-FIX-02` -> `45-04-performance-profiling-PLAN.md`
     - `45-CLOSE-01` -> `45-05-phase-close-out-PLAN.md`
 
-    Mark validation sign-off checkboxes `[x]` only if `45-VERIFY.md` has no `new-regression`.
+    Mark validation sign-off checkboxes `[x]` only if `45-VERIFY.md` has no `new-regression` and contains the exact TECHDEBT-10 evidence marker `GraphScreen Android manual evidence: present`.
 
-    In `.planning/REQUIREMENTS.md`, mark these five active requirement checkboxes `[x]`: `TECHDEBT-07`, `TECHDEBT-09`, `TECHDEBT-10`, `TECHDEBT-11`, and `TECHDEBT-12`.
+    In `.planning/REQUIREMENTS.md`, mark these five active requirement checkboxes `[x]`: `TECHDEBT-07`, `TECHDEBT-09`, `TECHDEBT-10`, `TECHDEBT-11`, and `TECHDEBT-12`. Do not mark `TECHDEBT-10` checked unless `45-PERF-AUDIT.md` and `45-VERIFY.md` both contain `GraphScreen Android manual evidence: present` and neither file contains `blocked-device-evidence-required` or `TECHDEBT-10 completion blocked`.
 
     In `.planning/ROADMAP.md`, update Phase 45 `**Plans:**` to `5 plans`, add five checked plan bullets matching the plan file names, and update the progress table row to `45. Code Quality Sweep | 5/5 | Complete | 2026-05-13 |`.
   </action>
   <verify>
-    <automated>rg -n "status: validated|nyquist_compliant: true|wave_0_complete: true|45-01-audit-inventory-PLAN.md|45-05-phase-close-out-PLAN.md" .planning/phases/45-code-quality-sweep/45-VALIDATION.md &amp;&amp; rg -n "\\[x\\] \\*\\*TECHDEBT-07\\*\\*|\\[x\\] \\*\\*TECHDEBT-09\\*\\*|\\[x\\] \\*\\*TECHDEBT-10\\*\\*|\\[x\\] \\*\\*TECHDEBT-11\\*\\*|\\[x\\] \\*\\*TECHDEBT-12\\*\\*" .planning/REQUIREMENTS.md &amp;&amp; rg -n "45\\. Code Quality Sweep \\| 5/5 \\| Complete \\| 2026-05-13 \\|" .planning/ROADMAP.md</automated>
+    <automated>rg -n "GraphScreen Android manual evidence: present" .planning/phases/45-code-quality-sweep/45-PERF-AUDIT.md .planning/phases/45-code-quality-sweep/45-VERIFY.md &amp;&amp; ! rg -n "blocked-device-evidence-required|TECHDEBT-10 completion blocked|pending-device-evidence" .planning/phases/45-code-quality-sweep/45-PERF-AUDIT.md .planning/phases/45-code-quality-sweep/45-VERIFY.md &amp;&amp; rg -n "status: validated|nyquist_compliant: true|wave_0_complete: true|45-01-audit-inventory-PLAN.md|45-05-phase-close-out-PLAN.md" .planning/phases/45-code-quality-sweep/45-VALIDATION.md &amp;&amp; rg -n "\\[x\\] \\*\\*TECHDEBT-07\\*\\*|\\[x\\] \\*\\*TECHDEBT-09\\*\\*|\\[x\\] \\*\\*TECHDEBT-10\\*\\*|\\[x\\] \\*\\*TECHDEBT-11\\*\\*|\\[x\\] \\*\\*TECHDEBT-12\\*\\*" .planning/REQUIREMENTS.md &amp;&amp; rg -n "45\\. Code Quality Sweep \\| 5/5 \\| Complete \\| 2026-05-13 \\|" .planning/ROADMAP.md</automated>
   </verify>
   <acceptance_criteria>
     - `45-VALIDATION.md` frontmatter contains `status: validated`, `nyquist_compliant: true`, and `wave_0_complete: true`.
     - `45-VALIDATION.md` contains no `TBD`.
+    - `45-PERF-AUDIT.md` and `45-VERIFY.md` both contain `GraphScreen Android manual evidence: present`.
     - `REQUIREMENTS.md` contains checked rows for all five Phase 45 TECHDEBT IDs.
     - `ROADMAP.md` contains all five Phase 45 plan file names as checked bullets.
     - `ROADMAP.md` progress table contains `45. Code Quality Sweep | 5/5 | Complete | 2026-05-13 |`.
