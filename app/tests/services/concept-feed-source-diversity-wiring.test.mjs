@@ -33,6 +33,10 @@ const SRC = readFileSync(
   new URL('../../src/services/concept-feed.service.ts', import.meta.url),
   'utf8',
 );
+const POST_ESSAY_SRC = readFileSync(
+  new URL('../../src/services/post-essay.service.ts', import.meta.url),
+  'utf8',
+);
 
 // ─── SC-1 integration ──────────────────────────────────────────────────────────
 
@@ -208,6 +212,115 @@ describe('counterweight: Phase 39 walker wire untouched at concept-feed.service.
       SRC,
       /new Set\(engagementService\.getDismissedAnchorIds\(\)\)/,
       'dismissedIds must be sourced from engagementService',
+    );
+  });
+});
+
+// ─── CONTENT-03: queued-news prefetch multi-source cache ─────────────────────
+
+describe('CONTENT-03: queued-news prefetch preserves multiple sources', () => {
+  it('maps selected Tavily top sources into stable newsMeta.sources entries', async () => {
+    const { selectNewsTopSources, mapNewsSourcesToNewsMeta } = await import(
+      '../../src/services/news-source-metadata.ts'
+    );
+    const mockResults = [
+      {
+        title: 'Source A',
+        url: 'https://alpha.example/news',
+        content: 'snippet A',
+        score: 0.9,
+      },
+      {
+        title: 'Source B',
+        url: 'https://beta.example/research',
+        content: 'snippet B',
+        score: 0.8,
+      },
+      {
+        title: 'Source C',
+        url: 'https://gamma.example/report',
+        content: 'snippet C',
+        score: 0.7,
+      },
+    ];
+
+    const topSources = selectNewsTopSources(mockResults, new Set());
+    const newsMetaSources = mapNewsSourcesToNewsMeta(topSources);
+
+    assert.ok(newsMetaSources.length >= 2, 'queued-news prefetch must preserve at least two sources');
+    assert.deepEqual(newsMetaSources.map(s => s.index), [1, 2, 3]);
+    assert.deepEqual(
+      newsMetaSources.slice(0, 2).map(s => ({ title: s.title, url: s.url, snippet: s.snippet })),
+      [
+        { title: 'Source A', url: 'https://alpha.example/news', snippet: 'snippet A' },
+        { title: 'Source B', url: 'https://beta.example/research', snippet: 'snippet B' },
+      ],
+      'newsMeta source mapping must preserve Tavily title/url/snippet values',
+    );
+  });
+
+  it('PreFetchCache.news stores WebSearchResult arrays keyed by conceptId', () => {
+    // Required source shape: news: Map<string, WebSearchResult[]>
+    assert.match(
+      SRC,
+      /news: Map<string, WebSearchResult\[\]>/,
+      'PreFetchCache.news must cache top-source arrays, not one chosen result',
+    );
+  });
+
+  it('cached news branch slices cached top sources into newsMeta.sources', () => {
+    // Required cached branch: topSources = cached.slice(0, 3)
+    assert.match(SRC, /result = cached\[0\]/, 'cached news branch must use cached[0] for title/teaser');
+    assert.match(
+      SRC,
+      /topSources = cached\.slice\(0, 3\)/,
+      'cached news branch must preserve up to three cached Tavily sources',
+    );
+    assert.match(
+      SRC,
+      /sources: mapNewsSourcesToNewsMeta\(topSources\)/,
+      'newsMeta.sources must be built from the shared mapper',
+    );
+    assert.doesNotMatch(
+      SRC,
+      /topSources = \[cached\]/,
+      'cached news branch must not collapse the cache back to one source',
+    );
+  });
+
+  it('refillQueue prefetch stores selected topSources rather than only chosen', () => {
+    assert.match(
+      SRC,
+      /selectNewsTopSources\(results\.data\.results, usedDomains\)/,
+      'queued-prefetch path must select top sources through the shared helper',
+    );
+    assert.match(
+      SRC,
+      /preFetched\.news\.set\(a\.conceptId, topSources\)/,
+      'queued-prefetch path must cache the full topSources array',
+    );
+    assert.doesNotMatch(
+      SRC,
+      /preFetched\.news\.set\(a\.conceptId, chosen\)/,
+      'queued-prefetch path must not cache only the chosen result',
+    );
+    assert.doesNotMatch(
+      SRC,
+      /const chosen = filtered\[0\]/,
+      'queued-prefetch path must not keep the old filtered[0] selection shape',
+    );
+  });
+
+  it('direct no-prefetch path and generateNewsEssay keep the same top-three contract', () => {
+    assert.match(
+      SRC,
+      /selectNewsTopSources\(searchResult\.data\.results, usedDomains\)/,
+      'direct no-prefetch path must use the shared top-source selector',
+    );
+    assert.match(
+      POST_ESSAY_SRC,
+      /sources\s*\.slice\(0, 3\)/,
+      'generateNewsEssay must continue consuming up to three newsMeta sources',
     );
   });
 });
