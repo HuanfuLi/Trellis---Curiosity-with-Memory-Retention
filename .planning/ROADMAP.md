@@ -1043,18 +1043,19 @@ _Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round
 
 **Starting phase:** 37 (continuing from v1.4 which ended at phase 36)
 **Total requirements:** 22 (MASONRY 2, ENGAGE 4, CONTENT 4, TECHDEBT 12)
-**Target phases:** 9 across 4 waves
+**Target phases:** 10 across 5 waves (9 original phases + 1 milestone-audit gap closure)
 **Granularity:** standard
 
 **Theme:** Ship the second-iteration curiosity feed (Pinterest-style 2-column masonry, richer essays, source diversity, local-first engagement signals) on top of a fully-hardened codebase that closes all v1.4 carry-overs plus a broader hygiene sweep.
 
 **Build order is wave-based** (derived from `.planning/research/SUMMARY.md`):
 
-- Wave 0 → Wave 1 → Wave 2 → Wave 3 → Wave 4 (sequential)
+- Wave 0 → Wave 1 → Wave 2 → Wave 3 → Wave 4 → Wave 5 (sequential)
 - Within Wave 1: Phase 39 + Phase 40 are parallel-safe (independent leaf modules)
 - Wave 2 (Phase 41) requires Wave 1 complete
 - Wave 3 (Phase 42 → Phase 43) requires Wave 2 complete; Phase 42 must precede Phase 43 (engagement action row sits on masonry-rendered card)
 - Wave 4 (Phase 44 + Phase 45) parallel-safe within wave; lands LAST so dependency bumps don't trigger StrictMode timing surprises mid-feature
+- Wave 5 (Phase 46) closes milestone-audit gap CONTENT-03 before v1.5 archive
 
 ## Phases
 
@@ -1067,6 +1068,7 @@ _Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round
 - [x] **Phase 43: Engagement UI** — Like/save/dismiss action row on tiles via long-press menu; HomeScreen `ANCHOR_DISMISSED` subscription + `[location.pathname]` engagement resync; "Deep dive" button on PostDetailScreen; "N connections" graph-derived social proof micro-label; Force-New-Day handler updated with `engagementService.reset()` (completed 2026-05-11)
 - [x] **Phase 44: Dependency Version Sweep** — Capacitor 8.1→8.3, i18next 26.0.5→26.0.10, react-router-dom 7.13→7.15, eslint / typescript-eslint minor bumps; React 19.x minor bump consolidated here
 - [x] **Phase 45: Code Quality Sweep** — `tsc` strict-mode audit, dead-code sweep, perf profiling pass (first-paint / queue refill / masonry scroll), project-wide TODO/FIXME triage, operator-note bug sweep (completed 2026-05-13)
+- [ ] **Phase 46: News Prefetch Multi-Source Gap Closure** — Close v1.5 audit gap CONTENT-03 by preserving top 2-3 Tavily sources through the queued-news prefetch path
 
 ## Phase Details
 
@@ -1220,6 +1222,19 @@ _Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round
   - [x] 45-04-performance-profiling-PLAN.md — profile first paint, queue refill, masonry scroll, and GraphScreen Android drag lag with P0/P1 decisions
   - [x] 45-05-phase-close-out-PLAN.md — record final verification, validation sign-off, requirements completion, state, and phase summary
 
+### Phase 46: News Prefetch Multi-Source Gap Closure
+**Goal**: Close the v1.5 milestone-audit CONTENT-03 gap by carrying the filtered top 2-3 Tavily results through `refillQueue` prefetch into `newsMeta.sources`, so normal queued news posts receive the same multi-snippet grounding as the direct generation path.
+**Depends on**: Phase 45 (milestone audit after all original v1.5 phases)
+**Requirements**: CONTENT-03
+**Gap Closure**: Closes `.planning/v1.5-MILESTONE-AUDIT.md` gap `CONTENT-03` / `Queued news post multi-snippet essay grounding`.
+**Success Criteria** (what must be TRUE):
+  1. `PreFetchCache.news` stores the filtered top 2-3 Tavily results for each concept, not only `filtered[0]`.
+  2. `generatePostBatch(..., preFetched)` writes all cached top sources into `newsMeta.sources` with stable source indexes.
+  3. Direct no-prefetch news generation remains unchanged: it still stores `filtered.slice(0, 3)`.
+  4. A regression test proves the queued-news prefetch path preserves multiple sources into `newsMeta.sources`.
+  5. `CONTENT-03` can be re-marked complete after phase verification and milestone re-audit.
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
@@ -1233,7 +1248,8 @@ _Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round
 | 43. Engagement UI | 15/15 | Complete    | 2026-05-12 |
 | 44. Dependency Version Sweep | 4/4 | Complete    | 2026-05-13 |
 | 45. Code Quality Sweep | 5/5 | Complete    | 2026-05-13 |
+| 46. News Prefetch Multi-Source Gap Closure | 0/0 | Not planned | - |
 
 ---
 
-_Created: 2026-05-08 — v1.5 Roadmap | 9 phases (37-45) | 22 requirements mapped | 4 waves_
+_Created: 2026-05-08 — v1.5 Roadmap | 10 phases (37-46; Phase 46 gap closure added 2026-05-13) | 22 requirements mapped | 5 waves_

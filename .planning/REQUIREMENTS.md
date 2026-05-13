@@ -21,7 +21,7 @@
 
 - [x] **CONTENT-01** User can request a "Deep dive" essay variant (350-600w) from `PostDetailScreen`; standard 150-250w teaser remains default _(Phase 41-02 ships the API + bodyMarkdownDeep field + tests; Phase 43 ships the user-facing button)_
 - [x] **CONTENT-02** Web-search filters for per-concept domain rotation: repeated Tavily calls for the same anchor pass `exclude_domains` so re-queries surface fresh sources _(Phase 40 leaf + Phase 41-01 Tavily wire complete)_
-- [x] **CONTENT-03** Essay prompts include 2-3 Tavily snippets (multi-snippet grounding) instead of `sources[0].snippet` only _(Phase 41-01 widened Tavily maxResults to 3 + stored multi-snippet shape; Phase 41-02 generateNewsEssay consumes sources.slice(0, 3))_
+- [ ] **CONTENT-03** Essay prompts include 2-3 Tavily snippets (multi-snippet grounding) instead of `sources[0].snippet` only _(Phase 41 direct generation path supports this; v1.5 milestone audit found the queued-news prefetch path still stores only one source. Phase 46 closes the gap.)_
 - [x] **CONTENT-04** Citations in markdown render via ReactMarkdown `sup`/`a`/`section` component overrides for clean footnote presentation _(Phase 41-02 — Markdown.tsx components prop + sanitize sup-attr spread fix; LLM emits [^N] markers via generateNewsEssay's footnote prompt)_
 
 ### TECHDEBT — v1.4 carry-overs + broader hygiene
@@ -75,7 +75,7 @@
 | ENGAGE-04   | Phase 43 | Wave 3 | Out of Scope (DS-01, 2026-05-11) |
 | CONTENT-01  | Phase 41 | Wave 2 | ✓ Complete (Phase 41-02 ships API + bodyMarkdownDeep field + tests; Phase 43 ships button) |
 | CONTENT-02  | Phase 40+41 | Wave 1+2 | ✓ Complete (Phase 40 leaf + Phase 41-01 wire) |
-| CONTENT-03  | Phase 41 | Wave 2 | ✓ Complete (Phase 41-01 multi-snippet shape + Phase 41-02 sources.slice(0, 3) consumption) |
+| CONTENT-03  | Phase 41+46 | Wave 2+5 | Pending gap closure (Phase 46 must preserve top 2-3 Tavily sources through queued-news prefetch path) |
 | CONTENT-04  | Phase 41 | Wave 2 | ✓ Complete (Phase 41-02 ReactMarkdown overrides + sanitize spread fix + footnote prompt) |
 | TECHDEBT-01 | Phase 37 | Wave 0 | ✓ Complete |
 | TECHDEBT-02 | Phase 38 | Wave 0 | ✓ Complete |
@@ -96,12 +96,13 @@
 - **Phase 38** (Wave 0): TECHDEBT-02, TECHDEBT-03, TECHDEBT-04, TECHDEBT-05, TECHDEBT-06 (5 reqs)
 - **Phase 39** (Wave 1): ENGAGE-01, ENGAGE-02, ENGAGE-03 (3 reqs)
 - **Phase 40** (Wave 1): CONTENT-02 (1 req)
-- **Phase 41** (Wave 2): CONTENT-01, CONTENT-03, CONTENT-04 (3 reqs)
+- **Phase 41** (Wave 2): CONTENT-01, CONTENT-04 complete; CONTENT-03 partially complete pending Phase 46 (3 reqs)
 - **Phase 42** (Wave 3): MASONRY-01, MASONRY-02 (2 reqs)
 - **Phase 43** (Wave 3): 0 active reqs (engagement UI wiring; ENGAGE-04 descoped per DS-01)
 - **Phase 44** (Wave 4): TECHDEBT-08 (1 req)
 - **Phase 45** (Wave 4): TECHDEBT-07, TECHDEBT-09, TECHDEBT-10, TECHDEBT-11, TECHDEBT-12 (5 reqs)
+- **Phase 46** (Wave 5): CONTENT-03 gap closure (1 req)
 
 ---
 
-*Last updated: 2026-05-13 — v1.5 milestone audit reconciled ENGAGE-01/02/03 traceability to Phase 39 service evidence plus Phase 43 UI evidence; Phase 45 close-out verified TECHDEBT-07, TECHDEBT-09, TECHDEBT-10, TECHDEBT-11, and TECHDEBT-12 against final evidence in `45-VERIFY.md`.*
+*Last updated: 2026-05-13 — Phase 46 gap closure added for CONTENT-03 after v1.5 milestone audit found queued-news prefetch stores only one Tavily source; ENGAGE-01/02/03 traceability reconciled to Phase 39 service evidence plus Phase 43 UI evidence.*

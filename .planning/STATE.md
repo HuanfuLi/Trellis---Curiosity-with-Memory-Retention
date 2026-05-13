@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: gap closure)
-status: completed
-stopped_at: Phase 45 verified complete
+status: planning
+stopped_at: Milestone v1.5 gap closure phase added
 last_updated: "2026-05-13T06:52:07.984Z"
 last_activity: 2026-05-13
 progress:
@@ -17,15 +17,15 @@ progress:
 
 ## Current Position
 
-Phase: 45 (code-quality-sweep) — COMPLETE
-Plan: 5 of 5
-Status: Phase 45 complete; milestone v1.5 ready for verification/close-out
+Phase: 46 (news-prefetch-multi-source-gap-closure) — PENDING PLANNING
+Plan: Not started
+Status: Milestone v1.5 audit found CONTENT-03 gap; Phase 46 added to close queued-news prefetch multi-source grounding before archive
 Last activity: 2026-05-13
 Phase summary: `.planning/phases/45-code-quality-sweep/45-PHASE-SUMMARY.md`
 
 ## Progress
 
-**Phases:** 4 / 9 complete (37 ✓; 38 ✓; 39 ready for verification; 40 ready for verification; 41 ready for verification; 42 ready for verification 8/8 plans; 43 ready for verification 15/15 plans; 44 complete; 45 complete)
+**Phases:** 9 / 10 complete (37 ✓; 38 ✓; 39 ✓; 40 ✓; 41 ✓ with CONTENT-03 gap; 42 ✓; 43 ✓; 44 ✓; 45 ✓; 46 pending gap closure)
 **Plans:** 15 / 15 complete in Phase 43 (43-01 shared-infra-and-locales ✓; 43-02 trim-presentation-style-tag ✓; 43-03 longpress-menu-and-masonry-integration ✓; 43-04 saved-screen-and-route ✓; 43-05 postdetail-deep-dive-trigger ✓; 43-06 homescreen-wiring ✓; 43-07 force-new-day-engagement-reset ✓; 43-08 phase-close-out ✓; 43-09 bottomsheet-portal-and-nav-clearance ✓ [gap-closure]; 43-10 engagement-corner-icon-chip-backdrop ✓ [gap-closure]; 43-11 homescreen-bookmark-inline-with-greeting ✓ [gap-closure]; 43-12 deep-dive-controls-above-essay-body ✓ [gap-closure]; 43-13 engagement-reset-dismissed-only ✓ [gap-closure]; 43-14 dismiss-filter-at-read-boundary ✓ [gap-closure]; 43-15 force-new-day-dedup ✓ [gap-closure]); 8 / 8 complete in Phase 42 (42-01 masonry-feed-skeleton ✓; 42-02 homescreen-swap ✓; 42-03 card-slide-in-removal ✓; 42-04 vine-bloom-card-and-i18n ✓; 42-05 source-reading-invariant-tests ✓; 42-06 roadmap-requirements-wording-correction ✓; 42-07 phase-close-out ✓; 42-08 heal-review-empty-anchor-fix ✓ [gap-closure]); 2 / 2 complete in Phase 41 (41-01 source-diversity-wiring ✓; 41-02 essay-depth-citation-rendering ✓); 1 / 1 complete in Phase 40 (40-01 source-diversity-service ✓); 1 / 1 complete in Phase 39 (39-01 engagement-service ✓)
 
 ```
@@ -38,7 +38,8 @@ Phase summary: `.planning/phases/45-code-quality-sweep/45-PHASE-SUMMARY.md`
 - **Wave 1** (foundation services): Phase 39 (engagement) + Phase 40 (source diversity) — parallel-safe, requires Wave 0
 - **Wave 2** (service integration): Phase 41 (pipeline + essay depth) — requires Wave 1
 - **Wave 3** (UI layer): Phase 42 (masonry) → Phase 43 (engagement UI) — sequential, requires Wave 2
-- **Wave 4** (hygiene sweep): Phase 44 (deps) + Phase 45 (code quality) — parallel-safe, lands LAST
+- **Wave 4** (hygiene sweep): Phase 44 (deps) + Phase 45 (code quality) — parallel-safe, lands last in original roadmap
+- **Wave 5** (milestone audit gap closure): Phase 46 — closes CONTENT-03 queued-news prefetch multi-source grounding before v1.5 archive
 
 ## Project Reference
 
@@ -46,7 +47,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-08 — milestone v1.5 started)
 
 **Core value:** Enable learners to transform fragmented information into structured knowledge through AI-driven Q&A, visual mapping, and adaptive spaced repetition — all while maintaining complete local-first privacy.
 
-**Current focus:** Phase 45 — code-quality-sweep
+**Current focus:** Phase 46 — news-prefetch-multi-source-gap-closure
 
 ## Requirement Coverage
 
@@ -72,11 +73,17 @@ All carry-overs are scheduled into Wave 0:
 
 ## Open blockers
 
-None.
+- **CONTENT-03 milestone audit gap** — queued news posts can still carry only one Tavily source because `preFetched.news` stores `filtered[0]` instead of the filtered top 2-3 results. Phase 46 closes this before v1.5 archive.
 
 ## Resolved blockers
 
 All v1.4 blockers resolved at close. Plan 45-04 Android evidence gate resolved on 2026-05-13 after `emulator-5554` became available and GraphScreen cold/warm drag evidence was recorded.
+
+## Last decisions (Milestone v1.5 audit gap planning, 2026-05-13)
+
+- **Phase 46 added** — `46-news-prefetch-multi-source-gap-closure` closes the v1.5 audit blocker for CONTENT-03 by carrying top 2-3 Tavily results through queued-news prefetch into `newsMeta.sources`.
+- **Requirement reset** — `CONTENT-03` is unchecked and traceability now points to Phase 41 + Phase 46 until the gap closure is executed and re-audited.
+- **Next action** — plan Phase 46, then execute it, rerun `$gsd-audit-milestone 1.5`, and only then rerun `$gsd-complete-milestone 1.5`.
 
 ## Last decisions (Plan 45-05 close, 2026-05-13)
 
