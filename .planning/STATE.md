@@ -1,27 +1,27 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.3
-milestone_name: gap closure)
+milestone: v1.5
+milestone_name: Curiosity Feed v2 + Tech-Debt Hardening
 status: complete
-stopped_at: Phase 46 verified; ready for v1.5 milestone re-audit
-last_updated: "2026-05-13T08:27:20.735Z"
+stopped_at: v1.5 archived; ready for next milestone planning
+last_updated: "2026-05-13T10:37:09.482Z"
 last_activity: 2026-05-13
 progress:
-  total_phases: 21
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_phases: 10
+  completed_phases: 10
+  total_plans: 44
+  completed_plans: 44
 ---
 
-# Project State: v1.5 ROADMAP CREATED — 2026-05-08
+# Project State: v1.5 SHIPPED — 2026-05-13
 
 ## Current Position
 
-Phase: 46 (news-prefetch-multi-source-gap-closure) — COMPLETE + VERIFIED
-Plan: 1 of 1
-Status: Phase 46 verification passed; ready for v1.5 milestone re-audit
+Phase: v1.5 milestone archive complete
+Plan: Not started
+Status: v1.5 archived with audit status `tech_debt`; ready for `$gsd-new-milestone`
 Last activity: 2026-05-13
-Phase summary: `.planning/phases/46-news-prefetch-multi-source-gap-closure/46-01-news-prefetch-multi-source-SUMMARY.md`
+Phase summary: `.planning/MILESTONES.md`
 
 ## Progress
 
@@ -29,7 +29,7 @@ Phase summary: `.planning/phases/46-news-prefetch-multi-source-gap-closure/46-01
 **Plans:** 15 / 15 complete in Phase 43 (43-01 shared-infra-and-locales ✓; 43-02 trim-presentation-style-tag ✓; 43-03 longpress-menu-and-masonry-integration ✓; 43-04 saved-screen-and-route ✓; 43-05 postdetail-deep-dive-trigger ✓; 43-06 homescreen-wiring ✓; 43-07 force-new-day-engagement-reset ✓; 43-08 phase-close-out ✓; 43-09 bottomsheet-portal-and-nav-clearance ✓ [gap-closure]; 43-10 engagement-corner-icon-chip-backdrop ✓ [gap-closure]; 43-11 homescreen-bookmark-inline-with-greeting ✓ [gap-closure]; 43-12 deep-dive-controls-above-essay-body ✓ [gap-closure]; 43-13 engagement-reset-dismissed-only ✓ [gap-closure]; 43-14 dismiss-filter-at-read-boundary ✓ [gap-closure]; 43-15 force-new-day-dedup ✓ [gap-closure]); 8 / 8 complete in Phase 42 (42-01 masonry-feed-skeleton ✓; 42-02 homescreen-swap ✓; 42-03 card-slide-in-removal ✓; 42-04 vine-bloom-card-and-i18n ✓; 42-05 source-reading-invariant-tests ✓; 42-06 roadmap-requirements-wording-correction ✓; 42-07 phase-close-out ✓; 42-08 heal-review-empty-anchor-fix ✓ [gap-closure]); 2 / 2 complete in Phase 41 (41-01 source-diversity-wiring ✓; 41-02 essay-depth-citation-rendering ✓); 1 / 1 complete in Phase 40 (40-01 source-diversity-service ✓); 1 / 1 complete in Phase 39 (39-01 engagement-service ✓)
 
 ```
-[████████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 46%
+[████████████████████████████████████████████████████] 100%
 ```
 
 ### Wave Order
@@ -43,15 +43,15 @@ Phase summary: `.planning/phases/46-news-prefetch-multi-source-gap-closure/46-01
 
 ## Project Reference
 
-See: `.planning/PROJECT.md` (updated 2026-05-08 — milestone v1.5 started)
+See: `.planning/PROJECT.md` (updated 2026-05-13 — milestone v1.5 archived)
 
 **Core value:** Enable learners to transform fragmented information into structured knowledge through AI-driven Q&A, visual mapping, and adaptive spaced repetition — all while maintaining complete local-first privacy.
 
-**Current focus:** Phase 46 — news-prefetch-multi-source-gap-closure
+**Current focus:** Start next milestone with `$gsd-new-milestone`
 
 ## Requirement Coverage
 
-22 / 22 requirements mapped to phases ✓ (no orphans)
+21 / 21 active requirements satisfied ✓ (`ENGAGE-04` descoped)
 
 | Category | Count | Phases |
 |----------|-------|--------|
@@ -74,6 +74,12 @@ All carry-overs are scheduled into Wave 0:
 ## Open blockers
 
 None.
+
+## Last decisions (Milestone v1.5 archive, 2026-05-13)
+
+- **v1.5 archived** — roadmap, requirements, and audit copied into `.planning/milestones/` and `.planning/MILESTONES.md` updated with shipped summary.
+- **Audit accepted as tech debt** — all 21 active requirements are satisfied and integration passed; accepted non-blocking debt is the stale `buildFallbackPosts` test contract, known lint/build/audit baselines, and partial validation metadata for phases 38/40/41.
+- **Next action** — run `$gsd-new-milestone` to define v1.6 requirements and roadmap from a fresh planning surface.
 
 ## Resolved blockers
 

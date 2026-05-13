@@ -12,21 +12,24 @@ The platform prioritizes a high-quality, native-first mobile experience built wi
 
 Enable learners to transform fragmented information into structured knowledge through AI-driven Q&A, visual mapping, and adaptive spaced repetition — all while maintaining complete local-first privacy.
 
-## Current Milestone: v1.5 Curiosity Feed v2 + Tech-Debt Hardening
+## Current State: v1.5 Shipped
 
-**Goal:** Ship the second-iteration curiosity feed (Pinterest-style masonry layout, richer essays, source diversity, engagement signals) on top of a fully-hardened codebase that closes all v1.4 carry-overs plus a broader hygiene sweep.
+v1.5 Curiosity Feed v2 + Tech-Debt Hardening shipped on 2026-05-13. The milestone delivered Pinterest-style masonry feed, richer essays, source diversity, citation rendering, local-first engagement signals, v1.4 carry-over cleanup, dependency/version hardening, code-quality evidence, and Phase 46's CONTENT-03 queued-news prefetch multi-source closure.
 
-**Target features:**
+Audit status: `tech_debt` — all 21 active v1.5 requirements satisfied and integration passed. Accepted non-blocking debt: stale `tests/concept-feed.test.mjs` `buildFallbackPosts` contract, known lint/build/audit baselines, and partial validation metadata for phases 38/40/41.
 
-*A. Curiosity Feed v2 — quality*
-- Pinterest-style masonry feed layout (variable-height tiles, 2-column flow, visual mosaic)
-- Richer post body essays (longer / tighter source grounding / citation render polish)
-- Source diversity (multi-domain, multi-media per concept, no near-duplicates, source quality scoring)
-- Engagement signals (like / save / dismiss, social-proof affordances, content-quality feedback loop) — local-only annotations to preserve local-first privacy
+## Next Milestone Goals
 
-*B. Tech-Debt Hardening — broader hygiene*
-- v1.4 carry-overs: i18n leaf-module refactor (closes 10 carried test failures), VALIDATION drift cleanup (34/35), ROADMAP plan-list polish (36-14 + 36-15 bullets), 33-HUMAN-UAT-1/2 device retest, CLAUDE.md `echolearn_*` doc-drift cleanup, YouTube landscape-listed-as-short bug
-- Broader hygiene: tsc strictness audit, dependency-version sweep, dead-code sweep, perf profiling, project-wide TODO/FIXME triage, sweep of operator-note bugs
+Not defined yet. Start with `$gsd-new-milestone` to gather v1.6 requirements and create a fresh roadmap.
+
+## Validated Requirements
+
+### v1.5
+
+- MASONRY-01, MASONRY-02 — masonry feed and end-of-content celebration.
+- ENGAGE-01, ENGAGE-02, ENGAGE-03 — save, dismiss, and like persistence/UI.
+- CONTENT-01, CONTENT-02, CONTENT-03, CONTENT-04 — deep dive, source diversity, multi-snippet grounding, and citation rendering.
+- TECHDEBT-01 through TECHDEBT-12 — v1.4 carry-overs, dependency sweep, strictness/dead-code/perf/TODO/operator-note hardening.
 
 ## Previous Milestones
 
@@ -118,4 +121,4 @@ _Last updated: 2026-05-09 — Phase 38 complete (TECHDEBT-02 through TECHDEBT-06
 **Phase 46 complete (2026-05-13, verifier 8/8):** v1.5 milestone-audit gap closure closed CONTENT-03 on the queued-news prefetch path. `PreFetchCache.news` now stores filtered top-source arrays, direct and queued-prefetch news paths share `selectNewsTopSources`, and `mapNewsSourcesToNewsMeta` maps up to three sources with stable 1-based indexes before `generateNewsEssay` consumes `sources.slice(0, 3)`. The targeted CONTENT-03 regression passes 17/17 and final build/lint/test evidence is recorded in `46-VERIFY.md`; the only aggregate test caveat remains the known-deferred `tests/concept-feed.test.mjs` `buildFallbackPosts` baseline from Phase 45. Milestone v1.5 is ready for re-audit and archive.
 
 ---
-*Last updated: 2026-05-13 — Phase 46 complete (verifier 8/8): v1.5 audit blocker CONTENT-03 closed for queued-news prefetch multi-source grounding. Milestone v1.5 is ready for re-audit and archive.*
+*Last updated: 2026-05-13 — v1.5 archived: Curiosity Feed v2 + Tech-Debt Hardening shipped with 21/21 active requirements satisfied and accepted non-blocking debt documented.*
