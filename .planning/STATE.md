@@ -1,53 +1,48 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.5
-milestone_name: Curiosity Feed v2 + Tech-Debt Hardening
-status: complete
-stopped_at: v1.5 archived; ready for next milestone planning
+milestone: v1.6
+milestone_name: Control, Graph Trust, Retrieval, and Ethical Engagement
+status: defining_requirements
+stopped_at: v1.6 requirements definition in progress
 last_updated: "2026-05-13T10:37:09.482Z"
 last_activity: 2026-05-13
 progress:
-  total_phases: 10
-  completed_phases: 10
-  total_plans: 44
-  completed_plans: 44
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
-# Project State: v1.5 SHIPPED — 2026-05-13
+# Project State: v1.6 DEFINING REQUIREMENTS — 2026-05-13
 
 ## Current Position
 
-Phase: v1.5 milestone archive complete
-Plan: Not started
-Status: v1.5 archived with audit status `tech_debt`; ready for `$gsd-new-milestone`
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements for v1.6 Control, Graph Trust, Retrieval, and Ethical Engagement
 Last activity: 2026-05-13
-Phase summary: `.planning/MILESTONES.md`
+Phase summary: —
 
 ## Progress
 
-**Phases:** 10 / 10 complete (37 ✓; 38 ✓; 39 ✓; 40 ✓; 41 ✓ with Phase 46 CONTENT-03 closure; 42 ✓; 43 ✓; 44 ✓; 45 ✓; 46 ✓)
-**Plans:** 15 / 15 complete in Phase 43 (43-01 shared-infra-and-locales ✓; 43-02 trim-presentation-style-tag ✓; 43-03 longpress-menu-and-masonry-integration ✓; 43-04 saved-screen-and-route ✓; 43-05 postdetail-deep-dive-trigger ✓; 43-06 homescreen-wiring ✓; 43-07 force-new-day-engagement-reset ✓; 43-08 phase-close-out ✓; 43-09 bottomsheet-portal-and-nav-clearance ✓ [gap-closure]; 43-10 engagement-corner-icon-chip-backdrop ✓ [gap-closure]; 43-11 homescreen-bookmark-inline-with-greeting ✓ [gap-closure]; 43-12 deep-dive-controls-above-essay-body ✓ [gap-closure]; 43-13 engagement-reset-dismissed-only ✓ [gap-closure]; 43-14 dismiss-filter-at-read-boundary ✓ [gap-closure]; 43-15 force-new-day-dedup ✓ [gap-closure]); 8 / 8 complete in Phase 42 (42-01 masonry-feed-skeleton ✓; 42-02 homescreen-swap ✓; 42-03 card-slide-in-removal ✓; 42-04 vine-bloom-card-and-i18n ✓; 42-05 source-reading-invariant-tests ✓; 42-06 roadmap-requirements-wording-correction ✓; 42-07 phase-close-out ✓; 42-08 heal-review-empty-anchor-fix ✓ [gap-closure]); 2 / 2 complete in Phase 41 (41-01 source-diversity-wiring ✓; 41-02 essay-depth-citation-rendering ✓); 1 / 1 complete in Phase 40 (40-01 source-diversity-service ✓); 1 / 1 complete in Phase 39 (39-01 engagement-service ✓)
+**Phases:** 0 / 0 defined
+**Plans:** 0 / 0 defined
 
 ```
-[████████████████████████████████████████████████████] 100%
+[░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 0%
 ```
 
 ### Wave Order
 
-- **Wave 0** (carry-over cleanup): Phase 37 (i18n leaf-module) + Phase 38 (v1.4 carry-overs) — parallel-safe, both unblock Wave 1
-- **Wave 1** (foundation services): Phase 39 (engagement) + Phase 40 (source diversity) — parallel-safe, requires Wave 0
-- **Wave 2** (service integration): Phase 41 (pipeline + essay depth) — requires Wave 1
-- **Wave 3** (UI layer): Phase 42 (masonry) → Phase 43 (engagement UI) — sequential, requires Wave 2
-- **Wave 4** (hygiene sweep): Phase 44 (deps) + Phase 45 (code quality) — parallel-safe, lands last in original roadmap
-- **Wave 5** (milestone audit gap closure): Phase 46 — closes CONTENT-03 queued-news prefetch multi-source grounding before v1.5 archive
+Not defined yet. Roadmap creation will establish v1.6 phases and wave order.
 
 ## Project Reference
 
-See: `.planning/PROJECT.md` (updated 2026-05-13 — milestone v1.5 archived)
+See: `.planning/PROJECT.md` (updated 2026-05-13 — milestone v1.6 started)
 
 **Core value:** Enable learners to transform fragmented information into structured knowledge through AI-driven Q&A, visual mapping, and adaptive spaced repetition — all while maintaining complete local-first privacy.
 
-**Current focus:** Start next milestone with `$gsd-new-milestone`
+**Current focus:** Define requirements and roadmap for v1.6 Control, Graph Trust, Retrieval, and Ethical Engagement.
 
 ## Requirement Coverage
 

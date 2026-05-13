@@ -18,9 +18,22 @@ v1.5 Curiosity Feed v2 + Tech-Debt Hardening shipped on 2026-05-13. The mileston
 
 Audit status: `tech_debt` — all 21 active v1.5 requirements satisfied and integration passed. Accepted non-blocking debt: stale `tests/concept-feed.test.mjs` `buildFallbackPosts` contract, known lint/build/audit baselines, and partial validation metadata for phases 38/40/41.
 
-## Next Milestone Goals
+## Current Milestone: v1.6 Control, Graph Trust, Retrieval, and Ethical Engagement
 
-Not defined yet. Start with `$gsd-new-milestone` to gather v1.6 requirements and create a fresh roadmap.
+**Goal:** Turn Trellis from a compelling learning feed into a more trustworthy learner-controlled system, with stronger knowledge-ingestion boundaries, correctable graph structure, better retrieval, higher-quality podcasts, and explicit learning-first engagement guardrails.
+
+**Target features:**
+- Redesign knowledge-ingestion filtering so chat can remain natural while only durable learning material enters the mind map.
+- Add manual mind-map correction controls so users can rename, move, merge, detach, and correct graph nodes.
+- Improve podcast defaults and add learner-directed length/style controls without degrading educational quality.
+- Strengthen retrieval after feed discovery through search, tags/bookmarks/history improvements, and concept-level dashboards.
+- Add ethical engagement cues: goals, stop cues, reflection/retrieval prompts, and learning-oriented success metrics.
+
+**Key context:** Professor feedback asked how the mind map is generated and corrected, how filtering works, whether podcasts can be controlled, how social-feed engagement balances learning, and what supports retrieval later. The critical clarification is that filtering is a knowledge-ingestion gate, not a presentation concern: natural chat may be answered, but small talk, prompt-leak requests, and other non-learning exchanges must not pollute the graph, while legitimate learning questions such as "What is a system prompt?" must still be ingestible.
+
+## Active Requirements
+
+v1.6 requirements are being defined in `.planning/REQUIREMENTS.md`.
 
 ## Validated Requirements
 
@@ -121,4 +134,4 @@ _Last updated: 2026-05-09 — Phase 38 complete (TECHDEBT-02 through TECHDEBT-06
 **Phase 46 complete (2026-05-13, verifier 8/8):** v1.5 milestone-audit gap closure closed CONTENT-03 on the queued-news prefetch path. `PreFetchCache.news` now stores filtered top-source arrays, direct and queued-prefetch news paths share `selectNewsTopSources`, and `mapNewsSourcesToNewsMeta` maps up to three sources with stable 1-based indexes before `generateNewsEssay` consumes `sources.slice(0, 3)`. The targeted CONTENT-03 regression passes 17/17 and final build/lint/test evidence is recorded in `46-VERIFY.md`; the only aggregate test caveat remains the known-deferred `tests/concept-feed.test.mjs` `buildFallbackPosts` baseline from Phase 45. Milestone v1.5 is ready for re-audit and archive.
 
 ---
-*Last updated: 2026-05-13 — v1.5 archived: Curiosity Feed v2 + Tech-Debt Hardening shipped with 21/21 active requirements satisfied and accepted non-blocking debt documented.*
+*Last updated: 2026-05-13 — v1.6 milestone started: Control, Graph Trust, Retrieval, and Ethical Engagement.*
