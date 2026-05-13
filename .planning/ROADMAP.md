@@ -1066,7 +1066,7 @@ _Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round
 - [x] **Phase 42: Masonry Feed Layout** — `MasonryFeed.tsx` with height-accumulating 2-column split (Pinterest/Rednote-style; tiles never move between columns on append); framer-motion entrance animations on leaf cards; vine-bloom end-of-content celebration card (completed 2026-05-10)
 - [x] **Phase 43: Engagement UI** — Like/save/dismiss action row on tiles via long-press menu; HomeScreen `ANCHOR_DISMISSED` subscription + `[location.pathname]` engagement resync; "Deep dive" button on PostDetailScreen; "N connections" graph-derived social proof micro-label; Force-New-Day handler updated with `engagementService.reset()` (completed 2026-05-11)
 - [x] **Phase 44: Dependency Version Sweep** — Capacitor 8.1→8.3, i18next 26.0.5→26.0.10, react-router-dom 7.13→7.15, eslint / typescript-eslint minor bumps; React 19.x minor bump consolidated here
-- [ ] **Phase 45: Code Quality Sweep** — `tsc` strict-mode audit, dead-code sweep, perf profiling pass (first-paint / queue refill / masonry scroll), project-wide TODO/FIXME triage, operator-note bug sweep
+- [x] **Phase 45: Code Quality Sweep** — `tsc` strict-mode audit, dead-code sweep, perf profiling pass (first-paint / queue refill / masonry scroll), project-wide TODO/FIXME triage, operator-note bug sweep (completed 2026-05-13)
 
 ## Phase Details
 
