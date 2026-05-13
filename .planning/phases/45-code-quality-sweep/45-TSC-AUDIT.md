@@ -55,6 +55,16 @@ Additional lint warnings are not suppressions: 24 warnings remain after unused-d
 - `app/tests/services/image-gen-key-gate.test.mjs` — Plan 45-02 Task 2 closure: source-reading checks now pin `const imageGenEnabled = settings.imageGeneration?.enabled !== false;` and `imageGenEnabled && (nanoBananaKeyPresent || geminiImageKeyPresent)`.
 - `app/tests/services/trellis-layout.test.mjs` — Plan 45-02 Task 2 closure: `getVineColor` expectation now imports and asserts against `VINE_COLOR_VARS`.
 
+## Plan 45-02 Task 3 Closure
+
+| Location | Closure evidence | Status |
+|---|---|---|
+| `app/src/services/concept-feed.service.ts` | Plan 45-02 Task 3 closure — direct same-directory local imports now use `.ts` suffixes for Node `node --test` compatibility, including `./youtube.service.ts`, `./web-search.service.ts`, `./post-queue.service.ts`, and `./feed-spread.ts`. | closed |
+
+| Follow-up | Evidence | Status |
+|---|---|---|
+| `app/src/services/concept-feed.service.ts` / `app/tests/concept-feed.test.mjs` | Plan 45-02 Task 3 follow-up — after the extensionless import blocker was closed, `node --test tests/concept-feed.test.mjs` reaches module instantiation and fails because `concept-feed.service.ts` does not export `buildFallbackPosts`; the helper was intentionally removed by commit `72f4795c` ("Removed fallback posts"). | deferred |
+
 ## In-Scope Fixes
 
 - Remove the three stale disable directives identified above.

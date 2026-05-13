@@ -4,31 +4,31 @@ import { today } from '../lib/date.ts';
 import { eventBus } from '../lib/event-bus.ts';
 import { settingsService, FEED_DEFAULTS } from './settings.service.ts';
 import { plannerService } from './planner.service.ts';
-import { youtubeService, type YouTubeSearchResult } from './youtube.service';
-import { webSearch } from './web-search.service';
-import { questionService } from './question.service';
-import { postQueueService } from './post-queue.service';
-import { postHistoryService } from './post-history.service';
-import { dailyReadService } from './daily-read.service';
+import { youtubeService, type YouTubeSearchResult } from './youtube.service.ts';
+import { webSearch } from './web-search.service.ts';
+import { questionService } from './question.service.ts';
+import { postQueueService } from './post-queue.service.ts';
+import { postHistoryService } from './post-history.service.ts';
+import { dailyReadService } from './daily-read.service.ts';
 import { engagementService } from './engagement.service.ts';
 import { sourceDiversityService, extractDomain } from './source-diversity.service.ts';
-import { assignStyles, reassignFailures, type ApiAvailability } from './style-assignment';
-import { computeLeafState } from './trellis-state.service';
-import { hasSeenVideoId, addSeenVideoId } from './concept-feed-dedup';
-import { STARTER_POST_IDS, filterDecayedStarters } from './starter-posts-decay';
+import { assignStyles, reassignFailures, type ApiAvailability } from './style-assignment.ts';
+import { computeLeafState } from './trellis-state.service.ts';
+import { hasSeenVideoId, addSeenVideoId } from './concept-feed-dedup.ts';
+import { STARTER_POST_IDS, filterDecayedStarters } from './starter-posts-decay.ts';
 import {
   markYoutubeQuotaExhausted,
   markTavilyQuotaExhausted,
   isYoutubeRuntimeAvailable,
   isTavilyRuntimeAvailable,
-} from './api-availability';
+} from './api-availability.ts';
 // Phase 36 GAP-4 — spread helpers extracted to a leaf module so node --test can
 // import them without hitting the i18n JSON-import-attribute chain. Both functions
 // mutate `posts` in place; this module re-exports them too so existing callers
 // (and downstream tests that import from here) keep working.
-import { spreadByStyle, spreadByConcept } from './feed-spread';
+import { spreadByStyle, spreadByConcept } from './feed-spread.ts';
 export { spreadByStyle, spreadByConcept };
-import { createPromiseMutex } from './refill-mutex';
+import { createPromiseMutex } from './refill-mutex.ts';
 
 const STORAGE_KEY = 'trellis_daily_posts';
 const CONNECTION_POSTS_KEY = 'trellis_connection_posts';
