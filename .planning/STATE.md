@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: gap closure)
-status: completed
-stopped_at: Completed 44-04-phase-close-out-PLAN.md
-last_updated: "2026-05-13T05:10:37.106Z"
+status: executing
+stopped_at: Completed 45-01-audit-inventory-PLAN.md
+last_updated: "2026-05-13T05:52:37.897Z"
 last_activity: 2026-05-13
 progress:
   total_phases: 21
@@ -17,9 +17,9 @@ progress:
 
 ## Current Position
 
-Phase: 44
-Plan: Not started
-Status: TECHDEBT-08 dependency sweep complete; Phase 45 remains pending
+Phase: 45 (code-quality-sweep) — EXECUTING
+Plan: 2 of 5
+Status: Ready to execute
 Last activity: 2026-05-13
 Phase summary: `.planning/phases/44-dependency-version-sweep/44-PHASE-SUMMARY.md`
 
@@ -46,7 +46,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-08 — milestone v1.5 started)
 
 **Core value:** Enable learners to transform fragmented information into structured knowledge through AI-driven Q&A, visual mapping, and adaptive spaced repetition — all while maintaining complete local-first privacy.
 
-**Current focus:** Phase 45 — code-quality-sweep pending after Phase 44 dependency close-out
+**Current focus:** Phase 45 — code-quality-sweep
 
 ## Requirement Coverage
 
@@ -73,6 +73,13 @@ All carry-overs are scheduled into Wave 0:
 ## Resolved blockers
 
 All v1.4 blockers resolved at close. No open blockers.
+
+## Last decisions (Plan 45-01 close, 2026-05-13)
+
+- **Phase 45 audit-first inventory is complete** — `45-TSC-AUDIT.md`, `45-TODO-TRIAGE.md`, `45-OPERATOR-NOTES.md`, and `45-PERF-AUDIT.md` exist before source cleanup begins.
+- **Strict-adjacent TypeScript flags remain audit-only** — `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess` were not enabled during inventory; later tasks need command evidence before changing either.
+- **TODO/operator/perf baselines are durable** — Spanish `TODOS` is user-facing copy, GraphScreen Android drag lag feeds performance profiling, and Force-New-Day debug notes require supersession checks before code changes.
+- **Task commits now complete for Plan 45-01:** `6e08c85d` docs(strictness/lint audit) → `9878e8ef` docs(TODO/operator inventory) → `0b6185ae` docs(perf matrix) → `acf1cc62` docs(decision coverage markers).
 
 ## Last decisions (Plan 44-04 close, 2026-05-13)
 
@@ -400,14 +407,16 @@ All v1.4 blockers resolved at close. No open blockers.
 
 ## Session Continuity
 
-**Stopped at:** Completed 44-04-phase-close-out-PLAN.md
-**Next action:** Verify Phase 44 close-out or proceed to Phase 45 code-quality sweep.
+**Stopped at:** Completed 45-01-audit-inventory-PLAN.md
+**Next action:** Execute `45-02-test-lint-strictness-PLAN.md`.
 
-**Files written this session (Plan 44-04 close):**
+**Files written this session (Plan 45-01 audit inventory):**
 
-- `.planning/phases/44-dependency-version-sweep/44-VALIDATION.md` (NEW to git — final validation sign-off)
-- `.planning/phases/44-dependency-version-sweep/44-PHASE-SUMMARY.md` (NEW — phase close-out summary)
-- `.planning/phases/44-dependency-version-sweep/44-04-phase-close-out-SUMMARY.md` (NEW — plan close-out summary)
+- `.planning/phases/45-code-quality-sweep/45-TSC-AUDIT.md`
+- `.planning/phases/45-code-quality-sweep/45-TODO-TRIAGE.md`
+- `.planning/phases/45-code-quality-sweep/45-OPERATOR-NOTES.md`
+- `.planning/phases/45-code-quality-sweep/45-PERF-AUDIT.md`
+- `.planning/phases/45-code-quality-sweep/45-01-audit-inventory-SUMMARY.md`
 - `.planning/ROADMAP.md` (Phase 44 row and plan list marked complete)
 - `.planning/STATE.md` (this file)
 
