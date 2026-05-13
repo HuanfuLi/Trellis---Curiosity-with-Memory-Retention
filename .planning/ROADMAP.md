@@ -1065,7 +1065,7 @@ _Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round
 - [x] **Phase 41: Pipeline Wiring + Essay Depth** — Wire engagement + diversity into refillQueue; add `EssayOptions.depth: 'standard' | 'deep'` to post-essay.service.ts (350-600w deep variant); raise body-slice cap 2000→4000; multi-snippet grounding + ReactMarkdown citation overrides _(Plan 41-01 + 41-02 complete; Phase 43 unblocked for Deep dive button)_
 - [x] **Phase 42: Masonry Feed Layout** — `MasonryFeed.tsx` with height-accumulating 2-column split (Pinterest/Rednote-style; tiles never move between columns on append); framer-motion entrance animations on leaf cards; vine-bloom end-of-content celebration card (completed 2026-05-10)
 - [x] **Phase 43: Engagement UI** — Like/save/dismiss action row on tiles via long-press menu; HomeScreen `ANCHOR_DISMISSED` subscription + `[location.pathname]` engagement resync; "Deep dive" button on PostDetailScreen; "N connections" graph-derived social proof micro-label; Force-New-Day handler updated with `engagementService.reset()` (completed 2026-05-11)
-- [ ] **Phase 44: Dependency Version Sweep** — Capacitor 8.1→8.3, i18next 26.0.5→26.0.10, react-router-dom 7.13→7.15, eslint / typescript-eslint minor bumps; React 19.x minor bump consolidated here
+- [x] **Phase 44: Dependency Version Sweep** — Capacitor 8.1→8.3, i18next 26.0.5→26.0.10, react-router-dom 7.13→7.15, eslint / typescript-eslint minor bumps; React 19.x minor bump consolidated here
 - [ ] **Phase 45: Code Quality Sweep** — `tsc` strict-mode audit, dead-code sweep, perf profiling pass (first-paint / queue refill / masonry scroll), project-wide TODO/FIXME triage, operator-note bug sweep
 
 ## Phase Details
@@ -1201,7 +1201,7 @@ _Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round
   - [x] 44-01-dependency-metadata-lockfile-PLAN.md — Apply the approved dependency target set, regenerate npm metadata, and document held-back majors
   - [x] 44-02-automated-verification-native-sync-PLAN.md — Run tests, lint, build, audit, and `npx cap sync`; record verification evidence
   - [x] 44-03-manual-smoke-uat-PLAN.md — Capture manual smoke results for locale switch, Ask streaming, queue refill, saved route navigation, and Android sync sanity
-  - [ ] 44-04-phase-close-out-PLAN.md — Sign off validation, mark TECHDEBT-08 complete, and create the phase summary
+  - [x] 44-04-phase-close-out-PLAN.md — Sign off validation, mark TECHDEBT-08 complete, and create the phase summary
 
 ### Phase 45: Code Quality Sweep
 **Goal**: Mechanical hygiene pass: tsc strictness audit, dead-code sweep, perf profiling, TODO/FIXME triage, operator-note bug sweep.
@@ -1226,7 +1226,7 @@ _Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round
 | 41. Pipeline Wiring + Essay Depth | 2/2 | Complete    | 2026-05-09 |
 | 42. Masonry Feed Layout | 9/8 | Complete    | 2026-05-10 |
 | 43. Engagement UI | 15/15 | Complete    | 2026-05-12 |
-| 44. Dependency Version Sweep | 3/4 | In Progress|  |
+| 44. Dependency Version Sweep | 4/4 | Complete | 2026-05-12 |
 | 45. Code Quality Sweep | 0/0 | Not started | - |
 
 ---
