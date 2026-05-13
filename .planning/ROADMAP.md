@@ -1068,7 +1068,7 @@ _Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round
 - [x] **Phase 43: Engagement UI** — Like/save/dismiss action row on tiles via long-press menu; HomeScreen `ANCHOR_DISMISSED` subscription + `[location.pathname]` engagement resync; "Deep dive" button on PostDetailScreen; "N connections" graph-derived social proof micro-label; Force-New-Day handler updated with `engagementService.reset()` (completed 2026-05-11)
 - [x] **Phase 44: Dependency Version Sweep** — Capacitor 8.1→8.3, i18next 26.0.5→26.0.10, react-router-dom 7.13→7.15, eslint / typescript-eslint minor bumps; React 19.x minor bump consolidated here
 - [x] **Phase 45: Code Quality Sweep** — `tsc` strict-mode audit, dead-code sweep, perf profiling pass (first-paint / queue refill / masonry scroll), project-wide TODO/FIXME triage, operator-note bug sweep (completed 2026-05-13)
-- [ ] **Phase 46: News Prefetch Multi-Source Gap Closure** — Close v1.5 audit gap CONTENT-03 by preserving top 2-3 Tavily sources through the queued-news prefetch path
+- [x] **Phase 46: News Prefetch Multi-Source Gap Closure** — Close v1.5 audit gap CONTENT-03 by preserving top 2-3 Tavily sources through the queued-news prefetch path (completed 2026-05-13)
 
 ## Phase Details
 
@@ -1081,9 +1081,6 @@ _Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round
   2. New `src/lib/i18n-leaf.ts` shim exists and is imported by ≥6 service files in place of `src/locales/index.ts`
   3. `tsc -b --noEmit` exits 0 after the refactor
   4. Locale-changed runtime behavior unchanged (manual switch from EN→ZH→ES→JA in Settings still updates UI live, no console errors)
-**Plans**: 1 plan
-  - [ ] 46-01-news-prefetch-multi-source-PLAN.md — Change `PreFetchCache.news` to carry filtered top-source arrays through queued-news prefetch, add regression coverage, and close CONTENT-03 verification/docs.
-
 ### Phase 38: v1.4 Carry-Over Cleanup
 **Goal**: Close all v1.4 carry-over documentation drift, device-only QA gaps, and the YouTube short-classification bug so v1.5 starts from a clean baseline.
 **Depends on**: Nothing (Wave 0 — parallel-safe with Phase 37)
@@ -1234,7 +1231,8 @@ _Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round
   3. Direct no-prefetch news generation remains unchanged: it still stores `filtered.slice(0, 3)`.
   4. A regression test proves the queued-news prefetch path preserves multiple sources into `newsMeta.sources`.
   5. `CONTENT-03` can be re-marked complete after phase verification and milestone re-audit.
-**Plans**: TBD
+**Plans**: 1/1 plans complete
+  - [x] 46-01-news-prefetch-multi-source-PLAN.md — Change `PreFetchCache.news` to carry filtered top-source arrays through queued-news prefetch, add regression coverage, and close CONTENT-03 verification/docs.
 
 ## Progress
 
@@ -1249,7 +1247,7 @@ _Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round
 | 43. Engagement UI | 15/15 | Complete    | 2026-05-12 |
 | 44. Dependency Version Sweep | 4/4 | Complete    | 2026-05-13 |
 | 45. Code Quality Sweep | 5/5 | Complete    | 2026-05-13 |
-| 46. News Prefetch Multi-Source Gap Closure | 0/1 | Planning complete | - |
+| 46. News Prefetch Multi-Source Gap Closure | 1/1 | Complete   | 2026-05-13 |
 
 ---
 

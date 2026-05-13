@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: gap closure)
-status: planning
-stopped_at: Milestone v1.5 gap closure phase added
-last_updated: "2026-05-13T06:52:07.984Z"
+status: verifying
+stopped_at: Completed 46-01-news-prefetch-multi-source-PLAN.md
+last_updated: "2026-05-13T08:17:44.667Z"
 last_activity: 2026-05-13
 progress:
   total_phases: 21
@@ -17,15 +17,15 @@ progress:
 
 ## Current Position
 
-Phase: 46 (news-prefetch-multi-source-gap-closure) — PENDING PLANNING
-Plan: Not started
-Status: Milestone v1.5 audit found CONTENT-03 gap; Phase 46 added to close queued-news prefetch multi-source grounding before archive
+Phase: 46 (news-prefetch-multi-source-gap-closure) — COMPLETE
+Plan: 1 of 1
+Status: Phase complete — ready for verification
 Last activity: 2026-05-13
-Phase summary: `.planning/phases/45-code-quality-sweep/45-PHASE-SUMMARY.md`
+Phase summary: `.planning/phases/46-news-prefetch-multi-source-gap-closure/46-01-news-prefetch-multi-source-SUMMARY.md`
 
 ## Progress
 
-**Phases:** 9 / 10 complete (37 ✓; 38 ✓; 39 ✓; 40 ✓; 41 ✓ with CONTENT-03 gap; 42 ✓; 43 ✓; 44 ✓; 45 ✓; 46 pending gap closure)
+**Phases:** 10 / 10 complete (37 ✓; 38 ✓; 39 ✓; 40 ✓; 41 ✓ with Phase 46 CONTENT-03 closure; 42 ✓; 43 ✓; 44 ✓; 45 ✓; 46 ✓)
 **Plans:** 15 / 15 complete in Phase 43 (43-01 shared-infra-and-locales ✓; 43-02 trim-presentation-style-tag ✓; 43-03 longpress-menu-and-masonry-integration ✓; 43-04 saved-screen-and-route ✓; 43-05 postdetail-deep-dive-trigger ✓; 43-06 homescreen-wiring ✓; 43-07 force-new-day-engagement-reset ✓; 43-08 phase-close-out ✓; 43-09 bottomsheet-portal-and-nav-clearance ✓ [gap-closure]; 43-10 engagement-corner-icon-chip-backdrop ✓ [gap-closure]; 43-11 homescreen-bookmark-inline-with-greeting ✓ [gap-closure]; 43-12 deep-dive-controls-above-essay-body ✓ [gap-closure]; 43-13 engagement-reset-dismissed-only ✓ [gap-closure]; 43-14 dismiss-filter-at-read-boundary ✓ [gap-closure]; 43-15 force-new-day-dedup ✓ [gap-closure]); 8 / 8 complete in Phase 42 (42-01 masonry-feed-skeleton ✓; 42-02 homescreen-swap ✓; 42-03 card-slide-in-removal ✓; 42-04 vine-bloom-card-and-i18n ✓; 42-05 source-reading-invariant-tests ✓; 42-06 roadmap-requirements-wording-correction ✓; 42-07 phase-close-out ✓; 42-08 heal-review-empty-anchor-fix ✓ [gap-closure]); 2 / 2 complete in Phase 41 (41-01 source-diversity-wiring ✓; 41-02 essay-depth-citation-rendering ✓); 1 / 1 complete in Phase 40 (40-01 source-diversity-service ✓); 1 / 1 complete in Phase 39 (39-01 engagement-service ✓)
 
 ```
@@ -73,11 +73,20 @@ All carry-overs are scheduled into Wave 0:
 
 ## Open blockers
 
-- **CONTENT-03 milestone audit gap** — queued news posts can still carry only one Tavily source because `preFetched.news` stores `filtered[0]` instead of the filtered top 2-3 results. Phase 46 closes this before v1.5 archive.
+None.
 
 ## Resolved blockers
 
 All v1.4 blockers resolved at close. Plan 45-04 Android evidence gate resolved on 2026-05-13 after `emulator-5554` became available and GraphScreen cold/warm drag evidence was recorded.
+
+- **CONTENT-03 milestone audit gap closed** — Phase 46 changed `PreFetchCache.news` to top-source arrays, routed direct and queued-prefetch paths through `selectNewsTopSources`, mapped cached arrays through `mapNewsSourcesToNewsMeta`, and added the queued-prefetch behavioral regression.
+
+## Last decisions (Plan 46-01 close, 2026-05-13)
+
+- **CONTENT-03 closed for milestone re-audit** — queued news prefetch now carries top 2-3 filtered Tavily sources through `PreFetchCache.news` into `newsMeta.sources` with stable source indexes.
+- **Helper seam established** — `news-source-metadata.ts` owns `selectNewsTopSources` and `mapNewsSourcesToNewsMeta`, so direct no-prefetch generation and queued prefetch use the same tested top-source selection path.
+- **Regression evidence recorded** — `concept-feed-source-diversity-wiring.test.mjs` proves mocked Tavily top sources map to multiple `newsMeta.sources`; full build/lint/test evidence lives in `46-VERIFY.md`.
+- **Next action** — rerun `$gsd-audit-milestone 1.5`, then `$gsd-complete-milestone 1.5`.
 
 ## Last decisions (Milestone v1.5 audit gap planning, 2026-05-13)
 
@@ -445,17 +454,20 @@ All v1.4 blockers resolved at close. Plan 45-04 Android evidence gate resolved o
 
 ## Session Continuity
 
-**Stopped at:** Completed 45-05-phase-close-out-PLAN.md
+**Stopped at:** Completed 46-01-news-prefetch-multi-source-PLAN.md
 **Next action:** Run milestone v1.5 verification/close-out.
 
-**Files written this session (Plan 45-05 phase close-out complete):**
+**Files written this session (Plan 46-01 gap closure complete):**
 
-- `.planning/phases/45-code-quality-sweep/45-VERIFY.md` (final command and requirement evidence)
-- `.planning/phases/45-code-quality-sweep/45-VALIDATION.md` (validated Nyquist sign-off)
-- `.planning/phases/45-code-quality-sweep/45-PHASE-SUMMARY.md` (Phase 45 rollup)
-- `.planning/phases/45-code-quality-sweep/45-05-phase-close-out-SUMMARY.md` (plan summary)
-- `.planning/REQUIREMENTS.md` (Phase 45 TECHDEBT traceability updated)
-- `.planning/ROADMAP.md` (Phase 45 plan progress updated to 5/5 complete)
+- `app/src/services/news-source-metadata.ts` (top-source selection and newsMeta mapping helper)
+- `app/src/services/concept-feed.service.ts` (queued news top-source array cache)
+- `app/tests/services/concept-feed-source-diversity-wiring.test.mjs` (CONTENT-03 regression)
+- `app/tests/services/post-essay.service.test.mjs` (helper-aware snippet invariant)
+- `.planning/phases/46-news-prefetch-multi-source-gap-closure/46-VERIFY.md` (final command evidence)
+- `.planning/phases/46-news-prefetch-multi-source-gap-closure/46-VALIDATION.md` (validated Nyquist sign-off)
+- `.planning/phases/46-news-prefetch-multi-source-gap-closure/46-01-news-prefetch-multi-source-SUMMARY.md` (plan summary)
+- `.planning/REQUIREMENTS.md` (CONTENT-03 marked complete)
+- `.planning/ROADMAP.md` (Phase 46 plan progress updated to 1/1 complete)
 - `.planning/STATE.md` (current position and decisions updated)
 
 **Files written previous session (Plan 45-04 performance profiling complete):**

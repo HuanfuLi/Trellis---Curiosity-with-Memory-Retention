@@ -1,9 +1,9 @@
 ---
 phase: 46
 slug: news-prefetch-multi-source-gap-closure
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-05-13
 ---
 
@@ -38,8 +38,8 @@ created: 2026-05-13
 
 | Task ID | Behavior | Requirement | Test Type | Automated Command | Status |
 |---------|----------|-------------|-----------|-------------------|--------|
-| 46-FIX-01 | `PreFetchCache.news` carries top 2-3 filtered Tavily results through queued-news prefetch into `newsMeta.sources` with stable source indexes | CONTENT-03 | behavioral helper regression + source-reading | `cd app && node --test tests/services/concept-feed-source-diversity-wiring.test.mjs` | pending |
-| 46-CLOSE-01 | Direct no-prefetch and queued-prefetch paths both use the tested top-source selection helper; final docs mark CONTENT-03 ready for re-audit | CONTENT-03 | source-reading + full suite | `cd app && npm run build && npm run lint && npm test` | pending |
+| 46-FIX-01 | `PreFetchCache.news` carries top 2-3 filtered Tavily results through queued-news prefetch into `newsMeta.sources` with stable source indexes | CONTENT-03 | behavioral helper regression + source-reading | `cd app && node --test tests/services/concept-feed-source-diversity-wiring.test.mjs` | pass |
+| 46-CLOSE-01 | Direct no-prefetch and queued-prefetch paths both use the tested top-source selection helper; final docs mark CONTENT-03 ready for re-audit | CONTENT-03 | source-reading + full suite | `cd app && npm run build && npm run lint && npm test` | pass |
 
 ---
 
@@ -51,11 +51,11 @@ None required. The gap is a static queued-prefetch wiring issue and must be clos
 
 ## Validation Sign-Off
 
-- [ ] Targeted queued-news prefetch regression uses mocked Tavily results and proves at least two cached sources become `newsMeta.sources`.
-- [ ] The regression asserts stable source indexes `1, 2, ...` and preserves title/url/snippet fields.
-- [ ] Direct no-prefetch news path uses the same top-source helper as queued prefetch.
-- [ ] Full build, lint, and test commands are recorded in Phase 46 verification evidence.
-- [ ] `CONTENT-03` is marked complete only after the regression and final verification pass.
-- [ ] `nyquist_compliant: true` set in frontmatter during phase close-out.
+- [x] Targeted queued-news prefetch regression uses mocked Tavily results and proves at least two cached sources become `newsMeta.sources`.
+- [x] The regression asserts stable source indexes `1, 2, ...` and preserves title/url/snippet fields.
+- [x] Direct no-prefetch news path uses the same top-source helper as queued prefetch.
+- [x] Full build, lint, and test commands are recorded in Phase 46 verification evidence.
+- [x] `CONTENT-03` is marked complete only after the regression and final verification pass.
+- [x] `nyquist_compliant: true` set in frontmatter during phase close-out.
 
-**Approval:** pending
+**Approval:** validated 2026-05-13
