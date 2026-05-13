@@ -1081,7 +1081,8 @@ _Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round
   2. New `src/lib/i18n-leaf.ts` shim exists and is imported by ≥6 service files in place of `src/locales/index.ts`
   3. `tsc -b --noEmit` exits 0 after the refactor
   4. Locale-changed runtime behavior unchanged (manual switch from EN→ZH→ES→JA in Settings still updates UI live, no console errors)
-**Plans**: TBD
+**Plans**: 1 plan
+  - [ ] 46-01-news-prefetch-multi-source-PLAN.md — Change `PreFetchCache.news` to carry filtered top-source arrays through queued-news prefetch, add regression coverage, and close CONTENT-03 verification/docs.
 
 ### Phase 38: v1.4 Carry-Over Cleanup
 **Goal**: Close all v1.4 carry-over documentation drift, device-only QA gaps, and the YouTube short-classification bug so v1.5 starts from a clean baseline.
@@ -1248,7 +1249,7 @@ _Updated: 2026-05-07 — Phase 36-12 EXECUTED: Promise-mutex refill closes round
 | 43. Engagement UI | 15/15 | Complete    | 2026-05-12 |
 | 44. Dependency Version Sweep | 4/4 | Complete    | 2026-05-13 |
 | 45. Code Quality Sweep | 5/5 | Complete    | 2026-05-13 |
-| 46. News Prefetch Multi-Source Gap Closure | 0/0 | Not planned | - |
+| 46. News Prefetch Multi-Source Gap Closure | 0/1 | Planning complete | - |
 
 ---
 
