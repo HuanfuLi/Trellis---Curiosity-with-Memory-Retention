@@ -86,45 +86,45 @@
 
 ## Traceability
 
-Traceability will be populated by the v1.6 roadmap.
+Traceability populated by the v1.6 roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FOUND-01 | — | Pending |
-| FOUND-02 | — | Pending |
-| FOUND-03 | — | Pending |
-| FOUND-04 | — | Pending |
-| INGEST-01 | — | Pending |
-| INGEST-02 | — | Pending |
-| INGEST-03 | — | Pending |
-| INGEST-04 | — | Pending |
-| GRAPH-01 | — | Pending |
-| GRAPH-02 | — | Pending |
-| GRAPH-03 | — | Pending |
-| GRAPH-04 | — | Pending |
-| GRAPHUI-01 | — | Pending |
-| GRAPHUI-02 | — | Pending |
-| GRAPHUI-03 | — | Pending |
-| RETRIEVE-01 | — | Pending |
-| RETRIEVE-02 | — | Pending |
-| RETRIEVE-03 | — | Pending |
-| RETRIEVE-04 | — | Pending |
-| PODCAST-01 | — | Pending |
-| PODCAST-02 | — | Pending |
-| PODCAST-03 | — | Pending |
-| PODCAST-04 | — | Pending |
-| PODCAST-05 | — | Pending |
-| LEARN-01 | — | Pending |
-| LEARN-02 | — | Pending |
-| LEARN-03 | — | Pending |
-| LEARN-04 | — | Pending |
-| LEARN-05 | — | Pending |
+| FOUND-01 | Phase 47 | Pending |
+| FOUND-02 | Phase 47 | Pending |
+| FOUND-03 | Phase 47 | Pending |
+| FOUND-04 | Phase 47 | Pending |
+| INGEST-01 | Phase 48 | Pending |
+| INGEST-02 | Phase 48 | Pending |
+| INGEST-03 | Phase 48 | Pending |
+| INGEST-04 | Phase 48 | Pending |
+| GRAPH-01 | Phase 49 | Pending |
+| GRAPH-02 | Phase 49 | Pending |
+| GRAPH-03 | Phase 49 | Pending |
+| GRAPH-04 | Phase 49 | Pending |
+| GRAPHUI-01 | Phase 50 | Pending |
+| GRAPHUI-02 | Phase 50 | Pending |
+| GRAPHUI-03 | Phase 50 | Pending |
+| RETRIEVE-01 | Phase 51 | Pending |
+| RETRIEVE-02 | Phase 51 | Pending |
+| RETRIEVE-03 | Phase 52 | Pending |
+| RETRIEVE-04 | Phase 52 | Pending |
+| PODCAST-01 | Phase 53 | Pending |
+| PODCAST-02 | Phase 53 | Pending |
+| PODCAST-03 | Phase 53 | Pending |
+| PODCAST-04 | Phase 53 | Pending |
+| PODCAST-05 | Phase 53 | Pending |
+| LEARN-01 | Phase 54 | Pending |
+| LEARN-02 | Phase 54 | Pending |
+| LEARN-03 | Phase 54 | Pending |
+| LEARN-04 | Phase 54 | Pending |
+| LEARN-05 | Phase 54 | Pending |
 
 **Coverage:**
 - v1.6 requirements: 29 total
-- Mapped to phases: 0
-- Unmapped: 29
+- Mapped to phases: 29
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-05-13*
-*Last updated: 2026-05-13 after v1.6 research synthesis*
+*Last updated: 2026-05-13 after v1.6 roadmap creation*
