@@ -83,12 +83,12 @@
 | TECHDEBT-04 | Phase 38 | Wave 0 | ✓ Complete |
 | TECHDEBT-05 | Phase 38 | Wave 0 | ✓ Complete |
 | TECHDEBT-06 | Phase 38 | Wave 0 | ✓ Complete |
-| TECHDEBT-07 | Phase 45 | Wave 4 | ✓ Complete (Plan 45-01 audit inventory) |
+| TECHDEBT-07 | Phase 45 | Wave 4 | ✓ Complete (Plan 45-05 final verification after Plan 45-01 audit inventory and Plan 45-02 closures) |
 | TECHDEBT-08 | Phase 44 | Wave 4 | ✓ Complete |
-| TECHDEBT-09 | Phase 45 | Wave 4 | ✓ Complete (Plan 45-03 dead-code sweep evidence) |
-| TECHDEBT-10 | Phase 45 | Wave 4 | ✓ Complete (Plan 45-04 Android GraphScreen evidence + localized mitigation) |
-| TECHDEBT-11 | Phase 45 | Wave 4 | ✓ Complete (Plan 45-03 final TODO/suppression dispositions) |
-| TECHDEBT-12 | Phase 45 | Wave 4 | ✓ Complete (Plan 45-03 operator-note dispositions) |
+| TECHDEBT-09 | Phase 45 | Wave 4 | ✓ Complete (Plan 45-05 final verification after Plan 45-03 dead-code sweep evidence) |
+| TECHDEBT-10 | Phase 45 | Wave 4 | ✓ Complete (Plan 45-05 final verification after Plan 45-04 Android GraphScreen evidence + localized mitigation) |
+| TECHDEBT-11 | Phase 45 | Wave 4 | ✓ Complete (Plan 45-05 final verification after Plan 45-03 final TODO/suppression dispositions) |
+| TECHDEBT-12 | Phase 45 | Wave 4 | ✓ Complete (Plan 45-05 final verification after Plan 45-03 operator-note dispositions) |
 
 ### Phase ownership summary
 
@@ -104,4 +104,4 @@
 
 ---
 
-*Last updated: 2026-05-08 — Traceability filled by roadmap (9 phases / 4 waves / 22 reqs mapped).*
+*Last updated: 2026-05-13 — Phase 45 close-out verified TECHDEBT-07, TECHDEBT-09, TECHDEBT-10, TECHDEBT-11, and TECHDEBT-12 against final evidence in `45-VERIFY.md`.*
