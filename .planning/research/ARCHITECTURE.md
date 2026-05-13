@@ -1,489 +1,523 @@
 # Architecture Research
 
-**Domain:** Curiosity Feed v2 + Tech-Debt Hardening — Integration into Trellis v1.5
-**Researched:** 2026-05-08
-**Confidence:** HIGH (all claims derived from direct source-code inspection of the live codebase)
+**Domain:** Trellis v1.6 Control, Graph Trust, Retrieval, Podcast Controls, and Ethical Engagement
+**Researched:** 2026-05-13
+**Confidence:** HIGH for existing integration points; MEDIUM for proposed UX surface names
 
----
+## Standard Architecture
 
-## Existing Architecture (Load-Bearing — Do Not Re-Architect)
+### System Overview
 
-The following is the production shape as of milestone v1.4 close. All v1.5 features must integrate WITH this structure, not replace it.
+v1.6 should extend Trellis through additive local-first services and typed events. The current architecture already has the right shape: React screens stay thin, services own business logic, `Question` records are the durable knowledge graph substrate, and screens re-read service state after event-bus signals.
 
 ```
-┌───────────────────────────────────────────────────────────────────────────────┐
-│  SwipeTabContainer (always-mounted 500vw horizontal strip)                    │
-│  HomeScreen  | PlannerScreen | AskScreen | GraphScreen | SettingsScreen       │
-│  (useState initializer fires ONCE at boot; navigation = no remount)           │
-└───────────────────────────────┬───────────────────────────────────────────────┘
-                                │ [location.pathname] useEffect resync
-                                ▼
-┌───────────────────────────────────────────────────────────────────────────────┐
-│  HomeScreen.tsx                                                                │
-│  ┌──────────────┐  ┌──────────────────────────────────────────────────────┐   │
-│  │  VineProgress│  │  InlineInfoFlow (InfoFlow.tsx)                       │   │
-│  │  (quota/     │  │  Single-column flex list, card-slide-in animations   │   │
-│  │   explored)  │  │  MemoizedConceptCard per DailyPost                   │   │
-│  └──────────────┘  │  ConnectionCard / MilestoneCard                      │   │
-│                    │  Pull-up gesture → handleLoad → infiniteScrollService │   │
-│                    └──────────────────────────────────────────────────────┘   │
-└───────────────────────────────┬───────────────────────────────────────────────┘
-                                │ calls
-                                ▼
-┌───────────────────────────────────────────────────────────────────────────────┐
-│  3-LIST PIPELINE  (CLAUDE.md load-bearing — 5+ re-explanations, DO NOT DRIFT) │
-│                                                                                │
-│  List 1: Daily Concept List                                                    │
-│    buildConceptBatch(questions) -> anchor nodes filtered by SM-2 due dates    │
-│    weighted: BASE_ENTRIES_PER_CONCEPT=4, x2 if important (ease<1.5 / dying)   │
-│    source consumed by flashcard + podcast pipelines too                        │
-│                    |                                                           │
-│                    v appendToDerivedList(ids) -- dedup on append               │
-│  List 2: Derived List (QueueState.derivedList in localStorage)                 │
-│    append-only, cyclePosition persisted                                        │
-│    walkDerivedList(count, exploredIds) -- lazy-skip explored anchors           │
-│    maxSteps = Math.max(count*2, len)  <- DO NOT regress to len*2              │
-│                    |                                                           │
-│                    v assignStyles (stratified largest-remainder + FY shuffle)  │
-│  List 3: Queue (QueueState.posts, max 32, threshold 16)                        │
-│    spreadByConcept -> spreadByStyle -> enqueueInterleaved                      │
-│    4 posts per swipe (strict per design)                                       │
-│    refillQueue guarded by _refillMutex (Promise-mutex, not boolean flag)       │
-│    STORAGE_KEY_LIVE + STORAGE_KEY_YESTERDAY (durable cold-start snapshot)      │
-└───────────────────────────────┬───────────────────────────────────────────────┘
-                                │ on post open
-                                ▼
-┌───────────────────────────────────────────────────────────────────────────────┐
-│  PostDetailScreen.tsx (sub-screen, Header via createPortal to document.body)  │
-│  generatePostEssay() -> post-essay.service.ts                                 │
-│    chatStream per sourceType: standard/video/news/text-art                    │
-│    bodyMarkdown:'' at creation; streamed on open                               │
-│  Detector A (scroll 70%) / B (30s dwell) / C (Q&A) / D (YouTube postMessage) │
-│  -> dailyReadService.markExplored -> CONCEPT_EXPLORED event                   │
-└───────────────────────────────────────────────────────────────────────────────┘
++--------------------------------------------------------------------------+
+| React Screens / Hooks                                                     |
+| Ask/useQuestions | GraphScreen | PodcastScreen | SavedScreen | Home      |
++-------------------------+------------------+-----------------------------+
+                          | calls services + subscribes to typed events
+                          v
++--------------------------------------------------------------------------+
+| Domain Services                                                           |
+| questionService        -> persists Q&A and durable knowledge nodes        |
+| question-filter        -> should become ingestion gate, not chat gate     |
+| canonical-knowledge    -> classifies root/branch/cluster/anchor           |
+| graphService           -> graph reads and edge weights                    |
+| podcastService         -> script/audio generation                         |
+| engagementService      -> save/like/dismiss post and anchor signals       |
+| NEW graph-edit         -> manual graph correction transactions            |
+| NEW retrieval/library  -> search, tags, bookmarks, concept dashboards     |
+| NEW learning-engagement-> goals, stop cues, reflection/retrieval prompts  |
++-------------------------+------------------+-----------------------------+
+                          | persists local-first state
+                          v
++--------------------------------------------------------------------------+
+| Storage                                                                   |
+| localStorage primary: trellis_questions, trellis_podcasts, engagement,    |
+| post history, settings, new v1.6 metadata stores                          |
+| SQLite backup: questions, edge_weights, planner tables                    |
+| IndexedDB: podcast audio blobs                                            |
++--------------------------------------------------------------------------+
 ```
 
----
+### Component Responsibilities
 
-## v1.5 Feature Integration Map
+| Component | Responsibility | Typical Implementation |
+|-----------|----------------|------------------------|
+| `questionService` | Durable Q&A persistence, related IDs, SQLite write-through | Modify to support "answer but do not ingest" and batch graph patches |
+| `question-filter.service.ts` | Current off-topic flagging | Refactor into ingestion evaluation with reason/confidence and override path |
+| `canonical-knowledge.service.ts` | Automatic classification and anchor/cluster creation | Keep auto pipeline; respect manual graph locks and correction metadata |
+| `graph.service.ts` | Graph reads, semantic candidates, edge weights | Add read helpers for editable graph operations; keep writes in new `graph-edit.service.ts` |
+| `GraphScreen.tsx` | MindElixir rendering and node selection | Add correction UI that delegates every mutation to `graph-edit.service.ts` |
+| `podcast.service.ts` | Daily script/audio generation and IndexedDB audio blobs | Add options snapshot and prompt builder for length/style controls |
+| `PodcastScreen.tsx` | Player, concept list, generation trigger | Add learner controls before generation/regeneration |
+| `SavedScreen.tsx` | Saved/Liked/History archive | Extend through retrieval/library service; avoid embedding search logic in the screen |
+| NEW `retrieval.service.ts` | Unified local search over concepts, Q&As, posts, history, tags | Pure service returning typed ranked results |
+| NEW `library.service.ts` | Tags/bookmarks and concept dashboard metadata | LocalStorage-backed leaf service, consumes existing engagement/post history |
+| NEW `learning-engagement.service.ts` | Goals, stop cues, reflection prompts, learning metrics | Separate from `engagementService` so likes/saves do not become addictive metrics |
 
-### Feature 1: Pinterest Masonry Layout
+## Recommended Project Structure
 
-**Integration point:** `app/src/components/InfoFlow.tsx` — specifically `InlineInfoFlow`
-
-**Current shape:**
 ```
-<div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-  {items.map((item, index) => (
-    <div key={index} style={{ minHeight: ... }}>
-      <MemoizedConceptCard ... />
-    </div>
-  ))}
-</div>
+app/src/
+├── types/index.ts
+│   └── Add ingestion, graph edit, podcast option, retrieval, and learning metric types
+├── services/
+│   ├── question-filter.service.ts      # refactor into ingestion evaluator
+│   ├── question.service.ts             # gate durable writes; add batch patch helpers
+│   ├── canonical-knowledge.service.ts  # respect graph locks/manual corrections
+│   ├── graph.service.ts                # graph read helpers
+│   ├── graph-edit.service.ts           # NEW: rename/move/merge/detach transactions
+│   ├── retrieval.service.ts            # NEW: ranked search across local stores
+│   ├── library.service.ts              # NEW: tags/bookmarks/dashboard metadata
+│   ├── podcast.service.ts              # options-aware generation
+│   └── learning-engagement.service.ts  # NEW: goals, cues, reflection, metrics
+├── screens/
+│   ├── GraphScreen.tsx                 # correction controls
+│   ├── PodcastScreen.tsx               # length/style controls
+│   ├── SavedScreen.tsx                 # search/tags/bookmark/history improvements
+│   └── ConceptDashboardScreen.tsx      # NEW or extend AnchorDetailScreen
+├── state/
+│   ├── useQuestions.ts                 # ingestion flow for streaming ask path
+│   ├── usePodcast.ts                   # option-aware generation state
+│   └── useRetrieval.ts                 # NEW thin hook over retrieval/library events
+└── tests/
+    ├── services/graph-edit*.test.mjs
+    ├── services/question-ingestion*.test.mjs
+    ├── services/retrieval*.test.mjs
+    ├── services/podcast-options*.test.mjs
+    └── services/learning-engagement*.test.mjs
 ```
 
-**Decision: New component, not a rewrite.**
+### Structure Rationale
 
-Extract a `MasonryFeed` component at `app/src/components/MasonryFeed.tsx`. `InlineInfoFlow` continues to own state (videoPlaying, seenPostIds, IntersectionObserver for video stop), event subscriptions (swipeCtx, visibilitychange), and the item-type dispatch (concept/connection/milestone). `MasonryFeed` receives the rendered slot list and handles column layout only.
+- **Keep services as owners:** This matches the repo's existing business-logic boundary and keeps screens from becoming persistence coordinators.
+- **Use additive leaf services:** `engagementService` and `postHistoryService` show the preferred localStorage-backed leaf pattern. Retrieval, library metadata, and ethical engagement should follow that style.
+- **Do not create a new graph database:** The graph is already encoded in `Question` fields (`parentId`, `isAnchorNode`, `isClusterNode`, `rootLabel`, `branchLabel`, `clusterLabel`, `clusterNodeId`, `qaCount`). v1.6 should add correction metadata, not fork the model.
+- **Keep `GRAPH_UPDATED` as the broad invalidation event:** Existing subscribers already re-read from storage on that event. Add specific edit events only for toast/undo/history details.
 
-Rationale: `InlineInfoFlow` carries six load-bearing concerns (video stop on swipe-away, video stop on route change, video stop on scroll-out, swipe gesture integration via SwipeTabContext, animation seeding for new posts, load-more trigger). Rewriting it risks regressions in all six. Column balancing is pure CSS/layout math — it can be isolated.
+## Architectural Patterns
 
-**Column-balancing logic location:** Inside `MasonryFeed` only. `InlineInfoFlow` passes `items` as a flat ordered array; `MasonryFeed` distributes into two column arrays by measuring or estimating item height.
+### Pattern 1: Ingestion Gate After Natural Chat
 
-**Height estimation approach (confidence: MEDIUM):** Real masonry requires measuring rendered heights, which requires a two-pass render or a ResizeObserver per card. For v1.5, use style-based height estimation instead: `video`/`short` = 320px estimate, `image` = 280px estimate, `text-art` = 180px estimate, `news`/`suggestion` = 200px estimate. Place each incoming item in the shorter column. This avoids ResizeObserver complexity and is accurate enough for style-proportional distribution.
+**What:** Chat answer generation and durable graph ingestion must become separate decisions. Natural chat can still be answered, but only valid learning material becomes a `Question`/anchor input.
 
-**Queue shape change:** None. The 3-list pipeline still produces a flat ordered array from `walkDerivedList`. `spreadByConcept` + `spreadByStyle` still run over the flat batch. `MasonryFeed` re-distributes display order across columns — this is purely a rendering concern, not a data-pipeline concern.
+**When to use:** Ask/chat paths, especially `useQuestions.askStreaming` and `questionService.ask`.
 
-**`spreadByConcept` + `spreadByStyle` implication:** These functions guarantee per-batch style and concept distribution. Masonry's column assignment does NOT need to preserve their exact output order — the display order across both columns combined equals the pipeline's delivery order. Users read both columns roughly top-to-bottom, so the distribution property (no consecutive same-concept, no consecutive same-style) still holds at the perceived reading order as long as items are assigned to columns by height rather than by concept/style bucket.
+**Trade-offs:** This changes the current streaming path, which calls `buildAndSave` before filtering and then patches `flagged`. The safer v1.6 shape is slightly more plumbing but prevents transient small talk and prompt-leak attempts from being broadcast as `QUESTION_ASKED`.
 
-**`useInfiniteScroll` / pull-up trigger:** `InlineInfoFlow`'s `onLoadMore` prop is already a callback to `HomeScreen.handleLoad`. The pull-up gesture detection lives in `HomeScreen.tsx` (touch handlers on the scroll container), not in `InlineInfoFlow`. This is unaffected by masonry. The `containerRef` in `useInfiniteScroll` attaches to the outer scroll container in `HomeScreen`, not to the feed component — also unaffected.
-
-**Android WebView / `position:fixed` rule:** Masonry columns use `display: grid` or two `flexDirection: column` children of a flex row. Neither creates a new containing block. The existing header portal pattern is unaffected.
-
-**Data flow for masonry:**
-```
-HomeScreen: dailyPosts[] (flat, unchanged)
-  -> useMemo: items: InfoFlowItem[] (flat, unchanged)
-    -> InlineInfoFlow(items) (unchanged -- owns video/event state)
-      -> MasonryFeed(items)  <- NEW
-        [leftCol, rightCol] = distributeByHeight(items)
-        renders two flex columns side by side
-```
-
----
-
-### Feature 2: Engagement-Aware Walker
-
-**Integration points:** `app/src/services/daily-read.service.ts`, `app/src/services/post-queue.service.ts` (walkDerivedList), `app/src/types/index.ts` (AppEvent union), `app/src/services/concept-feed.service.ts` (refillQueue)
-
-**New service: `app/src/services/engagement.service.ts`**
-
-Do NOT extend `dailyReadService`. Reasons:
-1. `dailyReadService` is date-scoped (resets daily). Engagement state has mixed persistence: `saved` is cross-day-permanent, `dismissed` is cross-day-persistent (durable skip), `liked` is per-post (survives across days as a marker on the post).
-2. `dailyReadService` already has a focused contract (`exploredAnchors`, `creditAwarded`). Adding engagement signals widens its scope past its testable boundary.
-3. The walker in `post-queue.service.ts` calls `dailyReadService.getExploredAnchors()` at walk time. Adding a new skip-list for dismissed anchors requires a clean parallel call surface.
-
-**`engagement.service.ts` public contract:**
+**Example:**
 
 ```typescript
-// localStorage key: 'trellis_engagement_v1'
-// permanent cross-day, no auto-reset
-engagementService.savePost(postId: string): void
-engagementService.unsavePost(postId: string): void
-engagementService.dismissAnchor(anchorId: string): void
-engagementService.undismissAnchor(anchorId: string): void
-engagementService.likePost(postId: string): void
-engagementService.unlikePost(postId: string): void
-engagementService.isSaved(postId: string): boolean
-engagementService.isDismissed(anchorId: string): boolean
-engagementService.isLiked(postId: string): boolean
-engagementService.getSavedPostIds(): string[]
-engagementService.getDismissedAnchorIds(): string[]  // consumed by walker
-```
+const answer = await generateAnswer(content, history);
+const decision = await ingestionGate.evaluate({ content, answer, sessionContext });
 
-**Walker integration — dismissed vs. explored:**
-
-`walkDerivedList` currently receives `exploredIds: string[]`. Extend its signature to accept an optional second skip list:
-
-```typescript
-walkDerivedList(count: number, exploredIds: string[], dismissedIds?: string[]): string[]
-```
-
-The lazy-skip predicate becomes: `if (exploredSet.has(id) || dismissedSet.has(id)) continue`. This is additive — the existing lazy-skip logic is unchanged, dismissed anchors are a second exclusion list. Default `dismissedIds = []` preserves all existing call sites.
-
-Call site update in `refillQueue` (concept-feed.service.ts):
-```typescript
-const exploredIds = dailyReadService.getExploredAnchors();
-const dismissedIds = engagementService.getDismissedAnchorIds();
-const batch = postQueueService.walkDerivedList(count, exploredIds, dismissedIds);
-```
-
-**Saved concepts — do NOT add extra weight in derived list.**
-
-`buildConceptBatch` operates on anchor IDs; a post is saved, not an anchor. Saved = user already engaged positively, not a signal of forgetting. The `isImportant` weight path (ease < 1.5 OR dying/falling/dead) already handles "user needs more of this concept." Instead, surface saved posts as a browsable collection (separate screen or Settings tab). The walker never needs to know about saves.
-
-**Event-bus signals — extend vs. new:**
-
-CLAUDE.md rule: "one signal per semantic event." `CONCEPT_EXPLORED` = user read/watched content. Dismiss = user explicitly does not want to see this concept. These are distinct user intents — do not extend `CONCEPT_EXPLORED`.
-
-Add ONE new event to the AppEvent union in `src/types/index.ts`:
-
-```typescript
-| { type: 'ANCHOR_DISMISSED'; payload: { anchorId: string; permanent: boolean } }
-```
-
-Subscribers: `HomeScreen` (filter dismissed post from `dailyPosts` local state). No subscription needed in `postQueueService` — `dismissedAnchorIds` is read synchronously from `engagementService` at walk time.
-
-For `liked` and `saved`: no event-bus needed in v1.5. These are local state mutations that update UI via `engagementService` getter calls after mutation. No cross-screen broadcast needed.
-
-**UI integration — where engagement controls render:**
-
-Add an action row to `ConceptCard` in `InfoFlow.tsx` (bottom of each card): like, save, dismiss icons. On dismiss: call `engagementService.dismissAnchor(anchorId)` + emit `ANCHOR_DISMISSED`. `HomeScreen` subscribes to `ANCHOR_DISMISSED` and filters the dismissed post out of `dailyPosts`.
-
----
-
-### Feature 3: Source Diversity Hook Point
-
-**Integration points:** `app/src/services/concept-feed.service.ts` (news branch of `generatePostBatch`, video/short branches), new leaf module.
-
-**Decision: Pre-filter at Tavily/YouTube call site, not at derived-list build time, not at display time.**
-
-Rationale:
-- Display-time filtering wastes LLM tokens on posts that get discarded.
-- Derived-list build time is too early — we don't know which sources will be fetched until style assignment says "this concept gets a news post."
-- The Tavily call in `generatePostBatch`'s news branch already has the per-concept query. A diversity filter at this point can check previously-fetched domains for this concept and bias toward underrepresented domains.
-
-**New leaf module: `app/src/services/source-diversity.ts`**
-
-```typescript
-// Session-scoped in-memory state. Cleared on explicit reset() or day boundary.
-// No persistence — source diversity is a per-session concern, not cross-day.
-
-filterForDiversity(
-  results: WebSearchResult[],
-  conceptId: string,
-  maxPerDomain?: number,   // default 2
-): WebSearchResult[]
-
-recordServedDomain(conceptId: string, domain: string): void
-
-scoreSource(result: WebSearchResult): number   // domain quality signal, 0-1
-
-reset(): void   // called on day boundary, matching concept-feed-dedup pattern
-```
-
-Call site: in `generatePostBatch`'s news branch, after Tavily returns results, before constructing the `DailyPost` shell. Pattern mirrors `hasSeenVideoId` / `addSeenVideoId` from `concept-feed-dedup.ts`.
-
-**YouTube source diversity:** Apply to `YouTubeSearchResult` in the video/short branches — track served `channelId` per concept, prefer underrepresented channels. Extend `source-diversity.ts` with parallel functions or keep in `concept-feed-dedup.ts` (existing file for videoId dedup).
-
-**Leaf-module constraint:** `source-diversity.ts` must have zero imports from `settings.service.ts` / `locales/index.ts` chains so `node --test` can import it directly. Session state lives in module-level Maps.
-
----
-
-### Feature 4: Richer Essay Variants
-
-**Integration point:** `app/src/services/post-essay.service.ts` — `generatePostEssay` dispatcher and `generateStandardEssay`.
-
-**Decision: Same service, different system prompts + token budgets. No new service.**
-
-Rationale: A new service would require `PostDetailScreen` to branch on which service to call. The existing dispatcher (`generatePostEssay` branches on `sourceType` / `presentationStyle`) is the right extension point — new depth variants fit naturally alongside existing sourceType variants.
-
-**Extension pattern:**
-
-```typescript
-// Extend EssayOptions:
-export interface EssayOptions {
-  signal?: AbortSignal;
-  depth?: 'standard' | 'deep';   // default: 'standard'
+if (decision.ingest) {
+  const question = questionService.buildAndSave(content, answer, store, {
+    ingestion: decision,
+  });
+  eventBus.emit({ type: 'QUESTION_INGESTED', payload: { questionId: question.id, decision } });
+  void classifyAndAnchorIncremental(question, questionService.getAll(), llmConfig, signal);
+} else {
+  eventBus.emit({ type: 'QUESTION_INGESTION_EVALUATED', payload: { decision } });
 }
 ```
 
-Inside `generateStandardEssay`, branch on `options?.depth === 'deep'` to use an alternate system prompt with:
-- Word target: 400-600 words vs. current 200-350
-- Explicit citation format instruction (inline `[1]` markers tied to `post.newsMeta.sources` for news posts)
-- Required structure: concept explanation -> real-world example -> why it matters
+### Pattern 2: Graph Edits as Transactions Over `Question[]`
 
-**Token budget handling for longer essays:** Add explicit `maxTokens: 1200` to the stream options for deep essays (the `serviceName` options bag already accepts this). This prevents mid-stream truncation on providers that default to 512 or 1024 tokens.
+**What:** Manual graph correction should be centralized in `graph-edit.service.ts`. Each operation reads the latest `trellis_questions`, computes all affected patches, writes them together, records an edit log entry, updates SQLite via `questionService`, and emits events.
 
-**Abort signal:** `EssayOptions.signal` already threads through to every `chatStream` call. No changes needed.
+**When to use:** Rename anchor/cluster, move anchor, move Q&A, merge anchors, detach Q&A, restore/undo.
 
-**When to activate deep mode:** `PostDetailScreen.tsx` decides. Add a "Deep dive" button that re-triggers `generatePostEssay` with `{ depth: 'deep', signal: controller.signal }` after resetting the markdown state. The existing `bodyMarkdown` streaming state already supports re-streaming.
+**Trade-offs:** A transaction helper is needed because current code patches one question at a time. Without centralization, `qaCount`, `nodeSummary`, child labels, and cluster aggregates will drift.
 
-**Citation render polish:** `patchPostEssayInCache` already patches `bodyMarkdown` into cache after streaming. `Markdown.tsx` (rehype-raw + rehype-sanitize) already renders `<sup>` tags. Citation styling is a CSS-only change in `PostDetailScreen.tsx`.
-
----
-
-### Feature 5: i18n Leaf-Module Refactor
-
-**Problem:** 5 services currently import from `src/locales/index.ts` directly for toast calls. `src/locales/index.ts` imports `en.json` with a JSON import assertion that fails under `node --test` (`ERR_IMPORT_ATTRIBUTE_MISSING`). This blocks test coverage for all 5 services and closes 10 v1.4 carried test failures.
-
-**Affected files:**
-- `src/services/flashcard.service.ts`
-- `src/services/session.service.ts`
-- `src/services/question.service.ts`
-- `src/services/scheduler.service.ts`
-- `src/services/podcast.service.ts`
-- `src/services/youtube-locale-url.ts` (imports `i18next` directly — same failure chain)
-
-**Decision: Extract `app/src/lib/i18n-leaf.ts` as an injectable shim, NOT a new i18n runtime.**
+**Example:**
 
 ```typescript
-// app/src/lib/i18n-leaf.ts
-// Leaf shim: zero imports from locales chain.
-// Services call t() from here; actual i18next instance injected at app boot.
-// Under node --test: inject a passthrough stub.
+graphEditService.moveAnchor({
+  anchorId,
+  targetClusterId,
+  lockPlacement: true,
+});
 
-let _t: (key: string, opts?: Record<string, unknown>) => string = (key) => key;
-
-export function t(key: string, opts?: Record<string, unknown>): string {
-  return _t(key, opts);
-}
-
-export function injectI18nRuntime(
-  fn: (key: string, opts?: Record<string, unknown>) => string
-): void {
-  _t = fn;
-}
+// Internally:
+// 1. patch anchor labels + clusterNodeId
+// 2. patch all child Q&As to the same labels/clusterNodeId
+// 3. recompute old/new cluster qaCount
+// 4. append GraphEditRecord
+// 5. emit GRAPH_EDIT_APPLIED + GRAPH_UPDATED
 ```
 
-**At app boot** (`app/src/main.tsx`, after i18n init completes):
+### Pattern 3: Retrieval Reads Existing Stores, Tags Live Separately
+
+**What:** Search should aggregate from `questionService`, `postHistoryService`, `engagementService`, and `podcastService`, while user-authored tags/bookmarks live in a dedicated localStorage store.
+
+**When to use:** Saved/Liked/History search, concept dashboards, later "find this again" workflows.
+
+**Trade-offs:** On-demand indexing is simpler and safer for local-first v1.6 than a persisted search index. Persist only user metadata; derive rankings from current data.
+
+### Pattern 4: Option Snapshots for Podcasts
+
+**What:** Store the learner's generation options on each `DailyPodcast` so the script/audio can be reproduced and invalidated deterministically.
+
+**When to use:** Length/style controls, default podcast preferences, regeneration.
+
+**Trade-offs:** A single daily podcast remains simpler than multiple variants per day. If options change, mark the existing podcast `pending` or generate over the same ID after explicit user action.
+
+### Pattern 5: Ethical Engagement is Not Feed Engagement
+
+**What:** Keep goals, stop cues, reflection prompts, and learning metrics in `learning-engagement.service.ts`, separate from `engagementService`.
+
+**When to use:** Home feed cues, post-completion prompts, Saved retrieval prompts, Planner goals.
+
+**Trade-offs:** Separating services avoids turning saves/likes into the central success metric. The app can show learning-oriented signals without corrupting the existing save/like/dismiss semantics.
+
+## Data Flow
+
+### v1.6 Ask and Ingestion Flow
+
+```
+User asks in AskScreen
+  -> useQuestions.askStreaming / questionService.ask
+  -> LLM answers naturally
+  -> ingestionGate evaluates durable-learning eligibility
+      -> not ingestible: session message only, no Question, no graph event
+      -> ingestible: questionService.buildAndSave
+          -> QUESTION_ASKED / QUESTION_INGESTED
+          -> classifyAndAnchorIncremental
+          -> GRAPH_UPDATED
+  -> GraphScreen/Home/Planner re-read on GRAPH_UPDATED
+```
+
+Critical change: filtering is an ingestion boundary, not a presentation boundary. A valid learning question about "system prompts" must ingest; "show me your system prompt" must not.
+
+### v1.6 Graph Correction Flow
+
+```
+GraphScreen node selected
+  -> correction sheet/action
+  -> graphEditService operation
+  -> fresh Question[] read
+  -> multi-node patch + graph edit log append
+  -> SQLite write-through for patched questions
+  -> GRAPH_EDIT_APPLIED
+  -> GRAPH_UPDATED
+  -> GraphScreen/useTrellisData/Planner/Home re-read local state
+```
+
+Affected records by operation:
+
+| Operation | Records to Patch | Notes |
+|-----------|------------------|-------|
+| Rename anchor | Anchor title/content/summary/aliases, optional child placement reason | Keep `id` stable |
+| Rename cluster | Cluster node, child anchors, child Q&As | Recompute reflection tree labels |
+| Move anchor | Anchor labels/`clusterNodeId`, all child Q&A labels/`clusterNodeId`, old/new cluster `qaCount` | Mark manual lock so classifier does not move it back |
+| Move Q&A | Q&A `parentId`, labels, `clusterNodeId`, old/new anchor `qaCount` and summaries | Use for "this answer belongs elsewhere" |
+| Merge anchors | Survivor anchor metadata, all source child Q&As `parentId`, source anchor tombstone/`mergedIntoId`, cluster counts | Prefer reversible tombstone over hard delete |
+| Detach Q&A | Q&A `parentId` removed, labels preserved or set to chosen cluster | Legacy leaf remains visible |
+
+### v1.6 Retrieval Flow
+
+```
+SavedScreen / ConceptDashboard / Search UI
+  -> retrievalService.search(query, filters)
+      -> questionService.getAll({ includeFlagged: false })
+      -> postHistoryService.getPosts()
+      -> engagementService saved/liked IDs
+      -> podcastService.getAll()
+      -> libraryService tag/bookmark metadata
+      -> ranked SearchResult[]
+  -> UI opens /anchor/:id, /ask/:id, /posts/:id, or /podcast
+```
+
+The first implementation should use lexical matching plus existing `embeddingVector` where available. Persisting a separate vector index is unnecessary for v1.6.
+
+### v1.6 Podcast Generation Flow
+
+```
+PodcastScreen controls
+  -> usePodcast.generatePodcast(date, conceptIds, options)
+  -> podcastService stores pending DailyPodcast with options snapshot
+  -> prompt builder uses length/style/source concepts
+  -> LLM script generation
+  -> TTS synthesize
+  -> IndexedDB audio blob
+  -> PODCAST_GENERATION_* events
+  -> usePodcast updates player state
+```
+
+### v1.6 Ethical Engagement Flow
+
+```
+Home/Post/Saved/Planner signals
+  -> learningEngagementService.record(...)
+  -> local daily metrics + goal progress update
+  -> LEARNING_METRICS_UPDATED
+  -> optional LEARNING_CUE_TRIGGERED
+  -> UI shows stop cue, retrieval prompt, or reflection prompt
+```
+
+This should consume existing signals (`CONCEPT_EXPLORED`, post history, review completion) and avoid new addictive counters such as streak-first or endless-scroll rewards.
+
+## Storage Schema Changes
+
+### Modify `Question`
+
+Additive fields only; old records must continue to parse.
+
 ```typescript
-import { injectI18nRuntime } from './lib/i18n-leaf';
-import i18n from './locales';
-injectI18nRuntime((key, opts) => i18n.t(key, opts));
+interface Question {
+  ingestion?: {
+    status: 'ingested' | 'not_ingested' | 'override_ingested';
+    reason: 'learning' | 'small_talk' | 'prompt_leak' | 'jailbreak' | 'non_learning' | 'ambiguous';
+    confidence: number;
+    decidedAt: number;
+    overrideable: boolean;
+  };
+  graphTrust?: {
+    manualPlacement?: boolean;
+    locked?: boolean;
+    correctedAt?: number;
+    correctionCount?: number;
+    mergedIntoId?: string;
+    detachedAt?: number;
+  };
+}
 ```
 
-**In each affected service:** Replace `import i18n from '../locales/index.ts'` + `i18n.t(...)` with `import { t } from '../lib/i18n-leaf'` + `t(...)`.
+### Modify `DailyPodcast`
 
-**In tests:** Import `injectI18nRuntime` and inject a key-passthrough stub:
-```javascript
-import { injectI18nRuntime } from '../../src/lib/i18n-leaf.ts';
-injectI18nRuntime((key) => key);  // returns the key as the value
+```typescript
+interface PodcastGenerationOptions {
+  targetDurationSec: 90 | 180 | 300 | 600;
+  style: 'recap' | 'socratic' | 'story' | 'exam-prep';
+  detailLevel: 'light' | 'standard' | 'deep';
+}
+
+interface DailyPodcast {
+  options?: PodcastGenerationOptions;
+  optionsHash?: string;
+}
 ```
 
-This is the same pattern used by `feed-spread.ts` and `refill-mutex.ts` (zero transitive deps, directly importable under `node --test`).
+### Modify `PodcastSettings`
 
-**This refactor is a prerequisite (Wave 0) for any new services that need toast calls, since those new services must also be leaf-importable.**
+```typescript
+interface PodcastSettings {
+  sleepTime: string;
+  advanceMinutes: number;
+  autoGenerate: boolean;
+  defaultOptions?: PodcastGenerationOptions;
+}
+```
+
+### New `trellis_graph_edits_v1`
+
+```typescript
+interface GraphEditRecord {
+  id: string;
+  type: 'rename' | 'move' | 'merge' | 'detach' | 'undo';
+  targetIds: string[];
+  before: Array<Pick<Question, 'id' | 'parentId' | 'rootLabel' | 'branchLabel' | 'clusterLabel' | 'clusterNodeId' | 'title' | 'qaCount' | 'nodeSummary'>>;
+  after: Array<Partial<Question> & { id: string }>;
+  createdAt: number;
+}
+```
+
+### New `trellis_library_v1`
+
+```typescript
+interface LibraryState {
+  tagsByItemId: Record<string, string[]>;
+  bookmarks: Array<{ itemId: string; itemType: 'post' | 'question' | 'anchor' | 'podcast'; createdAt: number }>;
+}
+```
+
+Keep saved/liked post IDs in `trellis_engagement_v1`; do not duplicate them in `trellis_library_v1`.
+
+### New `trellis_learning_engagement_v1`
+
+```typescript
+interface LearningEngagementState {
+  goals: Array<{ id: string; label: string; cadence: 'daily' | 'weekly'; target: number; createdAt: number }>;
+  dailyMetrics: Record<string, {
+    conceptsExplored: number;
+    retrievalPromptsAnswered: number;
+    reviewsCompleted: number;
+    postsViewed: number;
+    stopCueShownAt?: number;
+  }>;
+  reflectionPrompts: Array<{ id: string; prompt: string; sourceId?: string; answeredAt?: number; createdAt: number }>;
+}
+```
+
+### SQLite / Backup Implications
+
+- `questions` table stores the full `Question` JSON, so new `Question` fields are backed up automatically.
+- Add no SQLite table for `trellis_library_v1` or `trellis_learning_engagement_v1` in the first pass unless product requires backup parity. Current engagement/history services are localStorage-only, so matching that pattern is acceptable.
+- If graph edit undo must survive localStorage eviction independently, add `graph_edits (id TEXT PRIMARY KEY, data TEXT NOT NULL)` to `db.service.ts`; otherwise the durable corrected graph state already lives in `questions`.
+- `clearAllTables()` and Settings "Clear All Data" must remove any new `trellis_` keys automatically; explicit DB table cleanup is needed only if a new SQLite table is added.
+
+## Event-Bus Updates
+
+Keep existing events stable. Add events where consumers need specific semantics; otherwise emit existing broad invalidation events.
+
+| Event | Payload | Emitted By | Consumers |
+|-------|---------|------------|-----------|
+| `QUESTION_INGESTION_EVALUATED` | `{ decision }` | ingestion gate | Ask UI, tests, optional debug UI |
+| `QUESTION_INGESTED` | `{ questionId, decision }` | question service/useQuestions | Optional analytics/metrics; `QUESTION_ASKED` can remain for compatibility |
+| `GRAPH_EDIT_APPLIED` | `{ editId, type, targetIds }` | `graph-edit.service.ts` | Graph toast, undo affordance, tests |
+| `GRAPH_EDIT_REVERTED` | `{ editId }` | `graph-edit.service.ts` | Graph toast/history |
+| `GRAPH_UPDATED` | no payload | graph edit, classifier, delete/prune/reorg | Existing re-read subscribers |
+| `LIBRARY_CHANGED` | `{ kind, itemId, itemType }` | `library.service.ts` | SavedScreen, ConceptDashboard, search UI |
+| `RETRIEVAL_INDEX_UPDATED` | `{ reason }` | retrieval/library service if cached | Search UI only if a cache is introduced |
+| `PODCAST_OPTIONS_CHANGED` | `{ date, options }` | PodcastScreen/usePodcast | PodcastScreen, scheduler if auto-generation observes defaults |
+| `LEARNING_GOAL_UPDATED` | `{ goalId }` | learning engagement service | Home/Planner goal displays |
+| `LEARNING_CUE_TRIGGERED` | `{ cue, reason }` | learning engagement service | Home/Post cue UI |
+| `LEARNING_METRICS_UPDATED` | `{ date }` | learning engagement service | Dashboard/Planner/Home |
+
+Do not overload `ENGAGEMENT_CHANGED` for goals or learning metrics. That event is already scoped to save/unsave/like/unlike/undismiss and SavedScreen depends on that narrow meaning.
+
+## Integration Points
+
+### Modified Files
+
+| File | Change |
+|------|--------|
+| `app/src/types/index.ts` | Add ingestion decision, graph edit, podcast options, retrieval result, learning engagement types, and new `AppEvent` variants |
+| `app/src/services/question-filter.service.ts` | Replace boolean off-topic classifier with ingestion gate result; fix prompt-leak false positive for legitimate conceptual questions |
+| `app/src/services/question.service.ts` | Split answer generation from durable save, support ingestion metadata, add batch patch/replace helper for graph transactions |
+| `app/src/state/useQuestions.ts` | Apply ingestion gate before `buildAndSave` on streaming path; preserve byte-stable system prompt invariants |
+| `app/src/services/canonical-knowledge.service.ts` | Respect `graphTrust.locked/manualPlacement`; avoid moving manually corrected nodes during classification/reorg |
+| `app/src/services/graph.service.ts` | Add read helpers for anchors/clusters/children and validation candidates |
+| `app/src/screens/GraphScreen.tsx` | Add manual correction UI while keeping MindElixir `editable: false`; all writes go through service |
+| `app/src/services/podcast.service.ts` | Accept generation options, store options snapshot, build prompt from length/style/detail |
+| `app/src/state/usePodcast.ts` | Pass options through generation and reload state after option changes |
+| `app/src/screens/PodcastScreen.tsx` | Add learner controls and regeneration behavior |
+| `app/src/screens/SavedScreen.tsx` | Add search/filter/tags via retrieval/library service |
+| `app/src/services/settings.service.ts` | Add default podcast options and possibly ethical-engagement preferences |
+| `app/src/services/db.service.ts` | Only modify if graph edit log gets SQLite backup |
+| `app/src/screens/settings/SettingsDataScreen.tsx` | Ensure new stores clear/reset correctly; add developer reset if needed |
+
+### New Files
+
+| File | Purpose |
+|------|---------|
+| `app/src/services/ingestion-gate.service.ts` | Optional extraction if `question-filter.service.ts` becomes too broad; recommended for testability |
+| `app/src/services/graph-edit.service.ts` | Manual graph correction transactions and edit history |
+| `app/src/services/retrieval.service.ts` | Unified local search/ranking |
+| `app/src/services/library.service.ts` | Tags/bookmarks metadata |
+| `app/src/services/learning-engagement.service.ts` | Goals, stop cues, reflection prompts, learning metrics |
+| `app/src/state/useRetrieval.ts` | Thin hook for Saved/Dashboard search state |
+| `app/src/screens/ConceptDashboardScreen.tsx` | Concept-level retrieval/review/dashboard surface, unless folded into `AnchorDetailScreen.tsx` |
+| `app/src/components/graph/GraphEditSheet.tsx` | Graph correction actions |
+| `app/src/components/retrieval/SearchBar.tsx` | Shared search input/filter controls |
+| `app/src/components/learning/StopCue.tsx` | Ethical stop/reflection cue UI |
+
+### Internal Boundaries
+
+| Boundary | Communication | Notes |
+|----------|---------------|-------|
+| Ask -> ingestion -> graph | Service call + typed events | Do not emit persisted question events for non-ingested chat |
+| GraphScreen -> graph edits | `graphEditService` only | MindElixir stays non-editable; custom UI controls write through service |
+| Classifier -> manual graph state | Read `graphTrust` fields | Locked/manual nodes are constraints, not suggestions |
+| SavedScreen -> retrieval | `retrievalService` and `libraryService` | Avoid direct multi-store search logic in screen |
+| PodcastScreen -> podcast service | Options object | Store option snapshot on `DailyPodcast` |
+| Ethical cues -> feed/archive/planner | `learningEngagementService` events | Keep separate from `engagementService` save/like events |
+
+## Scaling Considerations
+
+| Scale | Architecture Adjustments |
+|-------|--------------------------|
+| Current local-first single user | On-demand scans of `Question[]` and post history are fine |
+| Large personal graph, 1k-10k nodes | Add memoized retrieval indexes in memory; batch graph patches; avoid O(N^2) graph validation in UI thread |
+| Very large local archive | Persist lightweight search index in IndexedDB, not localStorage; move audio/history cleanup into background tasks |
+
+### Scaling Priorities
+
+1. **First bottleneck:** Graph edit operations that recompute summaries/counts across all questions. Fix with service-level batch helpers and focused affected-subtree recomputation.
+2. **Second bottleneck:** Retrieval scanning every post and question on each keystroke. Fix with debounce and in-memory index rebuilt on `GRAPH_UPDATED`, `LIBRARY_CHANGED`, and post-history changes.
+3. **Third bottleneck:** Podcast audio storage. IndexedDB is already the right store; add quota-aware cleanup only after options increase generation frequency.
+
+## Anti-Patterns
+
+### Anti-Pattern 1: Treating Filtering as "Do Not Answer"
+
+**What people do:** Block or refuse small talk/meta questions before chat generation.
+**Why it's wrong:** The product requirement is natural chat with selective graph ingestion. Blocking presentation makes the app feel brittle and still does not solve graph pollution cleanly.
+**Do this instead:** Answer naturally, then decide whether to create durable `Question`/graph state.
+
+### Anti-Pattern 2: Letting MindElixir Mutate the Model
+
+**What people do:** Turn on `editable: true` and infer model updates from library DOM events.
+**Why it's wrong:** The real model includes anchors, clusters, Q&A children, `qaCount`, `clusterNodeId`, SQLite write-through, and graph invalidation events. DOM editing cannot keep those coherent.
+**Do this instead:** Keep `editable: false` and build explicit graph edit controls backed by `graph-edit.service.ts`.
+
+### Anti-Pattern 3: Hard-Deleting Merged Graph Nodes
+
+**What people do:** Delete source anchors during merge.
+**Why it's wrong:** Local-first async writes and SQLite restore rules can resurrect stale rows, and hard delete removes undo context.
+**Do this instead:** Reparent children to the survivor and tombstone the source anchor with `graphTrust.mergedIntoId` or a similar additive field.
+
+### Anti-Pattern 4: Duplicating Saved/Liked State in a New Library Store
+
+**What people do:** Copy saved and liked post IDs into `libraryService`.
+**Why it's wrong:** `engagementService` already owns those semantics and emits narrow events. Duplication creates ordering and retention bugs.
+**Do this instead:** Let `libraryService` own tags/bookmarks only and read saved/liked through `engagementService`.
+
+### Anti-Pattern 5: Using Likes/Saves as Learning Success
+
+**What people do:** Build "success metrics" from feed engagement counts.
+**Why it's wrong:** v1.6 is explicitly adding ethical engagement guardrails. Saves/likes are useful retrieval signals, not evidence of learning.
+**Do this instead:** Track retrieval prompts answered, reviews completed, concepts revisited, and reflection completion.
+
+## Suggested Build Order
+
+1. **Ingestion Gate Foundation**
+   - Modify `question-filter.service.ts`, `question.service.ts`, and `useQuestions.ts`.
+   - Add ingestion metadata and events.
+   - Rationale: This prevents new graph pollution before manual graph work depends on the graph being trustworthy.
+
+2. **Graph Edit Service and Tests**
+   - Add batch patch helper, `graph-edit.service.ts`, edit records, and service tests for rename/move/merge/detach.
+   - Rationale: Correctness belongs in a service before UI makes it easy to mutate production data.
+
+3. **GraphScreen Correction UI**
+   - Add node action sheet/menus that call graph edit operations.
+   - Rationale: UI is now a thin consumer of tested graph transactions.
+
+4. **Retrieval and Library Services**
+   - Add search/ranking, tags/bookmarks, and `LIBRARY_CHANGED`.
+   - Rationale: Retrieval depends on stable graph IDs and should reuse corrected anchors.
+
+5. **SavedScreen and Concept Dashboard Retrieval Surfaces**
+   - Add search/filter/tags to Saved/Liked/History; add concept dashboard or extend anchor detail.
+   - Rationale: Surfaces consume retrieval services without affecting ingestion/graph correctness.
+
+6. **Podcast Options**
+   - Add options types, settings defaults, prompt builder, PodcastScreen controls, and option-aware regeneration.
+   - Rationale: Mostly independent after retrieval, but it benefits from stable concept selection and dashboard links.
+
+7. **Ethical Engagement Guardrails**
+   - Add learning goals, stop cues, reflection/retrieval prompts, and learning metrics.
+   - Rationale: This should consume stable signals from ingestion, retrieval, reviews, feed history, and podcast completion rather than invent parallel metrics.
+
+## Sources
+
+- `.planning/PROJECT.md` - v1.6 milestone goals and local-first architecture decisions.
+- `app/src/types/index.ts` - `Question`, `DailyPodcast`, settings, `AppEvent`, and graph-related domain types.
+- `app/src/services/question.service.ts` - current save/filter/classification order and SQLite write-through.
+- `app/src/services/question-filter.service.ts` - current pattern/LLM off-topic classifier.
+- `app/src/services/canonical-knowledge.service.ts` - anchor/cluster projection, classification, reorg, and `GRAPH_UPDATED`.
+- `app/src/services/graph.service.ts` - graph reads, edge weights, semantic candidates, parent movement.
+- `app/src/screens/GraphScreen.tsx` - MindElixir rendering, read-only graph UI, reorg events.
+- `app/src/services/podcast.service.ts` - current fixed 90-second prompt, localStorage metadata, IndexedDB audio.
+- `app/src/screens/PodcastScreen.tsx` - current player/generation/concept insertion flow.
+- `app/src/screens/SavedScreen.tsx` - Saved/Liked/History archive and `ENGAGEMENT_CHANGED` refresh pattern.
+- `app/src/services/engagement.service.ts` - save/like/dismiss ownership and event semantics.
+- `app/src/services/post-history.service.ts` - local post archive consumed by Saved/Liked.
+- `app/src/services/db.service.ts` - SQLite/localStorage persistence boundary.
 
 ---
-
-### Feature 6: Engagement Local Store
-
-**Decision: New `engagement.service.ts`. Do not extend `dailyReadService`.**
-
-**localStorage key:** `'trellis_engagement_v1'` (namespaced per Trellis convention, versioned for future schema migration).
-
-**Cross-day persistence model:**
-- `savedPostIds`: permanent, never auto-cleared. User bookmarks survive app restarts.
-- `dismissedAnchorIds`: permanent. User said "don't show me this" — reset only via explicit "undo dismiss" or Clear All Data. The walker uses this as a durable skip list.
-- `likedPostIds`: permanent per-post marker.
-
-No date-based reset logic (unlike `dailyReadService`). The service reads/writes localStorage directly on each call — no in-memory cache layer needed since operations are infrequent.
-
-**Testability:** `engagement.service.ts` must be a leaf module — zero imports from settings.service / locales chains. State is read/written via `localStorage.getItem/setItem`. Tests stub localStorage via `globalThis.localStorage = { getItem: ..., setItem: ... }`, matching the existing `post-queue.service.ts` test pattern.
-
----
-
-## Data Flow Changes (v1.5 additions in context of existing flows)
-
-### Engagement dismiss flow
-```
-User taps dismiss on ConceptCard (InfoFlow.tsx)
-  -> engagementService.dismissAnchor(anchorId)
-  -> eventBus.emit({ type: 'ANCHOR_DISMISSED', payload: { anchorId, permanent: true } })
-  -> HomeScreen subscribes: setDailyPosts(prev => prev.filter(...anchorId does not match...))
-  -> Next refillQueue cycle: walkDerivedList(count, exploredIds, dismissedIds)
-       skips dismissed anchor via lazy-skip (same mechanism as explored)
-```
-
-### Masonry layout flow
-```
-HomeScreen: dailyPosts[] (unchanged production data)
-  -> buildItems(dailyPosts, questions, connectionCards) -> InfoFlowItem[] (unchanged)
-  -> InlineInfoFlow(items) (unchanged -- owns video/event state)
-    -> MasonryFeed(items) (NEW -- renders two columns)
-      distributeByHeight(items) -> [leftCol, rightCol]
-      leftCol rendered as flex column
-      rightCol rendered as flex column
-      both columns side by side in a flex row
-```
-
-### Richer essay flow
-```
-User taps "Deep dive" on PostDetailScreen
-  -> controller.abort() on any in-progress stream
-  -> reset bodyMarkdown state
-  -> generatePostEssay(post, questions, { depth: 'deep', signal: newController.signal })
-     yields chunks -> setBodyMarkdown accumulates (same as standard)
-  -> generateEssayMeta(post, bodyMarkdown, options)
-  -> patchPostEssayInCache(post.id, essay) (same as today)
-```
-
-### Source diversity flow
-```
-refillQueue -> generatePostBatch -> news branch
-  -> webSearch(query, { topic: 'news' }) -> results[]
-  -> filterForDiversity(results, conceptId, 2) -> filtered[]   <- NEW
-  -> recordServedDomain(conceptId, domain)                       <- NEW
-  -> construct DailyPost shell with bodyMarkdown: ''
-```
-
----
-
-## New File Inventory
-
-| File | Type | Purpose | Dependency constraint |
-|------|------|---------|----------------------|
-| `src/components/MasonryFeed.tsx` | NEW component | Two-column masonry layout renderer | No new deps beyond `InfoFlowItem` type |
-| `src/services/engagement.service.ts` | NEW service | save/dismiss/like state, cross-day localStorage | Leaf module — no settings/locales imports |
-| `src/services/source-diversity.ts` | NEW leaf module | Domain dedup + quality scoring for news/video | Leaf module — no settings/locales imports |
-| `src/lib/i18n-leaf.ts` | NEW leaf shim | Injectable t() for services testable under `node --test` | Zero transitive deps on locales chain |
-
-| File | Type | Change summary |
-|------|------|---------------|
-| `src/components/InfoFlow.tsx` | MODIFIED | `InlineInfoFlow` delegates rendering to `MasonryFeed`; add engagement action row to `ConceptCard` |
-| `src/services/post-queue.service.ts` | MODIFIED | `walkDerivedList` gains optional `dismissedIds` param (default []) |
-| `src/services/post-essay.service.ts` | MODIFIED | `EssayOptions` gains `depth` field; `generateStandardEssay` branches on depth |
-| `src/services/concept-feed.service.ts` | MODIFIED | `refillQueue` passes `dismissedIds` to walker; news branch calls `filterForDiversity` |
-| `src/types/index.ts` | MODIFIED | Add `ANCHOR_DISMISSED` to `AppEvent` union |
-| `src/screens/HomeScreen.tsx` | MODIFIED | Subscribe to `ANCHOR_DISMISSED`; re-sync `engagementService` state on navigation |
-| `src/screens/PostDetailScreen.tsx` | MODIFIED | "Deep dive" button triggers `depth: 'deep'` stream |
-| `src/services/flashcard.service.ts` | MODIFIED | i18n-leaf refactor: replace `i18n.t` with `t` from i18n-leaf |
-| `src/services/session.service.ts` | MODIFIED | i18n-leaf refactor |
-| `src/services/question.service.ts` | MODIFIED | i18n-leaf refactor |
-| `src/services/scheduler.service.ts` | MODIFIED | i18n-leaf refactor |
-| `src/services/podcast.service.ts` | MODIFIED | i18n-leaf refactor |
-| `src/services/youtube-locale-url.ts` | MODIFIED | i18n-leaf refactor |
-| `src/main.tsx` | MODIFIED | `injectI18nRuntime` call after i18n init |
-
----
-
-## Build Order (Dependency-Respecting)
-
-### Wave 0: Unblocking tech-debt (must complete before new service tests)
-
-These close the 10 carried test failures and establish the leaf-module foundation that all new service tests depend on. Nothing in Wave 1+ can be fully tested without Wave 0 complete.
-
-1. **i18n leaf-module refactor** — create `src/lib/i18n-leaf.ts`, update 6 service files + `main.tsx`. Closes `ERR_IMPORT_ATTRIBUTE_MISSING` for `flashcard.service`, `session.service`, `question.service`, `scheduler.service`, `podcast.service`, `youtube-locale-url`. Tests for these services become writable under `node --test`.
-2. **v1.4 carry-over cleanup** — VALIDATION drift (34/35 flip, 35 status normalize), ROADMAP plan-list bullets (36-14 + 36-15), CLAUDE.md `echolearn_*` doc-drift, 33-HUMAN-UAT-1/2 device retest. No code changes — documentation + device verification. Parallel with item 1.
-
-### Wave 1: Foundation services (no UI dependencies)
-
-These can be built and fully tested before any screen changes. Each is a leaf module — fully independently testable.
-
-3. **`engagement.service.ts`** — new leaf module. Write RED tests first (per CLAUDE.md lesson #2). Cover: save/unsave idempotency, dismiss/undismiss, cross-day persistence (no auto-reset), `getDismissedAnchorIds()` completeness. Then implement to GREEN.
-4. **`source-diversity.ts`** — new leaf module. Tests: `filterForDiversity` deduplication by domain, `maxPerDomain` enforcement, `scoreSource` returns 0-1 range, `recordServedDomain` updates state consumed by filter.
-5. **`walkDerivedList` extension** (`post-queue.service.ts`) — add optional `dismissedIds: string[]` param with default `[]`. Additive — all existing tests continue passing. Add regression tests for dismissed-skip behavior (mirrors existing explored-skip tests).
-6. **AppEvent union extension** (`src/types/index.ts`) — add `ANCHOR_DISMISSED`. TypeScript change only; verified by `tsc --noEmit`.
-
-### Wave 2: Service integration (requires Wave 1)
-
-7. **`concept-feed.service.ts` wiring** — `refillQueue` passes `engagementService.getDismissedAnchorIds()` to `walkDerivedList`; news branch calls `filterForDiversity`. Integration smoke test: verify dismissed anchor is absent from walker output.
-8. **`post-essay.service.ts` depth extension** — `EssayOptions.depth`, deep prompt variant, `maxTokens: 1200` for deep. Unit tests for prompt construction (assert deep system prompt contains word-target and citation instructions).
-
-### Wave 3: UI layer (requires Wave 1-2)
-
-9. **`MasonryFeed.tsx`** — new component. Test with mock `InfoFlowItem` array: assert items are distributed across two columns, no item appears in both columns, left+right combined equals input. `InlineInfoFlow` delegates its item rendering to `MasonryFeed`.
-10. **Engagement UI in `ConceptCard` / `InfoFlow.tsx`** — action row (like/save/dismiss icons). Dismiss emits `ANCHOR_DISMISSED`. `HomeScreen` subscribes and filters `dailyPosts`.
-11. **`PostDetailScreen.tsx` deep-dive button** — re-triggers `generatePostEssay` with `{ depth: 'deep', signal: newController.signal }`.
-
-### Wave 4: Broader hygiene (parallel within wave)
-
-12. tsc strictness audit, dependency-version sweep, dead-code sweep, perf profiling, project-wide TODO/FIXME triage, operator-note bugs. These are independent of each other and can be done in parallel.
-
----
-
-## Architectural Constraints (Invariants That Must Not Break)
-
-**3-list pipeline shape.** `buildConceptBatch` -> `appendToDerivedList` -> `walkDerivedList` -> `assignStyles` -> `generatePostBatch` -> `enqueueInterleaved`. No new list, no bypass, no rebuild-from-scratch. Engagement features extend the walker's skip predicate only.
-
-**Leaf-module pattern.** Any new service that needs `node --test` coverage must have zero transitive imports reaching `src/locales/index.ts`. If a new service needs `t()`, import from `src/lib/i18n-leaf.ts`, not from `src/locales`. This applies to `engagement.service.ts`, `source-diversity.ts`, and any future service added in v1.5.
-
-**One signal per semantic event.** `CONCEPT_EXPLORED` = user read/watched content. `ANCHOR_DISMISSED` = user explicitly dismissed. Do not conflate. Do not add `ENGAGEMENT_UPDATED` as a catch-all.
-
-**Always-mounted screen resync pattern.** Any new engagement state consumed by `HomeScreen` (or any other always-mounted screen) that can change while another screen is in the foreground MUST be re-read in a `[location.pathname]` `useEffect`. Established in `HomeScreen.tsx:181-201`.
-
-**Header portal pattern.** `MasonryFeed.tsx` renders inside `InlineInfoFlow` inside `HomeScreen` inside `SwipeTabContainer`. No `position: fixed` elements. No `transform`/`will-change`/`filter` CSS on any ancestor of `Header`.
-
-**`bodyMarkdown: ''` at creation.** Any new post type that defers body generation to on-open MUST set `bodyMarkdown: ''`. Storing preview text in `bodyMarkdown` makes `PostDetailScreen` skip the streamer.
-
-**Test-first for new services.** Per CLAUDE.md lesson #2: write RED tests for `engagement.service.ts`, `source-diversity.ts`, and `walkDerivedList` extension BEFORE implementing. The Phase 36 lesson (integration-smoke false confidence at small N) applies — write tests that catch the exact failure mode, not just "the call exists."
-
----
-
-## Anti-Patterns (v1.5 Specific)
-
-**Anti-Pattern 1: Splicing the derived list on dismiss.**
-What people do: when a user dismisses a concept, remove it from `derivedList` in `QueueState` and `save()`.
-Why wrong: physical splicing corrupts `cyclePosition` — the saved index no longer points to the same conceptId. This is Pitfall 1 from CLAUDE.md "Concept Feed Generation Pipeline."
-Do this instead: add dismissed IDs to `engagementService`. Walker lazy-skips them via the `dismissedIds` parameter at walk time. Never splice the derived list.
-
-**Anti-Pattern 2: Adding `ENGAGEMENT_UPDATED` as a broadcast event.**
-What people do: emit a generic `ENGAGEMENT_UPDATED` event on every like/save/dismiss so components can re-render.
-Why wrong: violates "one signal per semantic event." Components that subscribe to this mega-event re-render on signals they don't care about.
-Do this instead: `ANCHOR_DISMISSED` only (cross-screen concern). Liked/saved update via `engagementService` getters after mutation — no event needed for local UI state.
-
-**Anti-Pattern 3: Moving column distribution logic into `spreadByConcept`.**
-What people do: modify `spreadByConcept` to output two arrays (left column, right column) instead of a flat array.
-Why wrong: `spreadByConcept` is a leaf module with 7 regression tests. Its output contract is a reordered single array. Column distribution is a display concern; the pipeline contract is a data ordering concern. Coupling them makes both harder to test.
-Do this instead: `spreadByConcept` outputs flat array -> `MasonryFeed` distributes it into two column arrays.
-
-**Anti-Pattern 4: Importing `i18next` directly in new services.**
-What people do: `import i18next from 'i18next'` in a new service to get `i18next.t()`.
-Why wrong: same `ERR_IMPORT_ATTRIBUTE_MISSING` failure chain that blocks `node --test` coverage.
-Do this instead: `import { t } from '../lib/i18n-leaf'`.
-
-**Anti-Pattern 5: Eager body generation for new post types.**
-What people do: generate `bodyMarkdown` content during `refillQueue` for a new post type to avoid on-open latency.
-Why wrong: wastes tokens on posts the user may never open. Breaks the `PostDetailScreen` streamer guard (`bodyMarkdown === ''` check). Causes the news regression from commit `3263af4e` all over again.
-Do this instead: set `bodyMarkdown: ''` at creation. Stream on open in `post-essay.service.ts`.
-
-**Anti-Pattern 6: Adding saved-post weight into `buildConceptBatch`.**
-What people do: when a post is saved, look up its anchorId and increase that anchor's entry count in `buildConceptBatch`.
-Why wrong: couples engagement state to the feed pipeline. Saved = user already engaged positively, not a signal of urgency. The `isImportant` weight already handles "needs reinforcement" via SM-2 signals (ease < 1.5, dying/falling/dead leaf state).
-Do this instead: surface saved posts as a browsable collection. Keep `buildConceptBatch` pure (only SM-2 signals determine importance weight).
-
----
-
-*Architecture research for: Trellis v1.5 Curiosity Feed v2 + Tech-Debt Hardening*
-*Researched: 2026-05-08*
+*Architecture research for: v1.6 Control, Graph Trust, Retrieval, Podcast Controls, and Ethical Engagement*
+*Researched: 2026-05-13*
