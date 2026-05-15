@@ -20,16 +20,23 @@ Audit status: `tech_debt` — all 21 active v1.5 requirements satisfied and inte
 
 ## Current Milestone: v1.6 Control, Graph Trust, Retrieval, and Ethical Engagement
 
-**Goal:** Turn Trellis from a compelling learning feed into a more trustworthy learner-controlled system, with stronger knowledge-ingestion boundaries, correctable graph structure, better retrieval, higher-quality podcasts, and explicit learning-first engagement guardrails.
+**Goal:** Turn Trellis from a compelling learning feed into a more trustworthy learner-controlled system: a redesigned filter that keeps malicious and off-topic prompts out, correctable graph structure, recoverable retrieval, higher-quality podcasts, and ethical engagement guardrails.
 
-**Target features:**
-- Redesign knowledge-ingestion filtering so chat can remain natural while only durable learning material enters the mind map.
-- Add manual mind-map correction controls so users can rename, move, merge, detach, and correct graph nodes.
-- Improve podcast defaults and add learner-directed length/style controls without degrading educational quality.
-- Strengthen retrieval after feed discovery through search, tags/bookmarks/history improvements, and concept-level dashboards.
-- Add ethical engagement cues: goals, stop cues, reflection/retrieval prompts, and learning-oriented success metrics.
+**Target features (7 phases, 26 requirements):**
+- **Phase 47 (filter redesign):** Replace the regex-based off-topic classifier with a more robust strategy (LLM-only / embedding-similarity / hybrid — chosen during phase research). Pre-LLM gate that blocks malicious prompts from the LLM request entirely. Structural prompt-injection bracketing at the provider boundary as defense in depth. Held-out eval set; per-question override.
+- **Phases 48–49 (graph trust + correction UI):** Validated graph command service (rename, move, merge, detach, prune/delete, undo); selected-node correction controls in GraphScreen with preview/confirm.
+- **Phases 50–51 (retrieval + concept dashboards):** Bounded archive search; local-first tags/bookmarks; per-concept dashboard joining Q&A, archive, review, podcast, tag, weak/due signals.
+- **Phase 52 (podcast):** Better educational defaults; bounded length/style controls; option identity in cache; TTS safety checks.
+- **Phase 53 (engagement + privacy):** Daily learning goals, stop cues, sparse reflection prompts, cue snooze/disable; provider payload sanitizer ships with the new private fields it protects.
 
-**Key context:** Professor feedback asked how the mind map is generated and corrected, how filtering works, whether podcasts can be controlled, how social-feed engagement balances learning, and what supports retrieval later. The critical clarification is that filtering is a knowledge-ingestion gate, not a presentation concern: natural chat may be answered, but small talk, prompt-leak requests, and other non-learning exchanges must not pollute the graph, while legitimate learning questions such as "What is a system prompt?" must still be ingestible.
+**Key context:** v1.6 answers 5 questions a professor asked after a Trellis demo. **Three are product features** (Q3 podcast controls, Q4 engagement vs learning, Q5 retrieval). **Two are mixed:** Q1 (mind-map generation) splits into a private-answer half (how it's generated — explained to the professor in writeup, NOT a user-facing pipeline-transparency feature) and a product-feature half (edit/correct). Q2 (filter) splits into a private-answer half (the regex approach is brittle — diagnosis explained to the professor) and a product-feature half (filter redesign).
+
+**Explicit non-goals:**
+- No user-facing mind-map generation transparency. Generation is explained privately, not surfaced in product.
+- No four-state ingestion triage UI. The two failure modes (small-talk false-negatives, legitimate-LLM-question false-positives) are precision/recall problems on the existing classifier, not missing categories.
+- No regex tuning of the existing pattern library. v1.6 replaces the classifier approach.
+- No foundation phase. The original milestone draft included one (FOUND-01..05); the 2026-05-15 overhaul dissolved it — optional `?:` fields don't need migration scaffolding, events already carry needed payloads, and the sanitizer ships with the fields it protects (Phase 53).
+- No separate "learning metrics" tracking system. Professor Q4 asked about engagement-vs-learning *balance*, not a metrics dashboard.
 
 ## Active Requirements
 

@@ -2,53 +2,68 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Control, Graph Trust, Retrieval, and Ethical Engagement
-status: roadmap_corrected
-stopped_at: Phase 47 discussion paused for INGEST/FOUND reframing — resume with /gsd-discuss-phase 47
+status: roadmap_overhauled
+stopped_at: v1.6 milestone overhauled — Phase 47 ready to discuss as Filter Redesign
 last_updated: "2026-05-15"
 last_activity: 2026-05-15
 progress:
-  total_phases: 8
+  total_phases: 7
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
 ---
 
-# Project State: v1.6 ROADMAP CORRECTED - 2026-05-15
+# Project State: v1.6 ROADMAP OVERHAULED — 2026-05-15
 
-## 2026-05-15 Correction
+## 2026-05-15 Overhaul (latest)
 
-The v1.6 roadmap drafted on 2026-05-13 misread the operator's two ingestion failure modes ("How are you doing?" passing the off-topic filter; "What is a system prompt in LLM?" being flagged as malicious) as a request for richer ingestion semantics. The operator clarified the intent during /gsd-discuss-phase 47 on 2026-05-15:
+The v1.6 milestone (drafted 2026-05-13 by a prior agent) was overhauled after the operator surfaced four corrections during /gsd-discuss-phase 47:
 
-1. Make the existing binary off-topic classifier MORE ROBUST AND RELIABLE on those two failure modes — not introduce a four-category triage (`Added to map / Chat only / Needs review / Security blocked`).
-2. Add structural prompt-injection prevention at the LLM/TTS provider boundary (analogous to SQL-injection prevention via parameterized queries / brackets) — not a verb-detector classifier.
+1. **Some professor questions get private answers, not product features.** Q1 "how is the mind-map generated" is private (writeup/conversation), NOT a user-facing pipeline-transparency feature. Q2 "what's blocking filter reliability" diagnosis half is also private. The prior agent translated every professor question into product requirements, including pipeline-transparency surfaces the operator does not want built.
+2. **The off-topic + malicious-prompt filter needs redesign, not regex tuning.** The current regex pattern library (`question-filter.service.ts`) is "TOO reliant on regex" and "very ineffective." v1.6 must replace the approach (LLM-only / embedding-similarity / hybrid with much narrower regex), not add evals on top of regex. Malicious prompts must be **kept out of the LLM request entirely**, not flagged after the response.
+3. **No "learning metrics" topic was asked.** LEARN-04 ("metrics stay separate from engagement") was inferred by the prior agent. Professor Q4 asked about engagement-vs-learning *balance* (stop cues, goals, reflection), not a metrics tracking system. LEARN-04 dropped.
+4. **No demo urgency.** Presentation already happened; the questions came after. Plan for correctness.
 
-REQUIREMENTS.md and ROADMAP.md were rewritten on 2026-05-15 to reflect this:
-- INGEST-01..04 reframed around classifier reliability + held-out evals + per-question override (no new state machine).
-- FOUND-01 / FOUND-03 corrected to drop the new `ingestionState` schema; the existing `flagged` bit stays as the single ingestion gate.
-- FOUND-05 added: structural bracketing/delimiting of user content at the provider boundary, with goldens covering injection-style inputs.
-- Phase 48 renamed from "Knowledge-Ingestion Gate" to "Off-Topic Classifier Robustness".
+Plus the earlier 2026-05-15 corrections (during the same session, before the full overhaul):
+- Operator rejected the four-state ingestion triage (`Added to map / Chat only / Needs review / Security blocked`) the prior agent had introduced under INGEST-01..04.
+- Operator pushed back on the `normalizeQuestion()` migration framework I proposed under FOUND-02; for purely-additive optional fields, no normalize layer is needed.
 
-The Phase 47 discussion was started but paused before any decisions were captured. Resume with `/gsd-discuss-phase 47` from the corrected foundation. Memory: `feedback_ingestion_filter_intent.md`.
+### Resulting milestone shape
 
----
+| Phase | Title | Reqs |
+|---|---|---|
+| 47 | Filter Redesign — Off-Topic + Malicious Prompt Prevention | FILTER-01..05 |
+| 48 | Graph Command Service and Trust Invariants | GRAPH-01..04 |
+| 49 | Graph Correction UI | GRAPHUI-01..03 |
+| 50 | Retrieval and Library Foundation | RETRIEVE-01..02 |
+| 51 | Concept Dashboard and Recovery Surfaces | RETRIEVE-03..04 |
+| 52 | Podcast Quality Defaults and Learner Controls | PODCAST-01..05 |
+| 53 | Engagement Guardrails + Provider Privacy | LEARN-01..04 + PRIVACY-01 |
 
-# Project State: v1.6 ROADMAP CREATED - 2026-05-13
+**Net change:** 8 phases / 30 reqs → 7 phases / 26 reqs.
 
-## Project Reference
+### What was dropped or reworked
 
-See: `.planning/PROJECT.md` (updated 2026-05-13 - milestone v1.6 started)
+- **Phase 47 (was: Data, Events, Migration, and Privacy Foundation)** — dissolved entirely. FOUND-01 (umbrella schema) folded into each consuming phase. FOUND-02 (migration normalization) dropped as not-a-thing. FOUND-03 (event payload contract) dropped as already true. FOUND-04 (privacy sanitizer) folded into Phase 53 (PRIVACY-01) where the protected fields actually exist. FOUND-05 (structural bracketing) folded into the new Phase 47 (FILTER-03) where it directly enables FILTER-02.
+- **Phase 48 INGEST-01..04 (was: Off-Topic Classifier Robustness)** — replaced with FILTER-01..05 in the new Phase 47. Reframed from "tighten the regex thresholds" to "replace the classifier approach + add a pre-LLM gate."
+- **LEARN-04 (separate metrics)** — dropped as invented. LEARN-05 (no dark patterns) renumbered to LEARN-04.
+- **GRAPHUI-02 "inspect why a node was placed"** — partial drop; the inspection half is private-answer-only. The "see corrected graph after reload" half kept as new GRAPHUI-03.
 
-**Core value:** Enable learners to transform fragmented information into structured knowledge through AI-driven Q&A, visual mapping, and adaptive spaced repetition - all while maintaining complete local-first privacy.
-**Current focus:** Phase 47 - Data, Events, Migration, and Privacy Foundation.
+### Memory captured
+
+- `~/.claude/projects/-Users-Code-EchoLearn/memory/feedback_ingestion_filter_intent.md`
+- `~/.claude/projects/-Users-Code-EchoLearn/memory/feedback_no_normalize_for_optional_fields.md`
+- `~/.claude/projects/-Users-Code-EchoLearn/memory/feedback_professor_qs_private_vs_product.md`
+- `~/.claude/projects/-Users-Code-EchoLearn/memory/feedback_filter_redesign_not_tuning.md`
 
 ## Current Position
 
-Phase: 47 of 54 (1 of 8 in v1.6) - Data, Events, Migration, and Privacy Foundation
+Phase: 47 of 53 (1 of 7 in v1.6) — Filter Redesign — Off-Topic + Malicious Prompt Prevention
 Plan: Not planned yet
-Status: Ready to discuss (foundation reframed 2026-05-15; resume with /gsd-discuss-phase 47)
-Last activity: 2026-05-15 - REQUIREMENTS.md INGEST/FOUND corrected, ROADMAP.md Phase 47/48 rewritten, FOUND-05 added (structural prompt-injection prevention)
+Status: Ready to discuss with corrected scope
+Last activity: 2026-05-15 — full v1.6 overhaul (REQUIREMENTS, ROADMAP, PROJECT, STATE rewritten)
 
-Progress: 0 / 8 phases complete
+Progress: 0 / 7 phases complete
 
 ```
 [--------------------------------------------------] 0%
@@ -58,43 +73,41 @@ Progress: 0 / 8 phases complete
 
 | Phase | Focus | Requirements |
 |-------|-------|--------------|
-| 47 | Data/events/migration/privacy foundation | FOUND-01..04 |
-| 48 | Knowledge-ingestion gate | INGEST-01..04 |
-| 49 | Graph command service and trust invariants | GRAPH-01..04 |
-| 50 | Graph correction UI | GRAPHUI-01..03 |
-| 51 | Retrieval and library foundation | RETRIEVE-01..02 |
-| 52 | Concept dashboard and recovery surfaces | RETRIEVE-03..04 |
-| 53 | Podcast defaults and learner controls | PODCAST-01..05 |
-| 54 | Ethical engagement and learning guardrails | LEARN-01..05 |
+| 47 | Filter redesign (off-topic + malicious-prompt) | FILTER-01..05 |
+| 48 | Graph command service + trust invariants | GRAPH-01..04 |
+| 49 | Graph correction UI | GRAPHUI-01..03 |
+| 50 | Retrieval + library foundation | RETRIEVE-01..02 |
+| 51 | Concept dashboard + recovery surfaces | RETRIEVE-03..04 |
+| 52 | Podcast defaults + learner controls | PODCAST-01..05 |
+| 53 | Engagement guardrails + provider privacy | LEARN-01..04, PRIVACY-01 |
 
 ## Requirement Coverage
 
-30 / 30 active v1.6 requirements mapped.
+26 / 26 active v1.6 requirements mapped.
 
 | Category | Count | Phases |
 |----------|-------|--------|
-| FOUNDATION | 5 | Phase 47 |
-| INGEST | 4 | Phase 48 |
-| GRAPH | 4 | Phase 49 |
-| GRAPHUI | 3 | Phase 50 |
-| RETRIEVE | 4 | Phases 51-52 |
-| PODCAST | 5 | Phase 53 |
-| LEARN | 5 | Phase 54 |
+| FILTER | 5 | Phase 47 |
+| GRAPH | 4 | Phase 48 |
+| GRAPHUI | 3 | Phase 49 |
+| RETRIEVE | 4 | Phases 50–51 |
+| PODCAST | 5 | Phase 52 |
+| LEARN | 4 | Phase 53 |
+| PRIVACY | 1 | Phase 53 |
 
 ## Accumulated Context
 
 ### Decisions
 
 - v1.6 starts at Phase 47 because v1.5 completed through Phase 46.
-- Data/events/migration/privacy foundation comes before every feature phase.
-- Off-topic classifier robustness (the new Phase 48 framing) comes before graph, retrieval, podcast, and learning metrics consume durable knowledge.
-- Graph command service comes before GraphScreen correction UI.
-- Retrieval/library services precede concept dashboard and podcast controls; ethical engagement comes last over stable local learning signals.
-- (2026-05-15) Ingestion is a binary problem on the existing `flagged` bit, not a four-state triage. Prompt-injection prevention is structural at the provider boundary (FOUND-05), not a verb-detector classifier.
+- No foundation phase. Optional `?:` fields don't need migration scaffolding; events already carry needed payloads; sanitizer ships with the fields it protects.
+- Phase 47 (filter redesign) replaces the regex approach entirely; pre-LLM gate blocks malicious prompts from the request itself; structural bracketing at provider boundary is defense in depth.
+- Mind-map generation transparency is a private answer to the professor (writeup), NOT a user-facing product feature.
+- "Learning metrics" was never a professor request and is not in scope.
 
 ### Pending Todos
 
-None recorded for v1.6 yet.
+None recorded for v1.6 yet. The two pre-existing pending todos (cosine similarity threshold + auto-gen podcast device verification) remain in `.planning/todos/pending/` and are unrelated to v1.6 phase scope.
 
 ### Blockers/Concerns
 
@@ -103,5 +116,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-05-15
-Stopped at: Phase 47 discussion paused after operator clarified ingestion intent — REQUIREMENTS.md and ROADMAP.md rewritten to drop four-state triage and add FOUND-05 (structural injection prevention). Next action is `/gsd-discuss-phase 47` from the corrected foundation.
-Resume file: None (no Phase 47 CONTEXT.md was written; resume the discuss skill from scratch).
+Stopped at: v1.6 milestone overhauled across REQUIREMENTS.md, ROADMAP.md, PROJECT.md, STATE.md. Phase 47 (Filter Redesign) is the next discuss target. The earlier Phase 47 (foundation) discuss-checkpoint was deleted.
+Resume file: None. Next action is `/gsd-discuss-phase 47` against the corrected milestone.

@@ -1,58 +1,52 @@
-# Roadmap: Milestone v1.6 - Control, Graph Trust, Retrieval, and Ethical Engagement
+# Roadmap: Milestone v1.6 — Control, Graph Trust, Retrieval, and Ethical Engagement
 
 **Starting phase:** 47 (continuing from v1.5, which ended at Phase 46)
 **Granularity:** Standard (default; `.planning/config.json` has no explicit granularity key)
-**Total requirements:** 30
-**Target phases:** 8
+**Total requirements:** 26
+**Target phases:** 7
 
 ## Overview
 
-v1.6 turns Trellis from a compelling learning feed into a more trustworthy learner-controlled system. The milestone first protects local data, event semantics, migration safety, provider privacy boundaries, and structural prompt-injection prevention, then sharpens the existing off-topic classifier so chat stays natural while small talk and app meta cannot pollute durable knowledge. With a reliable ingestion gate in place, graph corrections move through a tested command service before GraphScreen exposes correction controls. Retrieval and library capabilities follow stable graph identity, then podcast controls build on trustworthy concept identity and retrieval context. Ethical engagement ships last so goals, stop cues, prompts, and metrics can consume mature local learning signals instead of save/like/dismiss engagement signals.
+v1.6 answers 5 professor questions asked after a Trellis demo. Three are product features (Q3 podcast controls, Q4 engagement vs learning, Q5 retrieval); two are mixed (Q1 mind-map generation has a private-answer half + a product-feature edit/correct half; Q2 filter has a private-answer diagnosis half + a product-feature redesign half). Mind-map generation transparency is intentionally NOT a product surface.
+
+Phase 47 is the only urgent product fix carried over from the demo: the existing regex-based off-topic filter is brittle, false-flags legitimate "What is a system prompt?" questions, and lets small talk through. v1.6 replaces the classifier strategy entirely (LLM-only / embedding-similarity / hybrid with a much narrower regex fast-path), adds a pre-LLM gate that rejects malicious prompts before any provider call, and adds structural bracketing as defense in depth. Subsequent phases give the user manual graph-correction control, retrieval/library/dashboard recovery, podcast quality + length/style controls, and ethical engagement guardrails (with the provider payload sanitizer shipping alongside the goals/reflections fields it protects).
+
+There is **no foundation phase**. The prior agent's FOUND-01..05 scaffolding (cross-cutting schema, migration normalization, event-payload contract, payload boundary, structural bracketing) was either invented (no real problem to solve) or coupled tightly to a specific feature phase that should own it.
 
 ## Phases
 
 **Phase Numbering:**
-- Integer phases (47, 48, 49): Planned milestone work
+- Integer phases (47, 48, …): Planned milestone work
 - Decimal phases (47.1, 47.2): Urgent insertions, if needed
 
-- [ ] **Phase 47: Data, Events, Migration, and Privacy Foundation** - Establish explicit v1.6 schemas, migrations, on-topic event propagation, provider payload boundaries, and structural prompt-injection bracketing at the LLM/TTS provider boundary.
-- [ ] **Phase 48: Off-Topic Classifier Robustness** - Make the existing binary off-topic classifier reliable on small-talk false-negatives and LLM/security false-positives, with a versioned eval set and a per-question override path.
-- [ ] **Phase 49: Graph Command Service and Trust Invariants** - Add validated graph correction commands, undo metadata, manual locks, and stale-write protection.
-- [ ] **Phase 50: Graph Correction UI** - Expose selected-node correction controls in GraphScreen without making MindElixir the source of truth.
-- [ ] **Phase 51: Retrieval and Library Foundation** - Add bounded archive search plus local-first tags/bookmarks backed by retrieval/library services.
-- [ ] **Phase 52: Concept Dashboard and Recovery Surfaces** - Give each concept a bounded dashboard that joins Q&A, archive, review, podcast, tag, and weak/due signals.
-- [ ] **Phase 53: Podcast Quality Defaults and Learner Controls** - Add educational podcast defaults, bounded length/style controls, option identity, and TTS safety checks.
-- [ ] **Phase 54: Ethical Engagement and Learning Guardrails** - Add goals, stop cues, sparse reflection/retrieval prompts, separate learning metrics, and cue controls.
+- [ ] **Phase 47: Filter Redesign — Off-Topic + Malicious Prompt Prevention** — Replace regex-based classifier; pre-LLM gate (block malicious from request); structural injection bracketing at provider boundary; held-out eval set; per-question override.
+- [ ] **Phase 48: Graph Command Service and Trust Invariants** — Validated graph correction commands, undo metadata, manual locks, stale-write protection.
+- [ ] **Phase 49: Graph Correction UI** — Selected-node correction controls in GraphScreen; preview/confirm for high-impact actions; durability across reload.
+- [ ] **Phase 50: Retrieval and Library Foundation** — Bounded archive search; local-first tags/bookmarks.
+- [ ] **Phase 51: Concept Dashboard and Recovery Surfaces** — Per-concept dashboard joining Q&A, archive, review, podcast, tag, weak/due signals.
+- [ ] **Phase 52: Podcast Quality Defaults and Learner Controls** — Educational defaults; bounded length/style controls; option identity; TTS safety checks.
+- [ ] **Phase 53: Engagement Guardrails + Provider Privacy** — Goals, stop cues, sparse reflection prompts, cue controls; provider payload sanitizer ships with the new fields it protects.
 
 ## Phase Details
 
-### Phase 47: Data, Events, Migration, and Privacy Foundation
-**Goal**: v1.6 state can be represented, loaded, reset, and protected without overloading old fields, without leaking private local context to providers, and without exposing the LLM/TTS provider boundary to prompt-injection from user content.
+### Phase 47: Filter Redesign — Off-Topic + Malicious Prompt Prevention
+**Goal**: Replace the regex-based off-topic classifier with a fundamentally more robust strategy; block malicious prompts from the LLM request entirely; add structural bracketing as defense in depth so legitimate LLM/security questions reach the answer LLM safely.
 **Depends on**: Phase 46
-**Requirements**: FOUND-01, FOUND-02, FOUND-03, FOUND-04, FOUND-05
+**Requirements**: FILTER-01, FILTER-02, FILTER-03, FILTER-04, FILTER-05
 **Success Criteria** (what must be TRUE):
-  1. Existing v1.5 localStorage and SQLite data loads into v1.6 without crashing screens or services.
-  2. Every ask event carries the binary `flagged` (off-topic) bit so graph, retrieval, podcast, review, and learning-metric consumers can filter durable-learning events from off-topic chat without re-running the classifier.
-  3. New graph-trust, podcast-option, retrieval/library, and learning-engagement metadata exists without reusing `Question.flagged` as a catch-all state. Ingestion stays on the existing `flagged` bit — no new ingestion-state enum.
-  4. Provider-bound LLM and TTS payload tests show goals, tags, saved/liked history, graph correction logs, and reflections are excluded by default.
-  5. User-supplied content reaching LLM (and prompt-bearing TTS/embedding) providers is structurally bracketed/delimited at the provider boundary; goldens cover representative injection-style inputs and verify system instructions cannot be overridden by content embedded in user input.
+  1. The regex-only path in `app/src/services/question-filter.service.ts` is replaced (or relegated to a much narrower fast-path); a non-regex strategy (LLM-only / embedding-similarity / hybrid — chosen during phase research) makes the primary classification decision.
+  2. User prompts classified as malicious/prompt-injection are NOT sent to the answer LLM; the user sees a clear in-app message and no provider tokens are spent on the malicious prompt.
+  3. User prompts classified as off-topic are answered in chat but do not enter mind map, review, feed, podcast context, retrieval index, or learning surfaces.
+  4. Legitimate learning questions about LLM/security/safety (e.g., "What is a system prompt?", "What is prompt injection?", "How does jailbreaking work?") pass the classifier and reach durable knowledge surfaces. The classifier does not inspect intent verbs.
+  5. User-supplied content reaching LLM (and prompt-bearing TTS/embedding) providers is structurally bracketed/delimited at the provider wrapper; goldens cover representative injection-style inputs and verify system instructions cannot be overridden.
+  6. A held-out eval set with at least one labeled example per surfaced failure mode (small-talk false-negative such as "How are you doing?", legitimate-LLM-question false-positive such as "What is a system prompt?") lives under version control and runs in the test suite.
+  7. User can override the off-topic flag on any individual exchange; the override persists across reloads and propagates to durable-knowledge consumers.
 **Plans**: TBD
+**Spike/research expected**: choosing the classifier strategy is a within-phase decision (research step), not a pre-locked choice in CONTEXT.md.
 
-### Phase 48: Off-Topic Classifier Robustness
-**Goal**: Improve the existing binary off-topic classifier on its two surfaced failure modes — small-talk false-negatives and LLM/security false-positives — without introducing a richer ingestion-state machine. Prompt-injection prevention is FOUND-05's structural concern, not a classifier responsibility.
-**Depends on**: Phase 47
-**Requirements**: INGEST-01, INGEST-02, INGEST-03, INGEST-04
-**Success Criteria** (what must be TRUE):
-  1. Greetings, jokes, thanks, small talk (e.g., "How are you doing?"), and app-meta chatter remain answerable in chat but are reliably caught by the off-topic classifier and never enter graph, review, feed, podcast, retrieval, or learning metrics.
-  2. Legitimate learning questions about LLM/security/safety (e.g., "What is a system prompt?", "What is prompt injection?", "How does jailbreaking work?") pass the classifier and reach durable knowledge surfaces. The classifier does not inspect intent verbs.
-  3. A held-out eval set with at least one labeled example per failure mode is checked into the repo and runs in the test suite; thresholds and prompts cannot regress on those examples without a documented waiver.
-  4. User can override the off-topic flag on any individual exchange through the existing per-question `flagged` toggle; the override persists across reloads and propagates via the FOUND-03 event payload.
-**Plans**: TBD
-**UI hint**: minimal — uses existing flagged-override surface; no new triage queue or four-state UI.
-
-### Phase 49: Graph Command Service and Trust Invariants
+### Phase 48: Graph Command Service and Trust Invariants
 **Goal**: Graph corrections are validated transactions over canonical `Question` records, with undo and stale-write protection before any correction UI ships.
-**Depends on**: Phase 48
+**Depends on**: Phase 47
 **Requirements**: GRAPH-01, GRAPH-02, GRAPH-03, GRAPH-04
 **Success Criteria** (what must be TRUE):
   1. Rename, move, merge, detach, prune/delete, and undo commands run through one graph command service boundary.
@@ -61,21 +55,21 @@ v1.6 turns Trellis from a compelling learning feed into a more trustworthy learn
   4. In-flight classification or global reorganization results cannot overwrite protected manual corrections.
 **Plans**: TBD
 
-### Phase 50: Graph Correction UI
-**Goal**: Users can inspect and correct selected mind-map nodes through clear local controls backed by the graph command service.
-**Depends on**: Phase 49
+### Phase 49: Graph Correction UI
+**Goal**: Users can correct selected mind-map nodes through clear local controls backed by the graph command service.
+**Depends on**: Phase 48
 **Requirements**: GRAPHUI-01, GRAPHUI-02, GRAPHUI-03
 **Success Criteria** (what must be TRUE):
-  1. User can select a graph node and open local correction controls for that node.
-  2. User can inspect why a node was placed where it is before deciding whether to correct it.
-  3. User can preview and confirm high-impact graph actions such as merge, prune/delete, and undo.
-  4. User sees the corrected graph after navigation away, navigation back, or app reload.
+  1. User can select a graph node and open local correction controls (rename, move, merge, detach, prune/delete) for that node.
+  2. User can preview and confirm high-impact graph actions such as merge, prune/delete, and undo before committing.
+  3. User sees the corrected graph after navigation away, navigation back, or app reload.
 **Plans**: TBD
 **UI hint**: yes
+**Note on scope**: per-node "why was this placed here" inspection is **out of scope** (private answer to professor Q1, not a product feature).
 
-### Phase 51: Retrieval and Library Foundation
+### Phase 50: Retrieval and Library Foundation
 **Goal**: Users can recover prior posts through bounded local search and apply local-first tags/bookmarks that persist across days.
-**Depends on**: Phase 50
+**Depends on**: Phase 49
 **Requirements**: RETRIEVE-01, RETRIEVE-02
 **Success Criteria** (what must be TRUE):
   1. User can search Saved, Liked, and History items by title, body, concept, source, and date.
@@ -85,9 +79,9 @@ v1.6 turns Trellis from a compelling learning feed into a more trustworthy learn
 **Plans**: TBD
 **UI hint**: yes
 
-### Phase 52: Concept Dashboard and Recovery Surfaces
+### Phase 51: Concept Dashboard and Recovery Surfaces
 **Goal**: Users can open a concept-level home that joins local learning artifacts and routes them toward recovery, review, and retrieval.
-**Depends on**: Phase 51
+**Depends on**: Phase 50
 **Requirements**: RETRIEVE-03, RETRIEVE-04
 **Success Criteria** (what must be TRUE):
   1. User can open a concept dashboard from concept-linked surfaces.
@@ -97,29 +91,29 @@ v1.6 turns Trellis from a compelling learning feed into a more trustworthy learn
 **Plans**: TBD
 **UI hint**: yes
 
-### Phase 53: Podcast Quality Defaults and Learner Controls
+### Phase 52: Podcast Quality Defaults and Learner Controls
 **Goal**: Users can generate higher-quality educational podcasts with bounded controls that preserve concept coverage and cache identity.
-**Depends on**: Phase 52
+**Depends on**: Phase 51
 **Requirements**: PODCAST-01, PODCAST-02, PODCAST-03, PODCAST-04, PODCAST-05
 **Success Criteria** (what must be TRUE):
   1. Default podcast generation includes recap, connections, misconception checks, retrieval questions, and a next action.
   2. User can choose bounded podcast length and style before generation.
   3. Regenerated or cached podcasts honor the chosen options, concept IDs, locale, and options hash.
-  4. Podcast output preserves required concept coverage across length/style settings or clearly explains what was omitted.
+  4. Podcast output preserves required concept coverage across length/style settings; style controls cannot degrade learning density into entertainment-only output.
   5. TTS model, voice, and speed changes have provider-safe fallback behavior and device UAT evidence before defaults change.
 **Plans**: TBD
 **UI hint**: yes
 
-### Phase 54: Ethical Engagement and Learning Guardrails
-**Goal**: Users can shape feed progress around learning outcomes, receive sparse recovery-oriented cues, and control those cues without pressure loops.
-**Depends on**: Phase 53
-**Requirements**: LEARN-01, LEARN-02, LEARN-03, LEARN-04, LEARN-05
+### Phase 53: Engagement Guardrails + Provider Privacy
+**Goal**: Users can shape feed progress around learning outcomes, receive sparse recovery-oriented cues, and control those cues without pressure loops; new private fields (goals, reflection responses) ship with provider payload sanitization.
+**Depends on**: Phase 52
+**Requirements**: LEARN-01, LEARN-02, LEARN-03, LEARN-04, PRIVACY-01
 **Success Criteria** (what must be TRUE):
   1. User can set or accept a lightweight daily learning goal based on concepts learned, reviewed, reflected on, or corrected.
   2. User sees a stop cue after a meaningful threshold, with routes to review, reflection, podcast, planner, or closing the app.
   3. User receives sparse retrieval/reflection prompts after meaningful engagement clusters without being interrupted on every post.
-  4. Learning metrics remain separate from save/like/dismiss engagement signals and emphasize recall, review, graph corrections, concept coverage, and reflections.
-  5. User can snooze or disable ethical cues, and Trellis does not add public likes, leaderboards, streak pressure, or engagement-maximizing loops.
+  4. User can snooze or disable ethical cues, and Trellis does not add public likes, leaderboards, streak pressure, or engagement-maximizing loops.
+  5. Provider-bound LLM and TTS payload tests confirm the new private fields (goals, reflection responses, tags, saved/liked/history, graph correction logs) are excluded from outbound provider requests by default.
 **Plans**: TBD
 **UI hint**: yes
 
@@ -127,55 +121,50 @@ v1.6 turns Trellis from a compelling learning feed into a more trustworthy learn
 
 | Requirement | Phase |
 |-------------|-------|
-| FOUND-01 | Phase 47 |
-| FOUND-02 | Phase 47 |
-| FOUND-03 | Phase 47 |
-| FOUND-04 | Phase 47 |
-| FOUND-05 | Phase 47 |
-| INGEST-01 | Phase 48 |
-| INGEST-02 | Phase 48 |
-| INGEST-03 | Phase 48 |
-| INGEST-04 | Phase 48 |
-| GRAPH-01 | Phase 49 |
-| GRAPH-02 | Phase 49 |
-| GRAPH-03 | Phase 49 |
-| GRAPH-04 | Phase 49 |
-| GRAPHUI-01 | Phase 50 |
-| GRAPHUI-02 | Phase 50 |
-| GRAPHUI-03 | Phase 50 |
-| RETRIEVE-01 | Phase 51 |
-| RETRIEVE-02 | Phase 51 |
-| RETRIEVE-03 | Phase 52 |
-| RETRIEVE-04 | Phase 52 |
-| PODCAST-01 | Phase 53 |
-| PODCAST-02 | Phase 53 |
-| PODCAST-03 | Phase 53 |
-| PODCAST-04 | Phase 53 |
-| PODCAST-05 | Phase 53 |
-| LEARN-01 | Phase 54 |
-| LEARN-02 | Phase 54 |
-| LEARN-03 | Phase 54 |
-| LEARN-04 | Phase 54 |
-| LEARN-05 | Phase 54 |
+| FILTER-01 | Phase 47 |
+| FILTER-02 | Phase 47 |
+| FILTER-03 | Phase 47 |
+| FILTER-04 | Phase 47 |
+| FILTER-05 | Phase 47 |
+| GRAPH-01 | Phase 48 |
+| GRAPH-02 | Phase 48 |
+| GRAPH-03 | Phase 48 |
+| GRAPH-04 | Phase 48 |
+| GRAPHUI-01 | Phase 49 |
+| GRAPHUI-02 | Phase 49 |
+| GRAPHUI-03 | Phase 49 |
+| RETRIEVE-01 | Phase 50 |
+| RETRIEVE-02 | Phase 50 |
+| RETRIEVE-03 | Phase 51 |
+| RETRIEVE-04 | Phase 51 |
+| PODCAST-01 | Phase 52 |
+| PODCAST-02 | Phase 52 |
+| PODCAST-03 | Phase 52 |
+| PODCAST-04 | Phase 52 |
+| PODCAST-05 | Phase 52 |
+| LEARN-01 | Phase 53 |
+| LEARN-02 | Phase 53 |
+| LEARN-03 | Phase 53 |
+| LEARN-04 | Phase 53 |
+| PRIVACY-01 | Phase 53 |
 
-**Coverage:** 30 / 30 active v1.6 requirements mapped. No orphaned requirements. No duplicate mappings.
+**Coverage:** 26 / 26 active v1.6 requirements mapped. No orphaned requirements. No duplicate mappings.
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 47 -> 48 -> 49 -> 50 -> 51 -> 52 -> 53 -> 54
+Phases execute in numeric order: 47 → 48 → 49 → 50 → 51 → 52 → 53
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 47. Data, Events, Migration, and Privacy Foundation | TBD | Not started | - |
-| 48. Off-Topic Classifier Robustness | TBD | Not started | - |
-| 49. Graph Command Service and Trust Invariants | TBD | Not started | - |
-| 50. Graph Correction UI | TBD | Not started | - |
-| 51. Retrieval and Library Foundation | TBD | Not started | - |
-| 52. Concept Dashboard and Recovery Surfaces | TBD | Not started | - |
-| 53. Podcast Quality Defaults and Learner Controls | TBD | Not started | - |
-| 54. Ethical Engagement and Learning Guardrails | TBD | Not started | - |
+| 47. Filter Redesign — Off-Topic + Malicious Prompt Prevention | TBD | Not started | - |
+| 48. Graph Command Service and Trust Invariants | TBD | Not started | - |
+| 49. Graph Correction UI | TBD | Not started | - |
+| 50. Retrieval and Library Foundation | TBD | Not started | - |
+| 51. Concept Dashboard and Recovery Surfaces | TBD | Not started | - |
+| 52. Podcast Quality Defaults and Learner Controls | TBD | Not started | - |
+| 53. Engagement Guardrails + Provider Privacy | TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-05-13*
-*Last updated: 2026-05-15 — Phase 47 (FOUND-05 added: structural prompt-injection bracketing) and Phase 48 (renamed to Off-Topic Classifier Robustness; INGEST-01..04 reframed around classifier reliability + override, removing the four-state triage UI). Phase 47 discussion was paused on 2026-05-15 to apply this correction; resume with `/gsd-discuss-phase 47`.*
+*Overhauled: 2026-05-15 — dropped invented foundation phase (was Phase 47); collapsed FOUND-05 + INGEST-01..04 into new Phase 47 "Filter Redesign" (replace approach, not tune regex; pre-LLM gate; structural bracketing). Renumbered phases 49→48, 50→49, 51→50, 52→51, 53→52, 54→53. Dropped LEARN-04 (invented metrics req); folded provider privacy sanitizer (PRIVACY-01) into Phase 53 alongside the LEARN fields it protects. Mind-map generation transparency moved to Out of Scope (private professor answer, not product). 8 phases / 30 reqs → 7 phases / 26 reqs.*
