@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Control, Graph Trust, Retrieval, and Ethical Engagement
-status: roadmap_overhauled
-stopped_at: v1.6 milestone overhauled — Phase 47 ready to discuss as Filter Redesign
+status: phase_47_context_gathered
+stopped_at: Phase 47 context gathered — ready for /gsd:plan-phase 47
 last_updated: "2026-05-15"
 last_activity: 2026-05-15
 progress:
@@ -60,8 +60,8 @@ Plus the earlier 2026-05-15 corrections (during the same session, before the ful
 
 Phase: 47 of 53 (1 of 7 in v1.6) — Filter Redesign — Off-Topic + Malicious Prompt Prevention
 Plan: Not planned yet
-Status: Ready to discuss with corrected scope
-Last activity: 2026-05-15 — full v1.6 overhaul (REQUIREMENTS, ROADMAP, PROJECT, STATE rewritten)
+Status: Context gathered — ready for /gsd:plan-phase 47
+Last activity: 2026-05-15 — Phase 47 discuss-phase complete; CONTEXT.md + DISCUSSION-LOG.md committed
 
 Progress: 0 / 7 phases complete
 
@@ -104,6 +104,10 @@ Progress: 0 / 7 phases complete
 - Phase 47 (filter redesign) replaces the regex approach entirely; pre-LLM gate blocks malicious prompts from the request itself; structural bracketing at provider boundary is defense in depth.
 - Mind-map generation transparency is a private answer to the professor (writeup), NOT a user-facing product feature.
 - "Learning metrics" was never a professor request and is not in scope.
+- **Phase 47 strategy locked in CONTEXT.md (not deferred to research):** hybrid — narrow regex (Layer 1) + embedding-similarity (Layer 2). No LLM in classifier path. Today's "regex first, LLM fallback" had the LLM fallback dead in practice.
+- **Phase 47 corpus design:** repo-only static JSON of text labels; embeddings runtime against user's configured embedding provider, cached with `(provider, model)` key, re-embedded on config change. Build-time embeddings rejected (model-incompatible with user's runtime config).
+- **Phase 47 malicious classifier scope:** narrow — DoS spam, known jailbreak templates, disallowed-content requests only. No override path on malicious; bracketing handles legitimate-looking-scary questions.
+- **Phase 47 override UI is already implemented** (`ChatMessage.tsx` + `AskScreen.tsx`); only gap to close is firing `classifyAndAnchorIncremental` when `flagged` flips true → false.
 
 ### Pending Todos
 
@@ -116,5 +120,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-05-15
-Stopped at: v1.6 milestone overhauled across REQUIREMENTS.md, ROADMAP.md, PROJECT.md, STATE.md. Phase 47 (Filter Redesign) is the next discuss target. The earlier Phase 47 (foundation) discuss-checkpoint was deleted.
-Resume file: None. Next action is `/gsd-discuss-phase 47` against the corrected milestone.
+Stopped at: Phase 47 discuss-phase complete. CONTEXT.md captures 19 implementation decisions across pre-LLM gate UX, override surface (already built), classifier strategy + corpus + failure mode, and eval-set seeds. DISCUSSION-LOG.md preserves alternatives.
+Resume file: `.planning/phases/47-filter-redesign-off-topic-malicious-prompt-prevention/47-CONTEXT.md`. Next action is `/gsd:plan-phase 47`.
