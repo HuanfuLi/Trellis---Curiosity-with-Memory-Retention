@@ -203,3 +203,92 @@ describe('applyUserContentBracketing — exported tag constants', () => {
     assert.equal(USER_CONTENT_CLOSE_TAG, '</user_content>');
   });
 });
+
+// ─── Composition-order tests (Task 2 of plan 47-03) ──────────────────────────
+// These tests assert the wiring inside providers/llm/index.ts: locale-first,
+// bracketing-second, in BOTH chatCompletion AND chatStream. Source-reading
+// asserts (mirrors useQuestions-system-prompt-stability.test.mjs:60-87
+// `indexOf` + offset comparison pattern) — the behavior is observable only
+// at the provider boundary, which we do not stub in CI.
+
+describe('applyUserContentBracketing — composition in providers/llm/index.ts', () => {
+  const llmSource = fs.readFileSync(LLM_INDEX_PATH, 'utf-8');
+
+  test('11. bracketing called inside chatCompletion AFTER applyLocaleDirective', () => {
+    const startIdx = llmSource.indexOf('export async function chatCompletion');
+    assert.ok(
+      startIdx !== -1,
+      'providers/llm/index.ts must export chatCompletion',
+    );
+    // Slice from the function header forward to the next `export ` declaration,
+    // which is sufficient for offset comparison inside the function body.
+    const nextExport = llmSource.indexOf('\nexport ', startIdx + 1);
+    const slice = nextExport === -1 ? llmSource.slice(startIdx) : llmSource.slice(startIdx, nextExport);
+
+    const localeOffset = slice.indexOf('applyLocaleDirective(');
+    const bracketOffset = slice.indexOf('applyUserContentBracketing(');
+    assert.ok(
+      localeOffset !== -1,
+      'chatCompletion must call applyLocaleDirective(...) — D-12 byte-stable comment line',
+    );
+    assert.ok(
+      bracketOffset !== -1,
+      'chatCompletion must call applyUserContentBracketing(...) — D-13 structural injection bracketing',
+    );
+    assert.ok(
+      localeOffset < bracketOffset,
+      'composition order in chatCompletion must be: applyLocaleDirective FIRST, applyUserContentBracketing SECOND. ' +
+      'Locale touches role:"system"; bracketing touches role:"user" — disjoint, but locale-first matches the documented D-12 → D-13 sequencing.',
+    );
+  });
+
+  test('12. bracketing called inside chatStream AFTER applyLocaleDirective', () => {
+    const startIdx = llmSource.indexOf('export async function* chatStream');
+    assert.ok(
+      startIdx !== -1,
+      'providers/llm/index.ts must export chatStream',
+    );
+    const nextExport = llmSource.indexOf('\nexport ', startIdx + 1);
+    const slice = nextExport === -1 ? llmSource.slice(startIdx) : llmSource.slice(startIdx, nextExport);
+
+    const localeOffset = slice.indexOf('applyLocaleDirective(');
+    const bracketOffset = slice.indexOf('applyUserContentBracketing(');
+    assert.ok(
+      localeOffset !== -1,
+      'chatStream must call applyLocaleDirective(...) — D-12 byte-stable comment line',
+    );
+    assert.ok(
+      bracketOffset !== -1,
+      'chatStream must call applyUserContentBracketing(...) — D-13 structural injection bracketing',
+    );
+    assert.ok(
+      localeOffset < bracketOffset,
+      'composition order in chatStream must be: applyLocaleDirective FIRST, applyUserContentBracketing SECOND.',
+    );
+  });
+
+  test('13. applyUserContentBracketing import declared at module top', () => {
+    assert.match(
+      llmSource,
+      /^import\s*\{\s*applyUserContentBracketing\s*\}\s*from\s*['"]\.\/user-content-bracketing(?:\.ts)?['"]/m,
+      'providers/llm/index.ts must import applyUserContentBracketing from ./user-content-bracketing at module top',
+    );
+  });
+
+  test('14. applyUserContentBracketing re-exported from providers/llm/index.ts', () => {
+    assert.match(
+      llmSource,
+      /export\s*\{\s*applyUserContentBracketing\s*\}/,
+      'providers/llm/index.ts must re-export applyUserContentBracketing for test discoverability via the central provider entry point',
+    );
+  });
+
+  test('15. Phase 35 D-12 comment preserved on the locale line in BOTH chatCompletion AND chatStream', () => {
+    const matches = llmSource.match(/applyLocaleDirective\(messages\);\s*\/\/\s*D-12/g) || [];
+    assert.ok(
+      matches.length >= 2,
+      `applyLocaleDirective(messages); // D-12 comment must appear at LEAST twice (once per function — chatCompletion + chatStream). ` +
+      `Found ${matches.length} match(es). Guards against an executor accidentally collapsing the comment when adding the new line.`,
+    );
+  });
+});
