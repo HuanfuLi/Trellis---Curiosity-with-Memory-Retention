@@ -29,13 +29,20 @@ Rules:
 
 const TOOL_PATTERN = /\[TOOL:web_search\]\s*(\{[^}]+\})/;
 
+// Phase 47 D-01 / D-02 sentinel — askStreaming returns this on the malicious
+// branch instead of null so AskScreen can stamp `kind: 'malicious-block'` onto
+// the persisted SessionMessage. Without it the placeholder content reaches the
+// session as a normal AI bubble and ChatMessage's neutral-rejection render
+// branch never triggers (FILTER-02 visibility regression).
+export type MaliciousBlockSentinel = { kind: 'malicious-block'; content: string };
+
 interface UseQuestionsReturn {
   questions: Question[];
   isAsking: boolean;
   isLoading: boolean;
   error: ServiceError | null;
   ask: (content: string) => Promise<Question | null>;
-  askStreaming: (content: string, onToken: (accumulated: string) => void, sessionContext?: QuestionFilterContext, sessionHistory?: SessionMessage[], webSearchEnabled?: boolean) => Promise<Question | null>;
+  askStreaming: (content: string, onToken: (accumulated: string) => void, sessionContext?: QuestionFilterContext, sessionHistory?: SessionMessage[], webSearchEnabled?: boolean) => Promise<Question | MaliciousBlockSentinel | null>;
   getByDate: (date: string) => Question[];
   getRecent: (n: number) => Question[];
   getById: (id: string) => Question | undefined;
@@ -92,7 +99,7 @@ export function useQuestions(): UseQuestionsReturn {
   }, []);
 
   const askStreaming = useCallback(
-    async (content: string, onToken: (accumulated: string) => void, sessionContext?: QuestionFilterContext, sessionHistory?: SessionMessage[], webSearchEnabled?: boolean): Promise<Question | null> => {
+    async (content: string, onToken: (accumulated: string) => void, sessionContext?: QuestionFilterContext, sessionHistory?: SessionMessage[], webSearchEnabled?: boolean): Promise<Question | MaliciousBlockSentinel | null> => {
       setIsAsking(true);
       setError(null);
 
@@ -169,22 +176,14 @@ export function useQuestions(): UseQuestionsReturn {
         // AskScreen placeholder will display while the (instant) flow returns.
         if (filterResult.label === 'malicious') {
           const blockedBody = i18n.t('chatMessage.maliciousBlocked.body');
-          // Documented SessionMessage shape — useQuestions does not own the
-          // session-message-append surface (AskScreen builds the persisted
-          // SessionMessage from the streamed placeholder content). Keeping
-          // the constructor here documents the kind discriminator at the
-          // exact site that produces it and gives downstream wiring a
-          // type-locked reference.
-          const _maliciousBlock: SessionMessage = {
-            id: '__pending__',
-            type: 'ai',
-            content: blockedBody,
-            kind: 'malicious-block',
-          };
-          void _maliciousBlock; // suppress unused-var lint (documentation shape)
+          // Stream the body so AskScreen's placeholder shows the rejection text
+          // immediately, then return the sentinel so AskScreen stamps
+          // `kind: 'malicious-block'` onto the persisted SessionMessage. The
+          // sentinel — not null — is what triggers ChatMessage's neutral
+          // rejection render (no override button per D-02).
           onToken(blockedBody);
           setIsAsking(false);
-          return null;
+          return { kind: 'malicious-block', content: blockedBody };
         }
 
         const store = questionService.getAll();

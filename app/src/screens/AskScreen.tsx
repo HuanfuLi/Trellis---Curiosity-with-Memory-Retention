@@ -10,7 +10,7 @@ import { sessionService } from '../services/session.service';
 import { flashcardService } from '../services/flashcard.service';
 import { conceptFeedService } from '../services/concept-feed.service';
 import { infiniteScrollService } from '../services/infiniteScroll.service';
-import type { ChatSession, SessionMessage } from '../types';
+import type { ChatSession, Question, SessionMessage } from '../types';
 import { formatDate } from '../lib/date';
 // NOTE: AskScreen uses questionService.askStreaming() (via useQuestions) exclusively for Q&A.
 // The non-streaming ask() method is available as a fallback but is not invoked from this screen.
@@ -296,12 +296,20 @@ export function AskScreen() {
 
         if (controller.signal.aborted) return;
 
-        const aiContent = question
-          ? question.answer
+        // Phase 47 D-01 / D-02 — askStreaming returns a sentinel
+        // { kind: 'malicious-block', content } instead of a Question on the
+        // malicious branch so we can stamp the discriminator onto the persisted
+        // SessionMessage. ChatMessage reads `kind` to pick the neutral
+        // rejection render (no override button) instead of the markdown body.
+        const isMaliciousBlock = !!question && typeof question === 'object' && 'kind' in question && question.kind === 'malicious-block';
+        const persistedQuestion = isMaliciousBlock ? null : (question as Question | null);
+
+        const aiContent = persistedQuestion
+          ? persistedQuestion.answer
           : lastContent || t('ask.genericError');
 
-        const related = question
-          ? questions.filter((q) => question.relatedQuestionIds.includes(q.id)).map((q) => q.summary)
+        const related = persistedQuestion
+          ? questions.filter((q) => persistedQuestion.relatedQuestionIds.includes(q.id)).map((q) => q.summary)
           : [];
 
         const aiMsg: SessionMessage = {
@@ -309,7 +317,8 @@ export function AskScreen() {
           type: 'ai',
           content: aiContent,
           relatedKnowledge: isPostSession ? undefined : related,
-          questionId: question?.id,
+          questionId: persistedQuestion?.id,
+          kind: isMaliciousBlock ? 'malicious-block' : undefined,
         };
 
         // Re-read sessionRef here (after all awaits) so we have the latest version,
