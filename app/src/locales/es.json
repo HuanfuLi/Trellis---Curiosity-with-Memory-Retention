@@ -755,7 +755,10 @@
     "offTopicPrompt": "Esto parece fuera de tema. ¿Guardar igualmente?",
     "saveAnyway": "Sí, guardar igualmente",
     "discard": "Descartar",
-    "relatedKnowledge": "🔗 Conocimiento relacionado:"
+    "relatedKnowledge": "🔗 Conocimiento relacionado:",
+    "maliciousBlocked": {
+      "body": "Este mensaje parece un intento de inyección de prompt. Si se trata de una pregunta real de aprendizaje sobre seguridad de LLM, reformúlala."
+    }
   },
   "conceptCard": {
     "viewDetails": "Ver detalles"

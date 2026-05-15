@@ -755,7 +755,10 @@
     "offTopicPrompt": "脱線しているようです。それでも保存しますか？",
     "saveAnyway": "はい、保存する",
     "discard": "破棄",
-    "relatedKnowledge": "🔗 関連する知識："
+    "relatedKnowledge": "🔗 関連する知識：",
+    "maliciousBlocked": {
+      "body": "このメッセージはプロンプトインジェクションの試みのように見えます。LLMのセキュリティに関する本当の学習質問であれば、表現を変えてもう一度お試しください。"
+    }
   },
   "conceptCard": {
     "viewDetails": "詳細を表示"
