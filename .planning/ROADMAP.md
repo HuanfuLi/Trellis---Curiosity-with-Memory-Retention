@@ -19,7 +19,7 @@ There is **no foundation phase**. The prior agent's FOUND-01..05 scaffolding (cr
 - Integer phases (47, 48, …): Planned milestone work
 - Decimal phases (47.1, 47.2): Urgent insertions, if needed
 
-- [ ] **Phase 47: Filter Redesign — Off-Topic + Malicious Prompt Prevention** — Replace regex-based classifier; pre-LLM gate (block malicious from request); structural injection bracketing at provider boundary; held-out eval set; per-question override.
+- [x] **Phase 47: Filter Redesign — Off-Topic + Malicious Prompt Prevention** — Replace regex-based classifier; pre-LLM gate (block malicious from request); structural injection bracketing at provider boundary; held-out eval set; per-question override.
 - [ ] **Phase 48: Graph Command Service and Trust Invariants** — Validated graph correction commands, undo metadata, manual locks, stale-write protection.
 - [ ] **Phase 49: Graph Correction UI** — Selected-node correction controls in GraphScreen; preview/confirm for high-impact actions; durability across reload.
 - [ ] **Phase 50: Retrieval and Library Foundation** — Bounded archive search; local-first tags/bookmarks.
@@ -42,12 +42,12 @@ There is **no foundation phase**. The prior agent's FOUND-01..05 scaffolding (cr
   6. A held-out eval set with at least one labeled example per surfaced failure mode (small-talk false-negative such as "How are you doing?", legitimate-LLM-question false-positive such as "What is a system prompt?") lives under version control and runs in the test suite.
   7. User can override the off-topic flag on any individual exchange; the override persists across reloads and propagates to durable-knowledge consumers.
 **Plans**: 6 plans
-- [ ] 47-01-PLAN.md — Wave 0: corpus JSON + held-out eval fixture + deterministic embedding mock + i18n bundles (en/zh/es/ja)
-- [ ] 47-02-PLAN.md — Wave 1: filter-corpus.service.ts cache + question-filter.service.ts hybrid Layer 1 + Layer 2 rewrite + eval-set runner (FILTER-01, FILTER-04)
-- [ ] 47-03-PLAN.md — Wave 1: provider-wrapper bracketing (user-content-bracketing.ts) + TTS/embedding exemption tests (FILTER-03)
-- [ ] 47-04-PLAN.md — Wave 2: useQuestions.askStreaming pre-gate inversion + ChatMessage malicious-block render + SessionMessage.kind discriminator (FILTER-01, FILTER-02)
-- [ ] 47-05-PLAN.md — Wave 2: question.service.ask mirror inversion (FILTER-01, FILTER-02)
-- [ ] 47-06-PLAN.md — Wave 3: AskScreen.handleQuestionOverride D-06 re-fire + final integration sign-off (FILTER-05)
+- [x] 47-01-PLAN.md — Wave 0: corpus JSON + held-out eval fixture + deterministic embedding mock + i18n bundles (en/zh/es/ja)
+- [x] 47-02-PLAN.md — Wave 1: filter-corpus.service.ts cache + question-filter.service.ts hybrid Layer 1 + Layer 2 rewrite + eval-set runner (FILTER-01, FILTER-04)
+- [x] 47-03-PLAN.md — Wave 1: provider-wrapper bracketing (user-content-bracketing.ts) + TTS/embedding exemption tests (FILTER-03)
+- [x] 47-04-PLAN.md — Wave 2: useQuestions.askStreaming pre-gate inversion + ChatMessage malicious-block render + SessionMessage.kind discriminator (FILTER-01, FILTER-02)
+- [x] 47-05-PLAN.md — Wave 2: question.service.ask mirror inversion (FILTER-01, FILTER-02)
+- [x] 47-06-PLAN.md — Wave 3: AskScreen.handleQuestionOverride D-06 re-fire + final integration sign-off (FILTER-05) — includes UAT-5 dual-vector fix at `122cda59`
 **Spike/research expected**: choosing the classifier strategy is a within-phase decision (research step), not a pre-locked choice in CONTEXT.md.
 
 ### Phase 48: Graph Command Service and Trust Invariants

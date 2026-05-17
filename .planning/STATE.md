@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Control, Graph Trust, Retrieval, and Ethical Engagement
-status: phase_47_planned
-stopped_at: Phase 47 planned — 6 plans across 4 waves; ready for /gsd:execute-phase 47
-last_updated: "2026-05-15"
-last_activity: 2026-05-15
+status: phase_47_complete
+stopped_at: Phase 47 complete — all 6 plans landed; UAT cleared with 1 inline fix (UAT-5 dual-vector at 122cda59); ready for /gsd:plan-phase 48
+last_updated: "2026-05-17"
+last_activity: 2026-05-17
 progress:
   total_phases: 7
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 6
-  completed_plans: 0
+  completed_plans: 6
 ---
 
 # Project State: v1.6 ROADMAP OVERHAULED — 2026-05-15
@@ -58,15 +58,14 @@ Plus the earlier 2026-05-15 corrections (during the same session, before the ful
 
 ## Current Position
 
-Phase: 47 of 53 (1 of 7 in v1.6) — Filter Redesign — Off-Topic + Malicious Prompt Prevention
-Plan: 6 plans across 4 waves (47-01..47-06); plan-checker PASSED with 1 cosmetic warning
-Status: Ready to execute — /gsd:execute-phase 47
-Last activity: 2026-05-15 — Phase 47 plan-phase complete; RESEARCH.md + PATTERNS.md + VALIDATION.md + 6 PLAN.md files committed
+Phase: 47 of 53 — **COMPLETE** (1 of 7 in v1.6 done) — Filter Redesign — Off-Topic + Malicious Prompt Prevention
+Next: Phase 48 (Graph Command Service and Trust Invariants) — ready for /gsd:plan-phase 48
+Last activity: 2026-05-17 — Phase 47 closed; all 6 plans + UAT-5 inline fix landed; CLAUDE.md "Question filter — dual-vector scoring (Phase 47 UAT-5 — load-bearing)" section added
 
-Progress: 0 / 7 phases complete
+Progress: 1 / 7 phases complete
 
 ```
-[--------------------------------------------------] 0%
+[#######-------------------------------------------] 14%
 ```
 
 ## Milestone Shape
@@ -119,13 +118,13 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-15
-Stopped at: Phase 47 plan-phase complete. 6 plans across 4 waves cover FILTER-01..05 and all 19 CONTEXT.md decisions. RESEARCH.md (94 KB), PATTERNS.md (52 KB), VALIDATION.md, and 6 PLAN.md files (47-01..47-06) committed. Plan-checker verified PASSED with one cosmetic warning (RESEARCH.md Open Questions formatting — non-blocking, all recommendations already adopted in plans).
+Last session: 2026-05-17
+Stopped at: Phase 47 execution complete. All 6 plans landed in 4 waves; manual UAT cleared after 1 inline fix (UAT-5 multi-turn jailbreak evasion → `122cda59` dual-vector scoring in `layer2Embedding`). VERIFICATION.md produced by gsd-verifier. CLAUDE.md gained a new "Question filter — dual-vector scoring (Phase 47 UAT-5 — load-bearing)" section. ROADMAP.md and this file marked complete for Phase 47.
 
-Wave structure:
-- Wave 0 (47-01): corpus + i18n + test mock fixtures
-- Wave 1 (47-02 + 47-03 parallel): hybrid classifier + cache + eval runner; provider-wrapper bracketing
-- Wave 2 (47-04 + 47-05 parallel): pipeline inversion in askStreaming + question.service.ask
-- Wave 3 (47-06): AskScreen override re-fire (D-06) + UAT checkpoint
+Resume file: `.planning/phases/48-graph-command-service-and-trust-invariants/` (to be created by `/gsd:plan-phase 48`). Next action is `/gsd:plan-phase 48`.
 
-Resume file: `.planning/phases/47-filter-redesign-off-topic-malicious-prompt-prevention/47-01-PLAN.md`. Next action is `/gsd:execute-phase 47`.
+Key Phase 47 artifacts:
+- 6 plan summaries: `47-0{1..6}-SUMMARY.md`
+- Verification: `47-VERIFICATION.md`
+- Load-bearing CLAUDE.md sections added: "Question filter — dual-vector scoring (Phase 47 UAT-5)"
+- Critical commits: 47-04 wire-through (`79efe98f`), 47-06 D-06 re-fire (`067cde0a`), UAT-5 dual-vector fix (`122cda59`)
