@@ -1,274 +1,347 @@
-# Feature Research: Curiosity Feed v2 (Trellis v1.5)
+# Feature Research
 
-**Domain:** AI-powered personalized learning feed — masonry layout, engagement signals, source diversity
-**Researched:** 2026-05-08
-**Confidence:** HIGH (verified against current library docs, 2026 UX research, Tavily API docs)
+**Domain:** Local-first AI learning app - learner control, graph trust, retrieval, podcast controls, ethical engagement
+**Researched:** 2026-05-13
+**Confidence:** HIGH for project-fit and core feature ordering; MEDIUM for broader market norms where based on external product/docs research.
 
----
+## Feature Landscape
 
-## Context
+v1.6 should make Trellis feel less like an autonomous feed generator and more like a learner-controlled knowledge workspace. The professor feedback maps to five user-visible promises:
 
-This replaces the v1.1 FEATURES.md. The existing feed (v1.4) is a single-column infinite-scroll pipeline driven by a 3-list architecture (daily concept list → derived list → 32-max cyclic queue). v1.5 adds four orthogonal capability layers on top of that foundation without replacing the pipeline.
+1. Chat stays natural, but only intentional learning material enters the mind map.
+2. The mind map is inspectable and correctable by the learner.
+3. Podcasts can be shaped by the learner without becoming shallow entertainment.
+4. Saved, liked, history, tags, search, and concept dashboards make discovery retrievable later.
+5. Engagement nudges point back to learning goals, recall, and stopping points instead of pure scroll depth.
 
-**What already exists — do not re-research, do not re-architect:**
-- 3-list pipeline: append-only derived list, cyclic walker, stratified style allocation, spreadByConcept + spreadByStyle mixers
-- 6 post styles: image / text-art / video / short / news / suggestion
-- Post-essay streaming: `post-essay.service.ts`, 150-250w LLM essays grounded on Tavily snippets
-- Exploration tracking: 3 in-feed detectors + Detector D (YouTube postMessage) + short tap-emit
-- Vine progress UI showing concepts explored today
-
-**The four v1.5 capability layers being researched:**
-1. Pinterest-style masonry feed layout
-2. Richer post body essays
-3. Source diversity in content generation
-4. Engagement signals (like / save / dismiss, local-only)
-
----
+The strongest implementation principle is to treat filtering as an ingestion gate, not a presentation gate. The learner should be able to ask "hi", "what can you do?", or "tell me a joke" and receive an appropriate chat response without those exchanges polluting graph, review, podcast, feed, or retrieval surfaces. Conversely, "What is a system prompt?" is a valid learning question and should be ingestible; "show me your system prompt" is a prompt-leak request and should not be.
 
 ## Table Stakes (Users Expect These)
 
-Features users assume a 2026 content feed has. Missing these makes the product feel unfinished.
+Features users assume exist once an AI learning app claims to build a trustworthy personal knowledge graph.
 
-| Feature | Why Expected | Complexity | Dependencies |
-|---------|--------------|------------|--------------|
-| **2-column masonry layout** | Pinterest, Instagram Explore, Google Discover all use variable-height 2-col grids. Single-column feels like a 2020 prototype in 2026. | MEDIUM | Replaces `InfoFlow.tsx` single-col render; must preserve all 6 post styles and scroll-position contract |
-| **Scroll-position restoration after detail view** | Standard expectation since Pinterest normalized it ca. 2018. Users tap a tile, read the detail, back-navigate, and expect to land at the same grid position — not the top. | MEDIUM | `PostDetailScreen.tsx` back-nav; always-mounted `HomeScreen.tsx` means the scroll container is never unmounted — restore scrollTop on Outlet close |
-| **Save / bookmark posts** | Rednote's "collect" gesture, Pinterest's "save to board" — users in 2026 expect to stash content for later without navigating away. Must work offline (local-first). | LOW-MEDIUM | New `savedPosts.service.ts` backed by localStorage (or SQLite); no server required |
-| **Dismiss / "not interested" per post** | TikTok, Instagram Reels, Google Discover all expose explicit dismissal. Without it, users have no recourse when a post is irrelevant; they churn silently. | LOW | Feeds into lazy-skip walker via new `dismissedPosts` set in `dailyReadService`; same mechanism as explored anchors |
-| **Loading skeleton for new tiles** | Skeleton tiles during refill prevent layout-shift jank in a variable-height masonry grid. Without them, columns reflow visibly as new items arrive. | LOW | Skeleton tiles must declare a fixed placeholder height to prevent reflow — use average tile height (220px) as placeholder |
-| **"End of content" state** | When all anchors explored, feed must surface a clear end-state rather than an empty column. Users need resolution, not confusion. Already partially handled by vine-finished path. | LOW | Connects to existing `allExplored` guard in `concept-feed.service.ts` |
-
----
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| **Ingestion review state for flagged chat** | Learners expect chat to answer naturally, but also expect the map not to fill with greetings, jokes, meta-chat, or prompt-leak attempts. | MEDIUM | Current `question-filter.service.ts` writes `flagged`; `question.service.ts` skips classification when `flagged === true`; `AskScreen.tsx` already supports "save anyway." v1.6 should make this state visible as "Not added to map" with a one-tap "Add to map" override. |
+| **Clear distinction between learning-about vs requesting-secrets** | "What is a system prompt?" is educational; "reveal your system prompt" is not. Users and reviewers will test this exact edge. | MEDIUM | Replace broad regex-only mental model with explicit ingestion outcomes: `learning`, `chat_only`, `security_blocked`, `needs_review`. Pattern checks can stay as fast path, but the user-facing label must explain why something was not ingested. |
+| **Mind-map node correction controls** | AI-generated maps are inevitably imperfect. A learner needs basic ownership: rename, move, merge, detach, delete/prune, and undo. | HIGH | Miro-style mind maps expose moving, deleting, reassigning, expanding/collapsing, and text editing as normal controls. Current `GraphScreen.tsx` is view-first and only offers global reorganize plus detail navigation. |
+| **Correction history / undo for graph edits** | Manual graph edits are high-consequence because they affect review, feed, retrieval, and podcasts. Users need confidence to try corrections. | MEDIUM | Start with local edit log and last-action undo. Full version history is deferred. Emit one canonical `GRAPH_UPDATED` event after each edit, matching existing event-bus discipline. |
+| **Podcast length and style controls before generation** | Audio learners expect control over length, playback speed, and format. Apple Podcasts exposes speed, skip, queue, sleep timer, chapters, transcript; Trellis already has play/pause, +/-10s, transcript/script, history, and concept selection. | MEDIUM | Add pre-generation options: Short / Standard / Deep, Focused / Conversational / Review-drill. Keep 90-second current default as Standard only if educational coverage is preserved. |
+| **Podcast regeneration that respects selected controls** | If controls exist but regenerate ignores them, the feature feels fake. | MEDIUM | Extend `DailyPodcast` with generation options and use them in `podcast.service.ts`. Regenerate should invalidate script/audio and preserve chosen concept set. |
+| **Unified retrieval search across archive and knowledge** | After feed discovery, users expect to find things again by concept, title, source, tag, and history. Existing `SavedScreen.tsx` has Saved / Liked / History; `questionService.search` is content-only and not exposed as a unified retrieval experience. | MEDIUM | Add search to the archive first, then concept-level dashboards. Use local indexes over posts/questions. No backend needed. |
+| **User tags/bookmarks for posts and concepts** | Saved/liked is not enough once the archive grows. Learners need lightweight categorization such as `exam`, `paper`, `confusing`, `listen later`. | MEDIUM | Tags should attach to both `DailyPost` snapshots and `Question`/anchor IDs. Keep them local. Support nested tags later, but v1.6 can ship flat tags. |
+| **Concept dashboard for each anchor** | Learners expect a concept page to answer: what have I asked, what posts did I read, what is due, what podcast covered it, what is weak? | HIGH | Builds on `AnchorDetailScreen`/graph detail pattern. This is the core retrieval surface for professor feedback. |
+| **Learning-goal and stop cues** | A learning feed should say when enough was done and route to recall/review, not just continue serving content. | MEDIUM | Digital Promise recommends learner agency, reflection, data reporting, and customizable prompt frequency. v1.6 should add goal, progress, and stop states without punitive streak mechanics. |
+| **Reflection/retrieval prompts after engagement** | Reading should convert into recall. Retrieval practice evidence is strong; users expect learning apps to help them remember, not just consume. | MEDIUM | After reading/saving/liking several posts, prompt: "What do you remember?" or "Make this a card?" Do not interrupt every post. |
 
 ## Differentiators (Competitive Advantage)
 
-Features that distinguish Trellis from generic content feeds. Aligned with the core value: structured knowledge through adaptive, privacy-preserving AI.
-
-### A. Masonry UX Patterns
+These features should make Trellis feel distinct from a generic chatbot, podcast generator, or social feed.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| **Variable tile height reflecting content type** | Image posts taller (3:4 ratio), text-art posts shorter (1:1), suggestion cards fixed-height. Creates the "mosaic rhythm" that makes Pinterest grids feel alive vs uniform grids that feel like a spreadsheet. | MEDIUM | Height must be declared before render (masonry libraries need known heights to avoid reflow). Precompute height bucket per post type at queue-fill time. |
-| **Tap-to-expand in-place (overlay, not navigation)** | Opening a tile as a full-screen overlay with the feed frozen underneath preserves scroll position trivially — no restoration logic needed. Pinterest's actual pattern since 2022. | MEDIUM-HIGH | Conflicts with existing `PostDetailScreen.tsx` navigation model. Decision required: keep nav-based for sub-screen features (Detector A/B/C/D), or add overlay for feed-grid posts. Overlay is simpler for scroll preservation but means all detectors must work inside the overlay layer. |
-| **Smooth scroll-position restoration (nav-based fallback)** | If overlay is not chosen, save `scrollTop` in a ref on `HomeScreen` before navigating, restore it in the `[location.pathname]` useEffect that already fires on `/home` navigation (Phase 36-14 pattern). No library needed. | LOW | Simpler than overlay but user perceives a flash before restoration. Acceptable for v1.5 if overlay is deferred. |
-| **Pull-to-refresh gesture** | Standard on mobile feeds; triggers force-refill of the queue rather than a full rebuild. Gives user agency without disrupting the derived-list cycle position. | LOW-MEDIUM | Call `refillQueue()` behind `_refillMutex` (already guarded); reset visual state. Do NOT reset `derivedList` or `cyclePosition`. |
+| **Two-lane chat outcome: answered vs ingested** | Preserves natural conversation while protecting graph quality. The learner sees that "answered" and "learned into my map" are different states. | MEDIUM | Best user-facing model: every AI response may show a small status chip: `Added to map`, `Chat only`, `Needs review`, or `Not saved`. Avoid modal friction during normal ask flow. |
+| **Graph correction as learning, not admin** | Renaming/merging/moving nodes forces learners to articulate structure. That is valuable metacognition, not just cleanup. | HIGH | Add brief "why placed here" text already available via `placementReason`, then let the learner accept/correct. Use correction events to improve future placement locally. |
+| **AI-suggested corrections with learner approval** | The current Reorganize button is global and opaque. A better v1.6 experience suggests "These two anchors may be duplicates" or "This Q&A may belong under X" and waits for learner approval. | HIGH | Start with suggestions generated from embeddings/current labels. Never auto-merge without confirmation. |
+| **Retrieval dashboard that joins graph + feed + review + podcast** | Competitors often separate notes, flashcards, podcasts, and feeds. Trellis can make a concept the durable unit across all surfaces. | HIGH | Anchor dashboard should list: summary, Q&As, posts, saved/liked/history items, review cards, podcast mentions, tags, weak/confident indicators. |
+| **Podcast as adaptive review session** | Most podcast controls optimize listening convenience. Trellis can optimize for learning: "quiz me between segments", "focus weak concepts", "include today's saved items". | HIGH | Add after basic length/style controls. Use SM-2 due list and concept selection. Keep script transcript editable/visible. |
+| **Ethical engagement metrics visible to learner** | Instead of "you scrolled 20 posts," show "3 concepts recalled", "2 weak concepts practiced", "1 node corrected", "time to stop or review". | MEDIUM | Replace vanity engagement with learning-oriented success metrics. This directly addresses professor concern about social-feed engagement. |
+| **Local-first trust labels** | Users can see why content appears: due for review, weak area, saved topic, connected anchor, or user-added tag. | MEDIUM | "Why this?" labels should be short and deterministic from local state. Do not imply server/social ranking. |
+| **Quarantine inbox for ambiguous ingestion** | Prevents silent false positives/false negatives in filtering. Ambiguous exchanges live in an inbox where the learner can add, discard, or retitle them. | MEDIUM | Useful for legitimate borderline cases such as "system prompt" as a concept, self-referential AI literacy questions, or incomplete follow-ups. |
 
-### B. Richer Post Body Essays
+## Anti-Features (Commonly Requested, Often Problematic)
 
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| **Progressive disclosure: 150w teaser → full essay on expand** | Research shows 150-250w is optimal for feed scan (30-45s read time). 500-1000w works for users who choose to go deeper. "Read more" expansion in-place (not navigation) matches how Substack, Medium, and Apple News work in 2026. | LOW | `post-essay.service.ts` already streams 150-250w. Add a `generateFullEssay(postId)` path that streams a follow-on 350-600w continuation, appended to `bodyMarkdown`. The detector-B 30s dwell timer already fires; repurpose as "expand offered" trigger. |
-| **Tighter Tavily source grounding** | Current news essay grounds on `sources[0].snippet`. Grounding on 2-3 snippets from different domains reduces hallucination and improves factual density. | LOW-MEDIUM | Pass `sources[0..2].snippet` joined with `---` separator into the essay prompt. No change to `refillQueue` news branch — Tavily already returns multiple results. |
-| **Citation render polish** | Numbered inline citations `[1]` linking to source URLs render inconsistently across the 4 locales and on narrow tiles. Needs a consistent superscript → tooltip or bottom-sheet pattern. | LOW | Pure UI work in `PostDetailScreen.tsx`; no pipeline touch. |
-| **Concept-connection sentence at essay end** | Each essay ends with 1 sentence linking the concept to an adjacent anchor in the user's own graph. Makes every post feel personally relevant. | MEDIUM | Requires passing `candidatePack` (graph neighbors) into the essay prompt — same context that `useQuestions.ts` uses for Ask. Adds ~100 tokens per essay call. |
+Features that seem attractive but would undermine the v1.6 goals.
 
-### C. Source Diversity
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| **Per-concept domain rotation** | When multiple Tavily calls are made for the same concept on different days/posts, exclude previously-seen domains using `exclude_domains` param. Prevents the same Wikipedia / Medium article from grounding every post. | LOW | Track `usedDomains: string[]` per anchor in localStorage (or SQLite). Passed as `exclude_domains` on the next Tavily call for that anchor. Tavily docs confirm `exclude_domains` is supported. |
-| **Media-type mixing within concept** | One concept gets: 1 image post (visual grounding), 1 news post (current application), 1 video (explains the mechanism), 1 text-art (pithy summary). Currently style assignment is random-stratified; intentionally balancing media types per concept reduces redundancy. | MEDIUM | Modify `appendToDerivedList` to track which styles have been used per conceptId. When same concept re-enters (via new question), prefer styles not yet seen. This is an annotation on the derived list entry, not a pipeline rebuild. |
-| **Source quality scoring (simple)** | Weight Tavily results by: (a) `score` field Tavily already returns, (b) domain not in a blocklist of low-quality aggregators. Use `search_depth='advanced'` (already returns reranked chunks). | LOW | Already free: Tavily `advanced` search depth reranks by relevance. Add `exclude_domains` blocklist for known aggregator-spam domains (listicle farms, content mills). |
-| **Near-duplicate detection across posts** | Two posts on the same concept from the same source URL produce nearly identical body text. Detect via title similarity before committing to queue. | MEDIUM | Compare `newsMeta.sources[0].url` before inserting to derived list. If same URL seen within same day for same concept, skip and re-query Tavily with `exclude_domains` extended. |
-
-### D. Engagement Signals (Local-Only)
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| **Like / heart per post** | Table stakes for any content feed in 2026. Signals "this was good" without triggering re-review. Stored locally in `savedPosts.service.ts`. Does NOT affect the SM-2 scheduling or the derived list. | LOW | localStorage key `trellis_liked_posts: Record<postId, timestamp>`. Heart icon on tile and detail view. Count is private (no social total displayed). |
-| **Save / collect post** | Higher-intent than like. Saved posts accessible in a dedicated "Saved" tab or shelf. Pinterest and Rednote showed that saves are the strongest implicit quality signal. | LOW-MEDIUM | `savedPosts.service.ts` persists full `DailyPost` objects (or IDs with re-fetch path). Accessible from a new screen or bottom-sheet. |
-| **Dismiss ("not interested")** | Explicit negative signal. Suppresses the concept from the feed for the rest of the day (same mechanism as `getExploredAnchors` lazy-skip in the walker). Long-press menu or swipe-left gesture reveals dismiss action. | LOW | Write conceptId to `dailyReadService.dismissedAnchors` (new field, parallel to `exploredAnchors`). Walker already lazy-skips by id — extend `walkDerivedList` to accept a second skip-set. |
-| **"Less of this" style signal** | User can signal "I get too many image posts" or "too many news posts." Adjusts `STYLE_WEIGHTS` in localStorage for future sessions. Graph-based: if user dismisses 3+ news posts in a row, reduce news weight by 10%, redistribute to other styles. | MEDIUM | New `feedPreferences.service.ts` persists per-style weight adjustments. `style-assignment.ts` reads from this service before running largest-remainder allocation. Keep base weights as floor (no style drops below 5%). |
-| **Graph-derived social proof** | Show "4 of your anchors connect to this concept" as a sub-label on tiles. This is deterministic from the local knowledge graph — no server needed. Gives "others like you" feeling authentically without any privacy risk. | LOW-MEDIUM | Compute connection count at queue-fill time using `candidatePack` neighbor resolution. Store as `connectionCount: number` on `DailyPost`. Render as micro-label "4 connections" below tile title. |
-| **"Trending in your graph" shelf** | A horizontal shelf above the feed showing 3-5 anchors with the most review activity this week. Entirely local: computed from `reviewHistory` in SQLite. Feels like social proof; is actually personal analytics. | MEDIUM | New `localTrending.service.ts` reads review history, groups by anchor, ranks by recency × frequency. Rendered as a horizontal chip row above the masonry grid. |
-
----
-
-## Anti-Features (Deliberately NOT Building)
-
-| Feature | Why Requested | Why Not | What to Do Instead |
-|---------|--------------|---------|-------------------|
-| **Engagement counts / social totals** | "Show how many people liked this" creates social-proof loops | Requires a backend and breaks local-first privacy. Also shifts focus from learning to performance anxiety. | Show only personal saves/likes. The "trending" shelf derives from the user's own graph, not a crowd. |
-| **Horizontal swipe to dismiss** | Familiar from Tinder / news apps | Trellis feed is inside a horizontal SwipeTabContainer strip. Horizontal swipe on a feed tile is **indistinguishable** from the inter-tab swipe gesture. This is the exact gesture conflict class that Phase 33 UAT-4 documented. Any horizontal swipe within the feed MUST be left to the tab strip. | Use long-press contextual menu for dismiss (Material Design pattern: swipe-to-reveal for dismiss in lists ONLY when the container is vertically-only, which the SwipeTabContainer is not). |
-| **Pull-to-top on new posts** | "Show newest first" is intuitive | Destroys the 3-list pipeline's derived-list append-only semantics and cyclePosition. Rebuilding derived list from scratch loses multiplicity weights and cycle state. | Pull-to-refresh should trigger `refillQueue` (adds to queue end) not rebuild. New posts surface naturally as the walker advances. |
-| **A/B testing style weights** | "What style mix performs best?" | Requires server-side experiment assignment and aggregated telemetry. Incompatible with local-first privacy. | Ship the `feedPreferences.service.ts` "less of this" adjustment. Let users self-select their mix over time. |
-| **Infinite "lazy load everything" tile heights** | CSS-only masonry with `grid-template-rows: masonry` | CSS Grid Lanes shipped in Safari 26 only as of May 2026; Chrome/Firefox behind flags. Not viable for Capacitor's embedded Chromium WebView (WebView version lags Chrome stable by weeks-months). | Use `masonic` (virtualized, interval-tree backed, ResizeObserver aware) or `react-masonry-css` (CSS columns fallback, no virtualization). |
-| **Runtime LLM translation of essay bodies** | "Translate this post to Japanese on tap" | Prohibited by CLAUDE.md (i18n rule: runtime LLM translation is prohibited). LLM essays are already generated in the user's locale via `applyLocaleDirective`. | Essays are already locale-directed at generation time. No translation layer needed. |
-| **Near-real-time "others explored" signals** | Social proof via server-aggregated signals | No backend, no server. Any "others explored" data would require exfiltrating user behavior, which violates the core privacy promise. | Use graph-derived local social proof ("4 of your anchors connect to this") and local trending from review history. |
-| **Engagement counts influencing SM-2 scheduling** | "If I liked a post, reduce its review interval" | Like/save on a post is not equivalent to recall success on a flashcard. Conflating the two would corrupt the SM-2 model that drives the daily concept list. | Likes and saves are purely personal annotations. Review performance exclusively controls SM-2. |
-
----
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| **Blocking off-topic chat at presentation time** | It seems cleaner to refuse small talk or meta-chat. | This misreads the requirement. The issue is graph pollution, not chat response. Blocking harmless chat makes the assistant feel brittle and does not solve durable storage quality. | Answer normally when safe; mark as `Chat only` and exclude from graph/review/feed/podcast. |
+| **Regex-only ingestion filter** | Fast, simple, already exists. | Current patterns are too broad for professor-tested examples. They can confuse learning-about-system-prompts with prompt leakage. Regex also cannot reliably handle context-dependent follow-ups. | Keep regex as a fast signal, but add explicit outcome taxonomy and LLM fallback for ambiguous cases. |
+| **Auto-delete flagged exchanges from chat** | Keeps history clean. | Hides the distinction between "not ingested" and "not answered"; removes learner agency; breaks auditability. | Keep in chat history with `Chat only` status; offer delete separately. |
+| **Global one-click mind-map reorganize as the main correction feature** | Easy to expose and already exists. | Opaque global reorganization can overwrite learner intent and does not teach the user how the map is structured. | Keep as advanced maintenance; prioritize local corrections: rename, move, merge, detach, prune, undo. |
+| **Auto-merge nodes without confirmation** | Reduces clutter quickly. | Wrong merges are costly and hard to notice; they contaminate review schedules, podcasts, retrieval, and source prompts. | Suggest merge candidates with preview and undo. Require learner confirmation. |
+| **Presentation filters on graph view to hide bad nodes** | Makes the map look clean quickly. | It leaves polluted data in the underlying graph, so review/podcast/retrieval still inherit the problem. | Fix at ingestion and correction data layer. Graph view filters can exist for navigation, not data hygiene. |
+| **Podcast controls that only change word count** | Simple implementation. | Learners asked for control over podcast quality, not just duration. A short podcast that drops weak concepts is worse than no control. | Length controls should change pacing/depth while preserving required concepts or explaining what was omitted. |
+| **Entertainment-style podcast personas** | "Make it fun" is appealing. | Over-personalized personas can distract, anthropomorphize, or reduce learning density. | Use restrained styles: Focused, Conversational, Review-drill. Avoid celebrity/character roleplay. |
+| **Public likes, leaderboards, streak pressure** | Familiar engagement mechanics. | Conflicts with local-first privacy and professor concern about social-feed dynamics. Can reward app opens instead of recall. | Private learning metrics: recall attempts, weak concepts practiced, concepts corrected, goal completed. |
+| **Infinite scroll as primary success metric** | Easy to measure. | Optimizes consumption, not learning. | Use stop cues and route to review/reflection after a goal is met. |
+| **Server-side sync/social graph for v1.6 retrieval** | Would enable cross-device search and social proof. | Contradicts current local-first milestone scope and creates privacy/security requirements. | Use localStorage/SQLite indexes. Defer sync as a separate milestone with explicit privacy design. |
 
 ## Feature Dependencies
 
-```
-[2-column masonry layout]
-    └──requires──> [Tile height declarations per post type] (at queue-fill time)
-    └──requires──> [Scroll-position restoration] (trivial if overlay chosen, ref-save if nav)
+```text
+[Ingestion outcome taxonomy]
+    └──requires──> [Question flagged/chat-only persistence]
+    └──unblocks──> [Graph pollution prevention]
+    └──unblocks──> [Quarantine inbox]
+    └──unblocks──> [Accurate retrieval index]
+    └──unblocks──> [Podcast concept selection]
 
-[Dismiss ("not interested")]
-    └──requires──> [walkDerivedList skip-set extension] (already lazy-skip capable)
-    └──requires──> [dailyReadService.dismissedAnchors] (new field, parallel to exploredAnchors)
+[Security/prompt-leak classification]
+    └──requires──> [Ingestion outcome taxonomy]
+    └──enhances──> [Chat status labels]
+    └──conflicts──> [Regex-only filter]
 
-["Less of this" style signal]
-    └──requires──> [feedPreferences.service.ts] (new leaf module)
-    └──requires──> [style-assignment.ts reads external weights] (currently uses STYLE_WEIGHTS constant)
-    └──enhances──> [Dismiss] (style dismissal = per-style weight adjustment)
+[Manual graph correction primitives]
+    └──requires──> [Graph edit service/API]
+    └──requires──> [Undo/edit log]
+    └──unblocks──> [AI-suggested corrections]
+    └──unblocks──> [Trusted concept dashboards]
 
-[Save / bookmark]
-    └──requires──> [savedPosts.service.ts] (new service)
-    └──enhances──> [Like / heart] (saves are a superset of likes in intent)
+[Concept dashboard]
+    └──requires──> [Trusted anchor IDs]
+    └──requires──> [Unified retrieval index]
+    └──enhances──> [Podcast concept controls]
+    └──enhances──> [Ethical learning metrics]
 
-[Graph-derived social proof]
-    └──requires──> [candidatePack neighbor count at queue-fill time]
-    └──enhances──> [2-column masonry layout] (micro-label on tile)
+[Archive search + tags]
+    └──requires──> [Saved/Liked/History existing archive]
+    └──requires──> [Post/question local index]
+    └──unblocks──> [Concept dashboard retrieval sections]
 
-["Trending in your graph" shelf]
-    └──requires──> [localTrending.service.ts] (new service reading SQLite review history)
-    └──enhances──> [Graph-derived social proof] (same "local analytics" framing)
+[Podcast length/style controls]
+    └──requires──> [Podcast generation options persisted]
+    └──requires──> [Stable concept selection list]
+    └──enhances──> [Concept dashboard]
 
-[Progressive disclosure: teaser → full essay]
-    └──requires──> [post-essay.service.ts continuation path] (new function, not new file)
-    └──enhances──> [Citation render polish] (full essay has more citations to render)
-
-[Per-concept domain rotation]
-    └──requires──> [usedDomains tracking per anchor] (new field in anchor metadata or localStorage)
-    └──enhances──> [Near-duplicate detection] (same URL check is simpler than domain rotation)
-
-[Tighter Tavily source grounding]
-    └──enhances──> [Richer essays] (more grounding = less hallucination)
-    └──conflicts──> [Per-concept domain rotation] (grounding on 2-3 snippets must respect exclude_domains)
-
-[Media-type mixing within concept]
-    └──requires──> [appendToDerivedList style-per-concept tracking] (new annotation on DerivedListEntry)
-    └──enhances──> [Stratified style allocation] (already guaranteed ±1 per style per N; this adds per-concept fairness)
+[Ethical engagement guardrails]
+    └──requires──> [Learning goals]
+    └──requires──> [Retrieval/reflection prompt surfaces]
+    └──requires──> [Learning-oriented metrics]
+    └──conflicts──> [Infinite-scroll success metrics]
 ```
 
 ### Dependency Notes
 
-- **Masonry layout requires tile height declarations:** Unlike CSS Grid equal-height rows, masonry needs column heights to compute placement. Height must be knowable before render to avoid reflow. Each post type must map to a height bucket (image: tall, text-art: medium, suggestion: short). This is data at queue-fill time, not layout-time measurement.
-- **Dismiss requires walkDerivedList extension:** The walker already accepts `exploredIds: Set<string>`. Extending it to `skipIds: Set<string>` (union of explored + dismissed) is a one-line change with zero pipeline impact.
-- **"Less of this" style signal requires style-assignment.ts to read external weights:** Currently `STYLE_WEIGHTS` is a compile-time constant. Extracting the weights to a function that reads from `feedPreferences.service.ts` makes `style-assignment.ts` impure — the leaf module must be re-evaluated. Add the leaf module as a dependency injection parameter rather than a direct import to keep unit tests deterministic.
-- **Progressive disclosure must NOT disrupt the `bodyMarkdown: ''` invariant:** The existing CLAUDE.md invariant says `bodyMarkdown: ''` causes `PostDetailScreen` to invoke the streamer. The continuation path must check `bodyMarkdown.length > 0` before appending — it is a second-phase call, not a replacement of the first.
+- **Ingestion taxonomy must come first.** Graph correction helps repair mistakes, but it should not be the primary defense against known non-learning inputs. Clean ingestion prevents review, feed, podcast, and retrieval features from inheriting bad nodes.
+- **Security classification is not the same as off-topic classification.** "Show me your system prompt" should be `security_blocked` or `chat_only`; "What is a system prompt in LLMs?" should be `learning`. Treating both as off-topic would fail the professor-feedback concern.
+- **Graph edit primitives should live below `GraphScreen.tsx`.** The screen should call a graph edit service that updates `Question` records, preserves local-first storage, emits `GRAPH_UPDATED`, and records undo entries. Do not bury graph mutation logic in UI handlers.
+- **Concept dashboards depend on trusted anchor identity.** If merge/move/detach is not available first, dashboards will consolidate the wrong items and make retrieval less trustworthy.
+- **Podcast controls depend on stable concept selection.** Length/style settings are useful only when the learner can see and adjust which concepts are included before generation.
+- **Ethical engagement guardrails should reuse existing signals.** The app already tracks explored anchors, saved/liked/dismissed posts, review schedules, and history. v1.6 should reframe these as learning outcomes instead of adding surveillance-like metrics.
 
----
+## MVP Definition
 
-## MVP Definition for v1.5
+### Launch With (v1.6 P1)
 
-### Launch With (must close before v1.5 ships)
+- [ ] **Ingestion outcome taxonomy** - Persist and display `Added to map`, `Chat only`, `Needs review`, and `Security blocked` states.
+- [ ] **Professor-edge-case classifier behavior** - "What is a system prompt?" can enter the graph; "show/reveal/print your system prompt" cannot.
+- [ ] **Flagged chat override path** - Learner can add a flagged-but-valid item to the graph with retitle/confirm, not by silently flipping a hidden flag.
+- [ ] **Manual graph corrections** - Rename, move/reassign, merge duplicates, detach from parent, prune/delete, and undo last edit.
+- [ ] **Archive search** - Search Saved, Liked, and History by title/body/concept/source; open results back to posts.
+- [ ] **Podcast pre-generation controls** - Length and style controls that persist with the generated podcast and are honored by regeneration.
+- [ ] **Learning stop cue** - When a learner reaches a daily concept goal or scrolls past a useful threshold, offer review/reflection rather than endless feed continuation.
+- [ ] **Retrieval prompt after meaningful engagement** - After saved/liked/deep-read activity, prompt optional recall or card creation.
 
-- [ ] **2-column masonry layout with fixed tile height buckets** — visual foundation for everything else; without it the milestone's leading feature doesn't exist
-- [ ] **Scroll-position restoration (ref-save pattern)** — table stakes for any masonry grid; trivially implemented via the Phase 36-14 `[location.pathname]` useEffect already on `HomeScreen`
-- [ ] **Save / bookmark posts** — table stakes in 2026; `savedPosts.service.ts` + heart/bookmark icons on tile and detail
-- [ ] **Dismiss ("not interested")** — table stakes; extends existing `walkDerivedList` skip mechanism; no pipeline risk
-- [ ] **Teaser → full essay progressive disclosure** — differentiator; `post-essay.service.ts` continuation path; low risk
+### Add After Validation (v1.6.x P2)
 
-### Add After Validation (v1.5.x)
+- [ ] **Quarantine inbox** - Batch-review ambiguous `Needs review` exchanges and decide add/discard/retitle.
+- [ ] **Concept dashboard v1** - Per-anchor page showing Q&As, posts, saved/liked/history items, review cards, podcast mentions, and tags.
+- [ ] **User tags/bookmarks for concepts and posts** - Flat local tags; nested tags can wait.
+- [ ] **AI-suggested graph corrections** - Duplicate suggestions and move suggestions with preview, confirm, and undo.
+- [ ] **Podcast weak-concept focus** - Generate a review-drill podcast around weak/due concepts while preserving learner-selected inclusions.
+- [ ] **Learning-oriented weekly summary** - Concepts recalled, weak areas improved, corrections made, and retrieval prompts completed.
 
-- [ ] **"Less of this" style signal** — needs `feedPreferences.service.ts` and style-assignment impurity; worth validating dismiss first
-- [ ] **Graph-derived social proof ("N connections" micro-label)** — differentiator; requires candidatePack at queue-fill time; validate masonry tile design first
-- [ ] **Per-concept domain rotation** — needs `usedDomains` tracking; validate essay quality improvement first
-- [ ] **Tighter Tavily source grounding (2-3 snippets)** — low risk change to essay prompt; add after validating existing stream path is stable
+### Future Consideration (v2+ / Later Milestones)
 
-### Future Consideration (v1.6+)
-
-- [ ] **"Trending in your graph" shelf** — requires SQLite review history aggregation; valuable but not blocking
-- [ ] **Tap-to-expand overlay (vs nav-based detail)** — architectural change to PostDetailScreen navigation model; replaces 4 detectors; significant scope
-- [ ] **Media-type mixing within concept** — requires derived list annotation system; deferred until append-only semantics are proven stable across multi-week usage
-- [ ] **Citation render polish** — pure UI work; not blocking v1.5 launch
-
----
+- [ ] **Full graph version history** - Useful but heavier than last-action undo.
+- [ ] **Cross-device sync for retrieval and tags** - Requires privacy, conflict resolution, and auth design. Not v1.6.
+- [ ] **Collaborative/social learning features** - Conflicts with local-first unless explicitly designed as opt-in.
+- [ ] **Advanced tag query language** - Anki/Obsidian-style advanced search is powerful, but v1.6 should ship simple search and filters first.
+- [ ] **Podcast chapters and interactive quizzes inside audio** - Valuable, but only after basic generation controls and concept selection are trusted.
+- [ ] **Personalized engagement model training** - Avoid until there is clear consent, explainability, and local-only implementation.
 
 ## Feature Prioritization Matrix
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| 2-column masonry layout | HIGH | MEDIUM | P1 |
-| Scroll-position restoration | HIGH | LOW | P1 |
-| Save / bookmark | HIGH | LOW | P1 |
-| Dismiss ("not interested") | HIGH | LOW | P1 |
-| Teaser → full essay | MEDIUM | LOW | P1 |
-| Tile height buckets (per post type) | HIGH | LOW | P1 (blocking masonry) |
-| Like / heart | MEDIUM | LOW | P2 |
-| Graph-derived social proof | MEDIUM | MEDIUM | P2 |
-| Per-concept domain rotation | MEDIUM | LOW | P2 |
-| Tighter Tavily grounding | MEDIUM | LOW | P2 |
-| "Less of this" style signal | MEDIUM | MEDIUM | P2 |
-| "Trending in your graph" shelf | LOW | MEDIUM | P3 |
-| Tap-to-expand overlay | HIGH | HIGH | P3 |
-| Media-type mixing within concept | MEDIUM | HIGH | P3 |
-| Citation render polish | LOW | LOW | P3 |
-| Pull-to-refresh | LOW | MEDIUM | P3 |
+| Ingestion outcome taxonomy | HIGH | MEDIUM | P1 |
+| Professor-edge-case classifier behavior | HIGH | MEDIUM | P1 |
+| Flagged chat override path | HIGH | LOW-MEDIUM | P1 |
+| Manual graph rename/move/merge/detach/prune | HIGH | HIGH | P1 |
+| Graph edit undo | HIGH | MEDIUM | P1 |
+| Archive search | HIGH | MEDIUM | P1 |
+| Podcast length/style controls | HIGH | MEDIUM | P1 |
+| Learning stop cue | HIGH | MEDIUM | P1 |
+| Retrieval/reflection prompt | HIGH | MEDIUM | P1 |
+| Quarantine inbox | MEDIUM | MEDIUM | P2 |
+| Concept dashboard | HIGH | HIGH | P2 |
+| Tags/bookmarks for concepts/posts | MEDIUM | MEDIUM | P2 |
+| AI-suggested graph corrections | MEDIUM-HIGH | HIGH | P2 |
+| Podcast weak-concept focus | MEDIUM-HIGH | HIGH | P2 |
+| Learning-oriented weekly summary | MEDIUM | MEDIUM | P2 |
+| Full graph version history | MEDIUM | HIGH | P3 |
+| Cross-device retrieval sync | HIGH | HIGH | P3 |
+| Collaborative/social signals | LOW-MEDIUM | HIGH | P3 |
+| Advanced query language | MEDIUM | HIGH | P3 |
+| Interactive podcast quizzes/chapters | MEDIUM | HIGH | P3 |
 
----
+**Priority key:**
+- P1: Must have for v1.6 requirements to satisfy professor feedback.
+- P2: Strong follow-up once P1 data contracts are stable.
+- P3: Useful but should be deferred to avoid scope and privacy drift.
 
-## Engagement Signals: What Is Table Stakes vs Differentiator in 2026
+## Learner Perspective by Feature Area
 
-Research confirms the following hierarchy as of 2026 (sources: platform algorithm documentation, 2026 UX trend reports):
+### 1. Ingestion Triage
 
-**Ranking of signal quality (strongest → weakest):**
-1. **Save / bookmark** — strongest positive signal; indicates user wants to return (Pinterest, Rednote, LinkedIn all weight this above likes)
-2. **Dwell time / completion** — already tracked via Detector B (30s) and scroll-70% sentinel; no new infra needed
-3. **Follow-up action** (Q&A, review add) — already tracked via Detector C; highest-intent signal
-4. **Dismiss / "not interested"** — strongest negative signal; more actionable than absence of engagement
-5. **Like / heart** — weakest positive signal in 2026; algorithms de-weight it vs saves; still expected as table stakes
-6. **Explicit rating** (1-5 stars, thumbs up/down with reason) — differentiator for research/productivity apps; anti-feature for casual feeds (introduces friction before user decides to invest attention)
+Expected learner experience:
 
-**Local-only social-proof approaches (ranked by authenticity vs engineering cost):**
+- The learner asks anything naturally in Ask.
+- Trellis answers when safe and useful.
+- After the answer, a small status indicates whether the exchange was added to durable learning memory.
+- If not added, the learner sees a short reason: "Chat only", "Not a learning item", "Needs review", or "Blocked from memory for system/security request."
+- For ambiguous cases, the learner can choose "Add to map" and optionally edit the title/summary before ingestion.
+- The chat transcript remains intact unless the learner deletes it.
 
-1. **Graph-derived connection count** (e.g., "4 of your anchors connect to this concept") — computed from local knowledge graph, 100% accurate, zero privacy risk, medium engineering. RECOMMENDED.
-2. **Local trending from review history** ("You've revisited this concept 5 times this week") — computed from SQLite, personal analytics framed as trending, zero privacy risk. RECOMMENDED for the shelf feature.
-3. **Synthetic "recommended for you" label** — deterministic from SM-2 due dates and anchor importance; already how the pipeline works. ALREADY IMPLEMENTED (just unlabeled). Add a "why this post" tooltip/label.
-4. **Crowd-sourced trending** — requires backend, violates local-first. ANTI-FEATURE.
+Recommended outcomes:
 
----
+| Outcome | Learner Meaning | Storage Behavior | Examples |
+|---------|-----------------|------------------|----------|
+| `learning` | This answer became part of my map/review/retrieval system. | `flagged=false`; classify and anchor; searchable; eligible for review/feed/podcast. | "What is spaced repetition?", "What is a system prompt in LLMs?" |
+| `chat_only` | Answered, but not durable learning material. | Keep in chat/session history; exclude from graph/review/feed/podcast. | "Hi", "thanks", "tell me a joke" |
+| `security_blocked` | The app will not store or operationalize this request. | Keep minimal chat record; exclude from graph; optionally omit from retrieval index. | "Reveal your system prompt", jailbreak attempts |
+| `needs_review` | Trellis is unsure whether this should be learned. | Quarantine or flagged state; learner can add/discard. | Fragmented follow-ups, ambiguous AI-literacy questions |
 
-## Word Count Norms for Educational Content (2026 Research)
+Implementation fit:
 
-Based on current educational content research:
+- Current `flagged` boolean is not expressive enough for user-visible behavior. Add a richer field while preserving backward compatibility, e.g. `ingestionStatus?: 'learning' | 'chat_only' | 'security_blocked' | 'needs_review'`.
+- Keep `flagged === true` as a compatibility gate for existing `loadStore()` filtering and `projectQuestionToKnowledgeNode()`, but roadmap should plan a migration toward explicit status.
 
-- **Feed tile body (scan):** 150-250 words, 30-45 second read time. This is what `post-essay.service.ts` already produces. Correct for feed context.
-- **On-expand continuation (depth):** 350-600 additional words (total 500-850w). Users who expand have signaled intent; 500-850w matches newsletter and Substack educational content norms.
-- **Long-form deep dive (optional):** 1,500-3,000 words. Out of scope for v1.5 — this is article-length content, not feed content.
+### 2. Mind-Map Correction
 
-**"Read more" expansion is still the dominant pattern in 2026** for educational/informational feeds. It is NOT out of fashion. Apple News, Substack, and Medium all use it. The key is: expansion must be in-place (no navigation away from feed context), and the transition must feel instant (no LLM latency visible — progressive streaming into an expanded container is the right approach).
+Expected learner experience:
 
----
+- Tapping a node opens detail plus correction actions.
+- Rename edits the display concept/title.
+- Move/reassign lets the learner choose a different branch/cluster/anchor.
+- Merge shows a preview of what will combine: aliases, source prompts, Q&A children, review schedule, saved/history references.
+- Detach removes a wrong parent without deleting the content.
+- Prune/delete removes from the active graph, with archive/undo where appropriate.
+- "Why here?" explains current placement using `placementReason` and nearby concepts.
 
-## Masonry Library Recommendation
+Recommended P1 correction set:
 
-**Use `masonic` (jaredLunde) for production.**
+| Correction | Learner Use Case | Complexity | Notes |
+|------------|------------------|------------|-------|
+| Rename node | AI label is vague or wrong. | LOW-MEDIUM | Patch `title`, relevant labels for containers, and aliases. |
+| Move/reassign node | Concept belongs under another branch/cluster. | MEDIUM | Existing `graphService.moveToParent` handles `parentId`, but anchor/cluster fields also need coherent updates. |
+| Merge duplicate anchors | Same concept appears twice. | HIGH | Must combine source prompts, aliases, Q&A children, related IDs, tags, saved/history references, and review signals. |
+| Detach Q&A from anchor | One Q&A was attached to wrong concept. | MEDIUM | Clear or change `parentId`/`clusterNodeId`; emit `GRAPH_UPDATED`. |
+| Prune/delete | Remove bad, obsolete, or non-learning material. | MEDIUM | Existing delete exists; prune can retain archived state via existing `flagged/prunedFromTrellis` precedent. |
+| Undo last graph edit | Recover from accidental correction. | MEDIUM | Local edit log; one-step undo is enough for v1.6. |
 
-Rationale:
-- Virtualized via red-black interval tree (O(log n + m) cell lookup); renders ~40-50 DOM nodes regardless of item count
-- ResizeObserver-based: handles variable-height cells without forcing full reflows
-- React 18+ compatible; no known incompatibility with Capacitor WebView
-- Actively maintained as of 2025 (npm: `masonic`)
+Do not make AI reorganization the main interaction. Global reorganize can remain, but learner trust comes from visible local control.
 
-**Do NOT use CSS Grid Lanes (`grid-template-rows: masonry`)** — Safari 26 shipped it but Chrome/Firefox are behind experimental flags as of May 2026. Capacitor's embedded Chromium WebView lags Chrome stable, making this unreliable for the Android target.
+### 3. Podcast Controls
 
-**Do NOT use `react-masonry-css`** for a virtualized feed. It renders all items in DOM (no virtualization). Acceptable for static galleries; not for a growing feed that could reach 100+ posts.
+Expected learner experience:
 
----
+- Before generating, the learner sees "Knowledge Today" concepts and can add/remove or accept planner additions.
+- The learner chooses length and style.
+- Trellis communicates tradeoffs: shorter means fewer examples, not skipped required concepts unless the learner confirms.
+- Regenerate uses the same options or lets the learner adjust them.
+- Player keeps table-stakes controls: play/pause, skip, transcript/script, history, delete. Add speed/sleep timer later if needed.
+
+Recommended controls:
+
+| Control | Options | Complexity | Notes |
+|---------|---------|------------|-------|
+| Length | Short, Standard, Deep | MEDIUM | Map to target script duration and required concept count. |
+| Style | Focused, Conversational, Review-drill | MEDIUM | Avoid entertainment personas. |
+| Concept inclusion | Due, weak, saved, manually added | MEDIUM-HIGH | Builds on current `todayConcepts` and planner insertion. |
+| Regenerate with options | Same options or edit before regenerate | MEDIUM | Persist options on `DailyPodcast`. |
+| Playback speed | 0.8x, 1x, 1.25x, 1.5x, 2x | LOW-MEDIUM | Table-stakes in podcast apps, but can follow generation controls. |
+
+P1 should focus on generation controls, not building a full podcast app clone.
+
+### 4. Retrieval
+
+Expected learner experience:
+
+- The archive is not just a graveyard. It is searchable and filterable.
+- Search results can include saved posts, liked posts, history, Q&As, anchors, and podcast scripts.
+- A concept dashboard gives a stable home for everything related to a concept.
+- Tags and bookmarks let the learner impose personal meaning beyond AI-generated categories.
+- Search explains where a result came from: Saved, Liked, History, Graph, Review, Podcast.
+
+Recommended retrieval layers:
+
+| Layer | What It Solves | Complexity | Priority |
+|-------|----------------|------------|----------|
+| Archive search | "I remember seeing a post about X." | MEDIUM | P1 |
+| Source/type filters | Narrow by saved/liked/history/post/question/podcast. | LOW-MEDIUM | P1 |
+| Concept dashboard | "Show me everything about this concept." | HIGH | P2 |
+| Flat tags | "Mark this as exam/paper/confusing." | MEDIUM | P2 |
+| Podcast transcript search | "Find where this was covered in audio." | MEDIUM | P2 |
+| Advanced query syntax | Power-user filtering. | HIGH | P3 |
+
+Implementation fit:
+
+- `SavedScreen.tsx` is the right entry point for P1 archive search because it already consolidates Saved, Liked, and History.
+- `questionService.search()` exists but only searches question content and answer. It should not become the only retrieval layer; add a retrieval service that can aggregate posts/questions/podcasts and return typed results.
+- Anki and Obsidian norms support search plus tags/filters as expected retrieval capabilities, but Trellis should keep the first version simple and mobile-friendly.
+
+### 5. Ethical Engagement
+
+Expected learner experience:
+
+- The app helps the learner decide what to do next, including stopping.
+- Success metrics are about learning: recall, review, correction, concept coverage, weak-area progress.
+- Likes/saves remain private personal signals.
+- Dismiss is respected without treating it as "failure."
+- Reflection prompts are adjustable, not nagging.
+
+Recommended guardrails:
+
+| Guardrail | Learner Benefit | Complexity | Notes |
+|-----------|-----------------|------------|-------|
+| Daily learning goal | Clarifies "enough for today." | MEDIUM | Goal can be concepts explored/recalled, not time-on-app. |
+| Stop cue after goal | Prevents endless feed dynamic. | MEDIUM | Offer Review, Reflect, Podcast, or Close. |
+| Retrieval prompt after engagement | Converts consumption into memory. | MEDIUM | Prompt after meaningful clusters of activity, not every post. |
+| Private metrics only | Protects privacy and reduces social pressure. | LOW | Do not add public counts. |
+| "Why this?" label | Preserves agency and explainability. | MEDIUM | Use local reasons: due, weak, saved, connected, planner. |
+| Prompt frequency control | Avoids annoyance. | MEDIUM | User can reduce/disable reflection nudges. |
+
+Ethical engagement should be framed as learner agency, not paternalistic blocking. The app should make the next learning action obvious and make stopping feel complete.
+
+## Competitor / Ecosystem Feature Analysis
+
+| Feature | Ecosystem Pattern | Our Approach |
+|---------|-------------------|--------------|
+| Mind-map correction | Miro supports moving/reassigning, editing, deleting, layout, and expand/collapse as normal mind-map controls. | Add local correction controls directly to Graph/anchor detail. Keep AI reorganize as secondary. |
+| Retrieval search/tags | Anki supports search across notes/cards plus tag/deck filters; Obsidian graph supports filtering, tags, groups, and display controls. | Unified local search across archive + graph + podcast, with simple filters first. Flat tags in v1.6.x. |
+| Podcast controls | Apple Podcasts exposes playback speed, skip, queue, sleep timer, transcript, and chapters. | P1 generation controls for educational length/style; playback speed can be P2 because current player already has basic controls. |
+| Retrieval practice | CMU Eberly Center summarizes robust evidence that retrieval practice supports learning beyond rereading. | Add recall/reflection prompts after engagement and route stop cues toward review. |
+| Learner agency and reflection | Digital Promise recommends learner choice over adaptive AI supports, opt-out, reflection opportunities, learner-facing data, and control over feedback prompt frequency. | Make goals, stop cues, reflection prompts, and "why this?" labels configurable and local-first. |
+| Prompt/security handling | OWASP and OpenAI highlight prompt injection/system leakage as active LLM app risks and recommend limiting consequences rather than assuming perfect detection. | Separate security-blocked and chat-only outcomes from learning ingestion. Never let prompt-leak attempts become durable knowledge nodes. |
 
 ## Sources
 
-- [Scrolling Designs: 8 Patterns (Lovable, 2026)](https://lovable.dev/guides/scrolling-designs-patterns-when-to-use)
-- [Infinite Scroll Feed System Design Guide (2026)](https://www.muhammadtayyab.dev/blog/how-to-design-an-infinite-scroll-feed-the-complete-system-design-guide)
-- [Masonic: High-performance masonry for React (GitHub)](https://github.com/jaredLunde/masonic)
-- [CSS Grid Lanes Complete Guide (DEV, 2026)](https://dev.to/bean_bean/css-grid-lanes-masonry-layout-is-here-a-complete-guide-for-2026-4686)
-- [Building High-Performance Scroll Restoration Infinite Lists (Medium, Feb 2026)](https://suhaotian.medium.com/building-high-performance-scroll-restoration-infinite-lists-on-the-web-baa55d4cd52f)
-- [Social Media Algorithms 2026: How Platforms Rank Content (Hootsuite)](https://blog.hootsuite.com/social-media-algorithm/)
-- [Google Discover Feb 2026 Core Update Scorecard (Newzdash)](https://www.newzdash.com/guide/google-discover-feb-2026-core-update-scorecard-data-shows-what-actually-changed)
-- [Designing swipe-to-delete and swipe-to-reveal interactions (LogRocket)](https://blog.logrocket.com/ux-design/accessible-swipe-contextual-action-triggers/)
-- [Content Length Best Practices 2026](https://www.georgescifo.com/2025/10/the-definitive-guide-to-content-length-best-practices-for-2026/)
-- [Mobile-First UX Patterns Driving Engagement 2026 (TensorBlue)](https://tensorblue.com/blog/mobile-first-ux-patterns-driving-engagement-design-strategies-for-2026)
-- [Tavily Web Search Essentials Docs](https://docs.tavily.com/examples/quick-tutorials/search-api)
-- [On-Device Recommender Systems Survey (Springer, 2025)](https://link.springer.com/article/10.1007/s41019-025-00308-8)
-- [Progressive Disclosure in UX (IxDF, 2026)](https://ixdf.org/literature/topics/progressive-disclosure)
-- [Instagram New UI 2026 (ClickAnalytic)](https://www.clickanalytic.com/instagram-new-ui-2025-explained/)
+Project sources:
+
+- `.planning/PROJECT.md` - v1.6 milestone goal and professor-feedback context.
+- `.planning/MILESTONES.md` - prior shipped v1.5 archive and current milestone sequencing context.
+- `app/src/services/question-filter.service.ts` - current pattern + LLM fallback filter.
+- `app/src/services/question.service.ts` - current `flagged` persistence, classification skip, search, patch/delete APIs.
+- `app/src/screens/AskScreen.tsx` - current flagged override path and chat persistence behavior.
+- `app/src/screens/GraphScreen.tsx` - current view-first graph UI and global reorganization affordance.
+- `app/src/services/graph.service.ts` - current graph move/link/delete-adjacent mutation primitives.
+- `app/src/services/podcast.service.ts` and `app/src/screens/PodcastScreen.tsx` - current daily podcast generation, concept list, insertion, playback, transcript, and history.
+- `app/src/screens/SavedScreen.tsx` - current Saved/Liked/History archive entry point.
+- `app/src/services/engagement.service.ts` - current local-only saved/liked/dismissed state and event semantics.
+
+External sources:
+
+- Carnegie Mellon Eberly Center, [Retrieval Practice for Improved Learning](https://www.cmu.edu/teaching/resources/instructionalstrategies/activelearningstrategies/retrievalpractice/index.html) - HIGH confidence for retrieval-practice rationale.
+- Digital Promise, [A Framework for Powerful Learning with Emerging Technology](https://digitalpromise.org/wp-content/uploads/2024/04/A-Framework-for-Powerful-Learning-with-Emerging-Technology.pdf) - HIGH confidence for agency, opt-out, reflection, learner-facing data, and prompt-frequency guidance.
+- Miro Help Center, [Mind map](https://help.miro.com/hc/en-us/articles/360017730753-Mind-map) - MEDIUM confidence for current mind-map control expectations.
+- Apple Support, [Watch and listen to podcasts on iPhone](https://support.apple.com/en-nz/guide/iphone/iph3a22707a5/26/ios/26) - HIGH confidence for podcast player control norms.
+- Anki Manual, [Searching](https://docs.ankiweb.net/searching.html) - HIGH confidence for retrieval search/tag expectations in spaced-repetition tools.
+- Obsidian Help, [Graph view](https://obsidian.md/help/plugins/graph) - MEDIUM confidence for graph filtering/display expectations.
+- OWASP, [Top 10 for Large Language Model Applications](https://owasp.org/www-project-top-10-for-large-language-model-applications/) - HIGH confidence that prompt injection/system leakage are recognized LLM-app risks.
+- OpenAI, [Designing AI agents to resist prompt injection](https://openai.com/index/designing-agents-to-resist-prompt-injection/) - HIGH confidence for treating detection as imperfect and limiting consequences.
 
 ---
-
-*Feature research for: Trellis v1.5 Curiosity Feed v2*
-*Researched: 2026-05-08*
+*Feature research for: Trellis v1.6 learner control, graph trust, retrieval, podcast controls, and ethical engagement*
+*Researched: 2026-05-13*

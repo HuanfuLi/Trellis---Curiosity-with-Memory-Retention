@@ -67,6 +67,57 @@ Living document. Each milestone close-out appends a new section before "Cross-Mi
 
 ---
 
+## Milestone: v1.5 — Curiosity Feed v2 + Tech-Debt Hardening
+
+**Shipped:** 2026-05-13
+**Phases:** 10 (37-46) | **Plans:** 44 plan files / 48 summary files
+
+### What Was Built
+
+- Pinterest-style two-column masonry feed with vine-bloom end state.
+- Local-first engagement service and UI: save, like, dismiss, saved/liked views, long-press menu, and dismiss filtering through walker/read boundaries.
+- Richer content pipeline: Deep Dive essays, citation rendering, Tavily source diversity, and queued-news multi-source grounding.
+- v1.4 carry-over cleanup: i18n leaf module, validation drift, roadmap polish, device retests, brand-history docs, and YouTube short removal.
+- Hardening sweep: dependency updates, strictness/lint/dead-code/TODO/operator-note/performance audits, and GraphScreen Android drag mitigation.
+
+### What Worked
+
+- Leaf-helper seams remained effective: `i18n-leaf.ts`, `source-diversity.service.ts`, and `news-source-metadata.ts` let tests cover behavior without importing the full app chain.
+- Source-reading tests caught wiring drift where DOM/runtime harnesses would have been expensive.
+- Milestone audit before archive found a real CONTENT-03 integration gap; the Phase 46 closure kept the fix narrow and test-backed.
+- Separating self-contained hardening phases from feature phases avoided dependency/strictness churn during UI work.
+
+### What Was Inefficient
+
+- Phase 43 accumulated many UI gap-closure plans after UAT, which was correct but expensive.
+- Nyquist metadata remains stale for phases 38, 40, and 41 even though verification passed.
+- `gsd-tools milestone complete` produced a zero-count v1.5 milestone entry, requiring manual repair.
+- The known stale `tests/concept-feed.test.mjs` `buildFallbackPosts` contract remains deferred.
+
+### Patterns Established
+
+- Testable production helpers for service data shaping, exemplified by `news-source-metadata.ts`.
+- Audit-driven gap closure phase after milestone review, exemplified by Phase 46.
+- Dedicated close-out artifacts (`*-VERIFY.md`, `*-VALIDATION.md`, `*-SUMMARY.md`, `*-VERIFICATION.md`) as archive-grade evidence.
+
+### Key Lessons
+
+1. Milestone audits need to inspect active runtime paths, not only direct generation paths; CONTENT-03 was only incomplete on queued prefetch.
+2. When a helper extraction changes source shape, update source-reading tests in the same plan or the test suite becomes stale.
+3. UI UAT should happen before broad close-out when layout/interaction changes span mounted screens, portals, and gesture surfaces.
+4. CLI archive output must be reviewed before commit; grammar drift in planning files can produce empty milestone stats.
+
+### Cost Observations
+
+- Model mix: mostly Opus-quality planning/execution with Sonnet verification/integration (estimated).
+- Sessions: high, due to multi-phase milestone plus UAT/gap closure loops.
+- Notable: Phase 43 and Phase 46 provided the highest leverage: Phase 43 exposed the real user-facing engagement workflow, and Phase 46 converted a static audit finding into a narrow durable regression.
+
+---
+
 ## Cross-Milestone Trends
 
-(Will fill in when v1.5 closes — need at least 2 milestones with retrospectives to identify patterns.)
+- **Leaf modules are now a standing architecture pattern.** v1.4 discovered the pattern for testability; v1.5 applied it systematically to i18n, source diversity, and news metadata mapping.
+- **Source-reading tests are powerful but need maintenance.** They caught load-bearing invariants across v1.4/v1.5, but helper extraction and import-shape changes require paired test updates.
+- **UAT finds interaction bugs that unit tests miss.** v1.4 Force-New-Day and v1.5 engagement/masonry flows both needed human-visible retest loops.
+- **Archive tooling needs verification.** Both v1.4 and v1.5 close-outs required manual review/repair of CLI-generated milestone summaries.

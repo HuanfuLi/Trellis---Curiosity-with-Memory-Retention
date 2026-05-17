@@ -33,6 +33,14 @@ const SRC = readFileSync(
   new URL('../../src/services/concept-feed.service.ts', import.meta.url),
   'utf8',
 );
+const POST_ESSAY_SRC = readFileSync(
+  new URL('../../src/services/post-essay.service.ts', import.meta.url),
+  'utf8',
+);
+const NEWS_METADATA_SRC = readFileSync(
+  new URL('../../src/services/news-source-metadata.ts', import.meta.url),
+  'utf8',
+);
 
 // ─── SC-1 integration ──────────────────────────────────────────────────────────
 
@@ -109,16 +117,21 @@ describe('SC-2(a): source-reading — news call sites wire sourceDiversityServic
     );
   });
 
-  it('both news call sites call filterForDiversity on the results array', () => {
-    // Two real call-site invocations (one in creation loop on searchResult.data.results,
-    // one in pre-fetch loop on results.data.results). Comments may add extra matches.
-    const callSiteMatches = [
-      ...SRC.matchAll(/sourceDiversityService\.filterForDiversity\([a-zA-Z]/g),
-    ];
-    assert.equal(
-      callSiteMatches.length,
-      2,
-      'expected exactly 2 actual filterForDiversity invocations (excludes docstring mentions)',
+  it('news top-source helper applies source diversity and both news paths call it', () => {
+    assert.match(
+      NEWS_METADATA_SRC,
+      /sourceDiversityService\.filterForDiversity\(results, usedDomains\)\.slice\(0, 3\)/,
+      'news-source-metadata.ts must apply filterForDiversity(results, usedDomains).slice(0, 3)',
+    );
+    assert.match(
+      SRC,
+      /topSources = selectNewsTopSources\(searchResult\.data\.results, usedDomains\)/,
+      'direct no-prefetch news path must use selectNewsTopSources(searchResult.data.results, usedDomains)',
+    );
+    assert.match(
+      SRC,
+      /const topSources = selectNewsTopSources\(results\.data\.results, usedDomains\)/,
+      'queued-prefetch news path must use selectNewsTopSources(results.data.results, usedDomains)',
     );
   });
 });
@@ -138,10 +151,10 @@ describe('SC-2(a) counterweight: recordServedDomain after commit', () => {
   });
 
   it('recordServedDomain in pre-fetch loop appears AFTER preFetched.news.set', () => {
-    const preFetchSet = SRC.indexOf('preFetched.news.set(a.conceptId, chosen)');
+    const preFetchSet = SRC.indexOf('preFetched.news.set(a.conceptId, topSources)');
     assert.ok(
       preFetchSet >= 0,
-      'pre-fetch loop must store filtered[0] as `chosen` into preFetched.news',
+      'pre-fetch loop must store topSources into preFetched.news',
     );
     const preFetchRecord = SRC.indexOf('sourceDiversityService.recordServedDomain', preFetchSet);
     assert.ok(
@@ -195,10 +208,10 @@ describe('SC-2(b): filterForDiversity prefers unseen domain in mixed input', () 
 // ─── Counterweight: Phase 39 walker wire intact ────────────────────────────────
 
 describe('counterweight: Phase 39 walker wire untouched at concept-feed.service.ts:~1212', () => {
-  it('concept-feed.service.ts contains walkDerivedList(16, exploredIds, dismissedIds)', () => {
+  it('concept-feed.service.ts contains walkDerivedList(24, exploredIds, dismissedIds)', () => {
     assert.match(
       SRC,
-      /walkDerivedList\(16, exploredIds, dismissedIds\)/,
+      /walkDerivedList\(24, exploredIds, dismissedIds\)/,
       'Phase 39 D-07 walker wire must be unchanged — load-bearing per CLAUDE.md',
     );
   });
@@ -208,6 +221,115 @@ describe('counterweight: Phase 39 walker wire untouched at concept-feed.service.
       SRC,
       /new Set\(engagementService\.getDismissedAnchorIds\(\)\)/,
       'dismissedIds must be sourced from engagementService',
+    );
+  });
+});
+
+// ─── CONTENT-03: queued-news prefetch multi-source cache ─────────────────────
+
+describe('CONTENT-03: queued-news prefetch preserves multiple sources', () => {
+  it('maps selected Tavily top sources into stable newsMeta.sources entries', async () => {
+    const { selectNewsTopSources, mapNewsSourcesToNewsMeta } = await import(
+      '../../src/services/news-source-metadata.ts'
+    );
+    const mockResults = [
+      {
+        title: 'Source A',
+        url: 'https://alpha.example/news',
+        content: 'snippet A',
+        score: 0.9,
+      },
+      {
+        title: 'Source B',
+        url: 'https://beta.example/research',
+        content: 'snippet B',
+        score: 0.8,
+      },
+      {
+        title: 'Source C',
+        url: 'https://gamma.example/report',
+        content: 'snippet C',
+        score: 0.7,
+      },
+    ];
+
+    const topSources = selectNewsTopSources(mockResults, new Set());
+    const newsMetaSources = mapNewsSourcesToNewsMeta(topSources);
+
+    assert.ok(newsMetaSources.length >= 2, 'queued-news prefetch must preserve at least two sources');
+    assert.deepEqual(newsMetaSources.map(s => s.index), [1, 2, 3]);
+    assert.deepEqual(
+      newsMetaSources.slice(0, 2).map(s => ({ title: s.title, url: s.url, snippet: s.snippet })),
+      [
+        { title: 'Source A', url: 'https://alpha.example/news', snippet: 'snippet A' },
+        { title: 'Source B', url: 'https://beta.example/research', snippet: 'snippet B' },
+      ],
+      'newsMeta source mapping must preserve Tavily title/url/snippet values',
+    );
+  });
+
+  it('PreFetchCache.news stores WebSearchResult arrays keyed by conceptId', () => {
+    // Required source shape: news: Map<string, WebSearchResult[]>
+    assert.match(
+      SRC,
+      /news: Map<string, WebSearchResult\[\]>/,
+      'PreFetchCache.news must cache top-source arrays, not one chosen result',
+    );
+  });
+
+  it('cached news branch slices cached top sources into newsMeta.sources', () => {
+    // Required cached branch: topSources = cached.slice(0, 3)
+    assert.match(SRC, /result = cached\[0\]/, 'cached news branch must use cached[0] for title/teaser');
+    assert.match(
+      SRC,
+      /topSources = cached\.slice\(0, 3\)/,
+      'cached news branch must preserve up to three cached Tavily sources',
+    );
+    assert.match(
+      SRC,
+      /sources: mapNewsSourcesToNewsMeta\(topSources\)/,
+      'newsMeta.sources must be built from the shared mapper',
+    );
+    assert.doesNotMatch(
+      SRC,
+      /topSources = \[cached\]/,
+      'cached news branch must not collapse the cache back to one source',
+    );
+  });
+
+  it('refillQueue prefetch stores selected topSources rather than only chosen', () => {
+    assert.match(
+      SRC,
+      /selectNewsTopSources\(results\.data\.results, usedDomains\)/,
+      'queued-prefetch path must select top sources through the shared helper',
+    );
+    assert.match(
+      SRC,
+      /preFetched\.news\.set\(a\.conceptId, topSources\)/,
+      'queued-prefetch path must cache the full topSources array',
+    );
+    assert.doesNotMatch(
+      SRC,
+      /preFetched\.news\.set\(a\.conceptId, chosen\)/,
+      'queued-prefetch path must not cache only the chosen result',
+    );
+    assert.doesNotMatch(
+      SRC,
+      /const chosen = filtered\[0\]/,
+      'queued-prefetch path must not keep the old filtered[0] selection shape',
+    );
+  });
+
+  it('direct no-prefetch path and generateNewsEssay keep the same top-three contract', () => {
+    assert.match(
+      SRC,
+      /selectNewsTopSources\(searchResult\.data\.results, usedDomains\)/,
+      'direct no-prefetch path must use the shared top-source selector',
+    );
+    assert.match(
+      POST_ESSAY_SRC,
+      /sources\s*\.slice\(0, 3\)/,
+      'generateNewsEssay must continue consuming up to three newsMeta sources',
     );
   });
 });

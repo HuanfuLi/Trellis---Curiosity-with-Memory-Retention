@@ -755,7 +755,10 @@
     "offTopicPrompt": "This looks off-topic. Save anyway?",
     "saveAnyway": "Yes, save anyway",
     "discard": "Discard",
-    "relatedKnowledge": "🔗 Related Knowledge:"
+    "relatedKnowledge": "🔗 Related Knowledge:",
+    "maliciousBlocked": {
+      "body": "This message looks like a prompt-injection attempt. If this is a real learning question about LLM security, please rephrase."
+    }
   },
   "conceptCard": {
     "viewDetails": "View details"

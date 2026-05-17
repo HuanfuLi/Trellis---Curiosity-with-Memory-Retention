@@ -1,5 +1,32 @@
 # Milestones
 
+## v1.5 Curiosity Feed v2 + Tech-Debt Hardening (Shipped: 2026-05-13)
+
+**Timeline:** 2026-05-08 → 2026-05-13 (5 days)
+**Phases:** 10 (37-46)
+**Plans:** 44 plan files / 48 summary files
+**Git range:** `e10bca7d..c90ebafb`
+**Diff:** 278 files / +51,076 / −1,764
+
+**Key accomplishments:**
+
+- **Curiosity Feed v2 shipped** — Pinterest-style two-column masonry feed, vine-bloom end state, richer essays, source diversity, citation rendering, and local-first engagement signals.
+- **Engagement UX landed** — save, like, dismiss, saved/liked views, long-press menu, read-boundary dismiss filtering, and Force-New-Day dismissed reset with saved/liked archives preserved.
+- **Essay/content pipeline hardened** — Deep Dive variant, multi-snippet Tavily grounding, citation rendering, source-domain rotation, and Phase 46 queued-news prefetch multi-source closure for CONTENT-03.
+- **v1.4 carry-overs closed** — i18n leaf-module refactor, validation drift, roadmap polish, device retests, brand-history localStorage docs, and YouTube short-classification removal.
+- **Code-quality and dependency sweep complete** — safe in-major dependency updates, strictness/lint/dead-code/TODO/operator-note/performance evidence, GraphScreen Android drag mitigation, and final verification.
+- **Milestone audit passed with accepted debt** — 21/21 active requirements satisfied; integration 10/10; remaining debt is documented as non-blocking.
+
+**Audit status:** `tech_debt` — no requirement or integration blockers. Accepted debt: known stale `tests/concept-feed.test.mjs` `buildFallbackPosts` test contract, known lint/build/audit baselines, and partial validation metadata for phases 38/40/41.
+
+**Archive:**
+
+- Roadmap: `.planning/milestones/v1.5-ROADMAP.md`
+- Requirements: `.planning/milestones/v1.5-REQUIREMENTS.md`
+- Audit: `.planning/milestones/v1.5-MILESTONE-AUDIT.md`
+
+---
+
 ## v1.4 Curiosity Feed Redesign + UI Polish (Shipped: 2026-05-08)
 
 **Timeline:** 2026-04-16 → 2026-05-08 (22 days)
@@ -24,6 +51,7 @@
 **Audit status:** `tech_debt` — 16 of 26 v1.3-carried test failures closed; 10 architectural carry-overs (i18n leaf-module refactor) explicitly accepted to v1.5 first wave
 
 **Archive:**
+
 - Roadmap: `.planning/milestones/v1.4-ROADMAP.md`
 - Requirements: `.planning/milestones/v1.4-REQUIREMENTS.md`
 - Audit: `.planning/milestones/v1.4-MILESTONE-AUDIT.md`

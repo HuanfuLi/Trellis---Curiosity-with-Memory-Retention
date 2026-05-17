@@ -320,6 +320,17 @@ export interface SessionMessage {
   relatedKnowledge?: string[];
   questionId?: string;
   // isStreaming is transient UI state only — never persisted
+  /**
+   * Discriminator for special-render AI messages. Phase 47 D-01 / D-02:
+   *   - undefined / 'normal' → existing markdown body render path.
+   *   - 'malicious-block'    → ChatMessage renders the inline rejection
+   *                            surface (NO override button, neutral copy
+   *                            from i18n key chatMessage.maliciousBlocked.body).
+   * useQuestions.askStreaming sets 'malicious-block' when filterResult.label
+   * === 'malicious' (pre-LLM gate per D-18). Zero LLM tokens are spent in
+   * this branch, no Question is persisted.
+   */
+  kind?: 'normal' | 'malicious-block';
 }
 
 export interface ChatSession {
@@ -651,7 +662,13 @@ export type ErrorCode =
   | 'PARSE_ERROR'
   | 'SEARCH_FAILED'
   | 'LLM_ERROR'
-  | 'COVERAGE_ERROR';
+  | 'COVERAGE_ERROR'
+  // Phase 47 — pre-LLM filter gate (D-01). Returned from question.service.ask
+  // when the filter classifies the input as malicious; no override path.
+  | 'BLOCKED_MALICIOUS'
+  // Phase 47 — pre-LLM filter gate (D-19). Returned from question.service.ask
+  // when the abort signal fires during the pre-gate (LOCALE_CHANGED, etc.).
+  | 'ABORTED';
 
 export interface AskResult {
   question: Question;

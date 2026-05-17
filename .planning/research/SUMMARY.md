@@ -1,281 +1,222 @@
 # Project Research Summary
 
-**Project:** Trellis v1.5 — Curiosity Feed v2 + Tech-Debt Hardening
-**Domain:** Mobile-first AI-powered learning feed — masonry layout, engagement signals, source diversity, richer essays, tech-debt hardening
-**Researched:** 2026-05-08
-**Confidence:** HIGH
+**Project:** Trellis v1.6 - Control, Graph Trust, Retrieval, and Ethical Engagement
+**Domain:** Local-first AI learning app with learner-controlled knowledge ingestion, correctable graph structure, retrieval, podcasts, and ethical engagement
+**Researched:** 2026-05-13
+**Confidence:** HIGH for roadmap ordering and architecture; MEDIUM for MindElixir edit hooks and OpenAI TTS quality until device UAT
 
 ## Executive Summary
 
-Trellis v1.5 layers four orthogonal capability improvements onto an already-working 3-list pipeline (daily concept list → derived list → 32-max cyclic queue) without replacing any load-bearing pipeline code. The correct mental model is **additive integration**, not redesign: new leaf modules wire at specific call sites (walker extension, Tavily pre-filter, essay options), new UI components delegate to existing state owners, and new events extend the AppEvent union rather than replacing existing signals. The research shows this is achievable with zero new production dependencies (after the masonry reconciliation below), zero new SQLite schema changes for engagement, and zero new dev dependencies.
+Trellis is a local-first AI learning workspace: Ask generates natural answers, the mind map organizes durable knowledge, the feed surfaces concept-linked material, SM-2 drives review, and podcasts recap learning. v1.6 should shift the product from "compelling learning feed" toward "trusted learner-controlled system." Experts build this type of product by separating chat presentation from durable knowledge ingestion, treating graph structure as canonical data rather than UI state, and making retrieval a bounded recovery tool rather than another discovery feed.
 
-The single most consequential decision in v1.5 is masonry layout strategy. Three researchers disagreed. The recommendation after full reconciliation is **CSS `column-count: 2` with `break-inside: avoid`** — not `@virtuoso.dev/masonry`, not `masonic`. The reasoning: Trellis's SwipeTabContainer uses a per-slot `overflow: auto` scroll container, not `window` scroll. `@virtuoso.dev/masonry`'s `useWindowScroll={true}` mode targets `document` scroll, not per-element scroll roots, and would require invasive rewiring of the `useInfiniteScroll` / `containerRef` setup. The queue maximum of 32 posts means at most 32 DOM nodes are ever live — well below any virtualization threshold where JS overhead pays off. CSS `column-count: 2` is universally supported, does not rebalance on image load (no ResizeObserver cascade, no cyclePosition corruption), preserves the always-mounted HomeScreen slot's scroll position automatically on back-navigation, and is compatible with framer-motion card entrance animations on individual leaf `<motion.div>` nodes without creating containing blocks on scroll ancestors.
+The recommended approach is conservative and service-oriented. Keep the existing React 19 / TypeScript / Vite / Tailwind / Capacitor stack, add `zod` for runtime validation at LLM/storage/edit-command boundaries, add `minisearch` for local full-text retrieval, and upgrade only MindElixir and Capacitor SQLite in-major where they directly support v1.6. The central dependency is strict: ingestion gate first, then graph command service and invariants, then graph UI, then retrieval/library surfaces, then podcast options, then ethical engagement cues over stable signals.
 
-The second most consequential decision is build order. Wave 0 (i18n leaf-module refactor) is an unconditional prerequisite: it closes 10 carried test failures and establishes the leaf-module foundation that all new service tests depend on. No new services added in v1.5 can have full `node --test` coverage without Wave 0 complete. Waves 1–4 proceed in strict dependency order: foundation leaf services → service integration → UI layer → hygiene sweep.
-
----
-
-## Masonry Layout Reconciliation
-
-This section documents the explicit reconciliation required across the three conflicting researcher recommendations.
-
-### The Conflict
-
-| Researcher | Recommendation | Primary Argument |
-|-----------|----------------|-----------------|
-| STACK.md | `@virtuoso.dev/masonry` v1.4.3 | Virtualization, auto-sizing, `useWindowScroll`, active maintenance |
-| FEATURES.md | `masonic` | Red-black interval tree, ResizeObserver-aware, ~40-50 DOM nodes |
-| PITFALLS.md | CSS `column-count: 2` | No rebalance on image load, universal support, no cyclePosition corruption |
-
-### Resolution: CSS `column-count: 2`
-
-**`@virtuoso.dev/masonry` is rejected on architectural grounds.** The claim that `useWindowScroll={true}` works with Trellis's per-screen `overflow: auto` container is incorrect. Virtuoso's window-scroll mode attaches its sentinel IntersectionObserver relative to `document`, not relative to the slot's scroll root. Trellis's scroll containers live inside SwipeTabContainer slots — they are NOT the document scroll root. Rewiring this would require changing `useInfiniteScroll.ts` and HomeScreen's `containerRef` model away from the always-mounted slot pattern, introducing fragility near Phase 36-14's resync logic. Additionally: 32 DOM nodes do not justify the overhead of a virtualizing renderer.
-
-**`masonic` is rejected on maintenance and integration grounds.** STACK.md's audit is correct: masonic's last publish is ~12 months stale. More critically, masonic uses absolute positioning for column placement — on `translateX` transition within SwipeTabContainer, absolute-positioned children recalculate bounding boxes, which can trigger the resize-handler cascade described in PITFALLS.md Pitfall 6 and CLAUDE.md's SwipeTabContainer `resync()` early-return guard.
-
-**CSS `column-count: 2` is adopted with the following implementation constraints:**
-- Each card container gets `break-inside: avoid` so cards are never split across columns.
-- Column fill order is top-to-bottom within each column, left-column-first reading order — acceptable because no card has positional semantics relative to another.
-- Image `onLoad` does NOT trigger any column recalculation (CSS multi-column is static after render).
-- framer-motion card entrance animations use `<motion.div>` per card (leaf node), NOT on the scroll container or InfoFlow root. `will-change: transform` on leaf cards is safe — it does not affect ancestor containing blocks.
-- `MasonryFeed.tsx` is still extracted as a named component (ARCHITECTURE.md's recommendation) so InlineInfoFlow delegates rendering while retaining ownership of video/event state. MasonryFeed receives a flat ordered array and renders it via `column-count: 2` CSS — it contains zero JS column-distribution logic.
-- Scroll-position restoration is automatic: the always-mounted HomeScreen slot's DOM is never destroyed, so `scrollTop` survives back-navigation without any ref-save logic.
-- No new production dependencies required. Zero.
-
----
+The key risks are data pollution, graph corruption, and engagement drift. Non-learning chat must be answerable but excluded from graph/review/feed/podcast/retrieval. MindElixir must remain a renderer/input surface, with every correction flowing through a validated graph edit service. Retrieval must help users find, resume, compare, and practice prior learning, not create a second infinite feed. Podcast options must be bounded and quality-preserving, not freeform prompt personas. Ethical engagement must be separate from save/like/dismiss metrics and must prioritize goals, stop cues, recall, review, and reflection.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The locked baseline (React 19.2.0, TypeScript 5.9.3, Vite 7.3.1, Tailwind CSS 4.2.1, Capacitor 8.1.0, framer-motion 12.38.0) requires no new production dependencies for the core v1.5 features after the masonry reconciliation above.
+v1.6 should avoid a platform rewrite. The existing local-first service architecture is already aligned with the milestone: services own business logic, screens re-read after event-bus signals, `Question` records remain the canonical graph substrate, localStorage is the active store, SQLite backs up questions, and IndexedDB stores podcast audio blobs.
 
-**Core technologies for new v1.5 surfaces:**
-- `localStorage ('trellis_engagement_v1')`: engagement state — same pattern as `trellis_post_queue`, synchronous read/write, no IndexedDB or SQLite extension needed
-- `CSS column-count: 2` + `break-inside: avoid`: masonry layout — no library, no dependency
-- `ReactMarkdown components` prop overrides (`sup`, `a`, `section`): citation rendering — no new remark/rehype plugin; `remark-gfm` v4 already owns GFM footnotes
-- Bundled `Map<string, number>` (~200 entries): source domain-tier scoring — compiled TS const, zero runtime cost, no network calls
-- `post-essay.service.ts` `EssayOptions.depth` flag: richer essays — same service, different prompt and token budget
+**Core technologies:**
+- React / React DOM `^19.2.6`: UI framework - keep current validated version; no UI architecture change is needed.
+- TypeScript `~5.9.3`: static contracts - keep tilde pin while adding runtime schemas for untrusted boundaries.
+- Vite `^7.3.1` and Tailwind CSS 4: build/style stack - no v1.6 need justifies major churn.
+- Capacitor `^8.3.3`: native shell - keep current shell; no new native plugin is required.
+- `@capacitor-community/sqlite` `^8.1.0`: durable cold backup - upgrade before adding v1.6 schema/migration surface.
+- MindElixir `^5.11.0`: mind-map rendering - retain current renderer, but drive edits through Trellis commands.
+- `zod` `^4.4.3`: runtime validation - required for LLM JSON, storage migrations, graph commands, podcast options, and learning-engagement records.
+- `minisearch` `^7.2.0`: local search - use for archive/knowledge/podcast retrieval; use embeddings only as an optional reranker.
+- Existing LLM/TTS/embedding provider layers: provider-neutral AI calls - do not add LangChain, Agents SDK, vector DBs, graph DBs, analytics SDKs, or backend sync.
 
-**Version bumps (safe within current major):**
-- Capacitor 8.1.0 → 8.3.1: `npm update @capacitor/*` (no 8.x breaking changes)
-- i18next 26.0.5 → 26.0.10: breaking changes in v26 do not affect Trellis usage patterns
-- react-router-dom 7.13.1 → 7.15.0: minor/security only
-- typescript-eslint, eslint, eslint-plugin-react-hooks: safe minor update
-
-**Held back (explicit hold decisions):**
-- Vite: stay on `^7.3.x` — Vite 8 is a Rolldown/Oxc rewrite with breaking config changes that require a dedicated migration sprint
-- TypeScript: stay on `~5.9.3` (tilde-pinned) — TS 6.0's `--strictInference` needs an audit pass before enabling; this is a tech-debt-sweep task
-- lucide-react: stay on `^0.575.0` — 1.x removes brand icons; requires an explicit icon audit sprint
-- framer-motion: stay on `^12.38.0` — the `motion` package rename is mechanical but broad; defer to v1.6
+Critical version notes: upgrade MindElixir and Capacitor SQLite before graph/storage work; move OpenAI TTS default from hard-coded `tts-1` toward configurable `gpt-4o-mini-tts` only with provider capability checks and device UAT.
 
 ### Expected Features
 
-**Must have (table stakes — launch blockers):**
-- 2-column masonry layout with `break-inside: avoid` card containers
-- Scroll-position restoration (automatic via always-mounted slot; no code required)
-- Save / bookmark posts (`engagementService.savePost` + bookmark icon on tile and detail)
-- Dismiss / "not interested" (`engagementService.dismissAnchor` + `walkDerivedList` skip extension)
-- Loading skeleton tiles during refill (220px fixed-height placeholders to prevent layout-shift jank)
-- "End of content" state (already partially wired via `allExplored` guard — needs UI polish)
-- Teaser → full essay progressive disclosure (`EssayOptions.depth: 'deep'` path in `post-essay.service.ts`)
+**Must have (v1.6 P1):**
+- Ingestion outcome taxonomy - distinguish `Added to map`, `Chat only`, `Needs review`, and `Security blocked`.
+- Professor-edge-case classifier behavior - "What is a system prompt?" can be learned; "show/reveal/print your system prompt" cannot become durable knowledge.
+- Flagged chat override path - learner can add a flagged-but-valid item with confirm/retitle, not by silently flipping a hidden boolean.
+- Manual graph corrections - rename, move/reassign, merge duplicates, detach, prune/delete, and undo last edit.
+- Archive search - search Saved, Liked, and History by title/body/concept/source, opening back to the original post.
+- Podcast pre-generation controls - length and style options persist with each podcast and regeneration honors them.
+- Learning stop cue - after a goal or useful threshold, route toward review/reflection/podcast/close rather than endless feed continuation.
+- Retrieval/reflection prompt after meaningful engagement - prompt recall or card creation after clusters of saved/liked/deep-read activity, not every post.
 
-**Should have (competitive differentiators — v1.5.x):**
-- Like / heart per post (`engagementService.likePost`, localStorage, no pipeline touch)
-- Graph-derived social proof ("N connections" micro-label on tile, computed from `candidatePack` at queue-fill time)
-- Per-concept domain rotation (`exclude_domains` on repeated Tavily calls; `usedDomains` tracked per anchor)
-- Tighter Tavily source grounding (2-3 snippets passed to essay prompt, not just `sources[0].snippet`)
-- "Less of this" style signal (`feedPreferences.service.ts` adjusting STYLE_WEIGHTS read by `style-assignment.ts`)
+**Should have (v1.6.x P2):**
+- Quarantine inbox for ambiguous ingestion decisions.
+- Concept dashboard v1 joining Q&As, posts, saved/liked/history, review cards, podcast mentions, tags, and weak/confident indicators.
+- Flat local tags/bookmarks for concepts and posts.
+- AI-suggested graph corrections with learner approval, preview, and undo.
+- Podcast weak-concept focus using due/weak concepts without losing learner-selected inclusions.
+- Learning-oriented weekly summary focused on recall, review, corrections, concept coverage, and reflections.
 
-**Defer (v1.6+):**
-- "Trending in your graph" shelf (requires SQLite review history aggregation)
-- Tap-to-expand overlay (architectural change to PostDetailScreen navigation model; replaces 4 detectors)
-- Media-type mixing per concept (requires DerivedListEntry style-annotation system)
-- Citation render polish as a standalone phase (pure UI; not launch-blocking)
-- Pull-to-refresh gesture (low priority; calls `refillQueue` behind mutex)
+**Defer (v2+):**
+- Full graph version history beyond last-action undo.
+- Cross-device sync for retrieval/tags, because it requires privacy, auth, and conflict-resolution design.
+- Collaborative/social learning and public metrics.
+- Advanced tag query language.
+- Podcast chapters and interactive audio quizzes.
+- Personalized engagement model training.
 
-**Anti-features (deliberately not building):**
-- Horizontal swipe to dismiss: gesture conflict with SwipeTabContainer — use long-press contextual menu
-- Engagement counts influencing SM-2 scheduling: like/save is not equivalent to recall success; conflating them corrupts the spaced-repetition model
-- Runtime LLM translation: prohibited by CLAUDE.md
-- Near-real-time "others explored" signals: requires backend, violates local-first constraint
+Anti-features: do not block harmless off-topic chat at presentation time; do not rely on regex-only filtering; do not make global one-click reorganization the main correction tool; do not auto-merge graph nodes; do not build entertainment personas, streak pressure, public likes, leaderboards, or infinite scroll success metrics.
 
 ### Architecture Approach
 
-All v1.5 features integrate with the existing 3-list pipeline as additive extensions at specific seams. `MasonryFeed.tsx` is a new rendering component that InlineInfoFlow delegates to, leaving InlineInfoFlow's six load-bearing concerns (video stop on swipe-away, video stop on route change, video stop on scroll-out, swipe gesture integration, animation seeding, load-more trigger) completely untouched. `engagement.service.ts` is a leaf module with a defined public contract; it does NOT extend `dailyReadService` (different persistence semantics) and does NOT extend `postQueueService`. `source-diversity.ts` is a session-scoped leaf module inserted at the Tavily call site inside `generatePostBatch`, never inside derived-list build or at display time.
+v1.6 should extend Trellis through additive local-first services and typed events. The main architectural move is to split answer generation from durable knowledge ingestion, then make every graph correction a validated transaction over `Question[]`. Retrieval, library metadata, podcast options, and ethical engagement should be leaf services consuming existing stores and emitting narrow events.
 
-**Major new components:**
-1. `src/lib/i18n-leaf.ts` — injectable t() shim that breaks the `src/locales/index.ts` import chain for 6 service files, closing 10 carried test failures (Wave 0 prerequisite)
-2. `src/services/engagement.service.ts` — leaf module: save/dismiss/like state, cross-day localStorage, `getDismissedAnchorIds()` consumed by walker; no date-based reset (saves/likes are permanent; dismissed anchors reset via explicit undo or Clear All Data)
-3. `src/services/source-diversity.ts` — session-scoped leaf: `filterForDiversity`, `recordServedDomain`, `scoreSource`; synchronous in-memory Maps; `reset()` called on day boundary
-4. `src/components/MasonryFeed.tsx` — CSS `column-count: 2` renderer; receives flat `InfoFlowItem[]` from InlineInfoFlow; zero JS column-distribution logic; no new dependencies
+**Major components:**
+1. `ingestion-gate.service.ts` / refactored `question-filter.service.ts` - answer-vs-ingest decisions with reason, confidence, overrideability, and schema validation.
+2. `question.service.ts` / `useQuestions.ts` - split chat answer events from accepted-ingestion events; avoid persist-then-filter races.
+3. `graph-edit.service.ts` - rename/move/merge/detach/prune/undo transactions, edit log, graph invariants, SQLite write-through where relevant.
+4. `canonical-knowledge.service.ts` - respect manual locks/revisions and avoid overwriting learner corrections during classification/reorg.
+5. `GraphScreen.tsx` - correction UI only; MindElixir stays renderer/input, not source of truth.
+6. `retrieval.service.ts` - MiniSearch-backed local search across questions, anchors, posts, history, tags, and podcast scripts.
+7. `library.service.ts` - tags/bookmarks metadata; saved/liked remains owned by `engagementService`.
+8. `podcast.service.ts` / `usePodcast.ts` - option snapshots, options hash, generation IDs, bounded prompt templates, and stale-job dropping.
+9. `learning-engagement.service.ts` - goals, stop cues, reflection/retrieval prompts, and learning metrics separate from feed engagement.
 
-**Key modified files:**
-- `src/services/post-queue.service.ts`: `walkDerivedList` gains optional `dismissedIds?: string[]` param (default `[]`); additive, all existing call sites preserved
-- `src/services/post-essay.service.ts`: `EssayOptions` gains `depth?: 'standard' | 'deep'`; `generateStandardEssay` branches on depth; `bodyMarkdown.slice(0, 2000)` cap raised to 4000 before essay lengthening
-- `src/services/concept-feed.service.ts`: `refillQueue` passes `engagementService.getDismissedAnchorIds()` to walker; news branch calls `filterForDiversity`
-- `src/types/index.ts`: add `ANCHOR_DISMISSED` to AppEvent union (one event, not a catch-all `ENGAGEMENT_UPDATED`)
-- `src/screens/HomeScreen.tsx`: subscribe to `ANCHOR_DISMISSED`; sibling `[location.pathname]` effect re-syncs engagement state (Phase 36-14 canonical pattern)
-- `src/screens/settings/SettingsDataScreen.tsx`: `handleForceNewDay` calls `engagementService.reset()` alongside existing resets
-- 6 service files + `main.tsx`: i18n-leaf refactor (Wave 0)
+Key patterns: keep services as owners; keep `GRAPH_UPDATED` as broad invalidation; add narrow events only when UI needs detail; use load-time normalization for old localStorage records; preserve always-mounted screen `[location.pathname]` resync; keep dynamic retrieval context out of byte-stable Ask system prompts.
 
 ### Critical Pitfalls
 
-1. **Dismiss wired to `markExplored` pollutes vine credits** — dismiss and explored are semantically distinct: dismissal = rejection, explored = completion. Wire dismiss to `engagementService.dismissAnchor()` + `ANCHOR_DISMISSED` event only. Never call `markExplored` or emit `CONCEPT_EXPLORED` from a dismiss handler. Write a source-reading test asserting this anti-wire does not exist.
-
-2. **Engagement state not reset on Force-New-Day** — `handleForceNewDay` in `SettingsDataScreen` must call `engagementService.reset()`. Missing this causes dismissed anchors to carry over and stale annotations to persist. The triple-defense applies: (a) handler mutates storage, (b) service rejects stale state on load, (c) always-mounted HomeScreen re-syncs on `[location.pathname]` effect.
-
-3. **Source diversity domain lookup inside `_refillMutex.run()`** — any async or slow-sync lookup inside the refill mutex extends the lock time beyond LLM-latency-sized thresholds. Domain reputation lookup must be synchronous O(N_results) scan over a bundled allowlist. No network calls inside the mutex. Add a fallback: if all Tavily results are filtered by the blocklist, allow the lowest-blocked domain to prevent silent zero-posts-for-concept failures.
-
-4. **Richer essays break the AbortController contract** — every new async call added to `PostDetailScreen`'s essay `useEffect` must receive `{ signal: abortController.signal }` and be preceded by an `if (abortController.signal.aborted) return` guard (D-08 pattern). Raise the `generateEssayMeta` body slice cap from 2000 to 4000 chars before lengthening the essay prompt, or meta calls always operate on a truncated body.
-
-5. **i18n leaf-module refactor invalidates source-reading test regexes** — four source-reading tests grep raw TypeScript source for structural invariants. Import-line changes during the refactor can cause false-positive matches. Run `npm test` after each file in the refactor sequence, not after the batch. Audit `grep -rl "readFileSync\|fs\.read" app/tests/` before starting; update any test whose anchor string changes simultaneously.
-
----
+1. **Treating ingestion triage as chat suppression** - answer safe natural chat, but only persist/classify/search learning material. Add fixtures for "What is a system prompt?" versus "Show me your system prompt."
+2. **Persist-then-filter race** - do not let untriaged `QUESTION_ASKED` drive graph, retrieval, podcast concepts, or metrics. Split `QUESTION_ANSWERED` from `QUESTION_INGESTED`, or require durable consumers to filter explicit ingestion status.
+3. **Overloading `flagged`** - do not reuse one boolean for off-topic, prompt-leak, pruned, hidden, detached, and corrected states. Add explicit `ingestion` and `graphTrust` metadata with loader tests.
+4. **Letting MindElixir mutate canonical state** - never persist `mei.getData()` or library edit state. Convert UI actions to graph edit commands and re-render from `Question` records.
+5. **Partial graph corrections** - rename/move/merge/detach must patch parents, children, labels, `clusterNodeId`, `qaCount`, summaries, tombstones, edit history, and emit one `GRAPH_UPDATED`.
+6. **Manual edits racing classification/reorg** - add structural revision/manual lock metadata and stale-commit checks so in-flight LLM work cannot undo learner corrections.
+7. **Retrieval becomes another feed** - search must be query/filter/dashboard/review oriented, bounded, and recovery-focused; no endless recommendations.
+8. **Podcast controls with stale cache identity** - reuse a ready podcast only when date, concept IDs, locale, and options hash match; rapid regenerations need generation IDs.
+9. **Ethical cues become nagging or reward loops** - keep cues sparse, user-controlled, snoozable/disableable, and measured by learning outcomes rather than time spent or posts viewed.
+10. **Privacy/context boundary drift** - saved/liked history, goals, tags, corrections, and reflections must not be sent to providers by default; add provider payload exclusion tests.
 
 ## Implications for Roadmap
 
-Based on combined research, the dependency graph enforces a 4-wave build order. Phases within a wave can be parallelized; waves must be sequential.
+Based on research, suggested phase structure:
 
-### Wave 0: Tech-Debt Unblocking (prerequisite for all new service tests)
+### Phase 1: Data Model, Events, and Migration Foundation
 
-**Phase: i18n Leaf-Module Refactor**
-**Rationale:** 10 carried test failures from v1.4 block all new service test coverage. `src/lib/i18n-leaf.ts` breaks the `ERR_IMPORT_ATTRIBUTE_MISSING` chain across 6 service files. Must land before any new service (engagement, source-diversity) is tested, because those services must also be leaf-importable and will import from the same shim.
-**Delivers:** Green test baseline; 6 services become writable under `node --test`
-**Avoids:** Pitfall 7 (source-reading test regex collision), Pitfall 11 (`_actions-mock-loader.mjs` stub gap)
-**Research flag:** None — pattern matches existing `feed-spread.ts` / `refill-mutex.ts`; implementation is mechanical
+**Rationale:** v1.6 introduces multiple new states. The roadmap should first define explicit local-first schemas, load-time normalization, event semantics, reset behavior, and provider/context boundaries so later feature phases do not overload `flagged`, `ENGAGEMENT_CHANGED`, or `QUESTION_ASKED`.
+**Delivers:** Additive `Question.ingestion`, `Question.graphTrust`, podcast options types, graph edit record types, retrieval/library/learning-engagement types, app events, old-payload loader tests, Clear All Data/Force-New-Day reset inventory, and provider context-category tests.
+**Addresses:** Ingestion taxonomy, graph trust metadata, podcast options identity, learning metrics separation.
+**Avoids:** `flagged` overload, localStorage schema drift, persist-then-filter races, privacy boundary drift, always-mounted stale state.
 
-**Phase: v1.4 Carry-Over Cleanup**
-**Rationale:** Documentation drift (VALIDATION 34/35 flip, ROADMAP plan-list bullets 36-14+36-15, CLAUDE.md `echolearn_*` doc-drift) and device verification (33-HUMAN-UAT-1/2, YouTube landscape-listed-as-short bug) are parallel-safe with the i18n refactor.
-**Delivers:** Clean documentation baseline; 33-HUMAN-UAT device retest closed; YouTube short classification bug fixed
-**Research flag:** None — documentation surgery and device verification
+### Phase 2: Ingestion Gate Foundation
 
-### Wave 1: Foundation Services (no UI dependencies)
+**Rationale:** The ingestion gate must come before graph edits, retrieval, podcasts, dashboards, and metrics. Otherwise every downstream surface inherits polluted nodes and false learning signals.
+**Delivers:** Deterministic + LLM fallback ingestion evaluator with Zod-validated decisions; explicit answer-vs-ingest events; professor-edge-case fixtures; Ask status chips; visible add-to-map override path; non-ingested chat excluded from graph/review/feed/podcast/retrieval.
+**Addresses:** `Added to map`, `Chat only`, `Needs review`, `Security blocked`, override path, prompt-leak distinction.
+**Avoids:** Chat suppression, regex-only false positives, untriaged event indexing, prompt stability regression.
 
-**Phase: Engagement Service + Walker Extension**
-**Rationale:** `engagement.service.ts` and the `walkDerivedList` optional `dismissedIds` parameter are independently testable leaf modules. Building them before any UI work lets the walker integration be validated in isolation before HomeScreen is touched. RED tests first per CLAUDE.md Phase 32.1 lesson #2.
-**Delivers:** `engagementService` (save/dismiss/like, cross-day localStorage); `walkDerivedList` extended with optional dismissed-skip; `ANCHOR_DISMISSED` event in AppEvent union
-**Addresses:** Dismiss (P1 table-stakes); Like (P2); Save (P1 table-stakes)
-**Avoids:** Pitfall 2 (dismiss wired to markExplored), Pitfall 3 (Force-New-Day gap), Pitfall 8 (echolearn_ key drift), Pitfall 13 (SQLite migration trap — stay in localStorage)
-**Research flag:** None — architecture fully specified; engagement-to-walker boundary explicitly defined
+### Phase 3: Graph Command Service and Invariant Suite
 
-**Phase: Source Diversity Leaf Module**
-**Rationale:** `source-diversity.ts` is a session-scoped leaf module with no UI dependencies. Domain-tier allowlist is a bundled TS const. Independently testable before `concept-feed.service.ts` wiring.
-**Delivers:** `filterForDiversity`, `recordServedDomain`, `scoreSource`; bundled domain-tier map (~200 entries); synchronous O(N) scan
-**Addresses:** Source diversity (P2 differentiator)
-**Avoids:** Pitfall 4 (domain lookup inside mutex blocks refill)
-**Research flag:** None — domain-tier list is hardcoded; no external API
+**Rationale:** Graph command service must exist before UI controls. Correctness belongs below `GraphScreen`, because corrections affect review, feed, retrieval, podcasts, and future dashboards.
+**Delivers:** `graph-edit.service.ts`, batch question patch helper, edit log/inverse undo, rename/move/merge/detach/prune commands, tombstone merge behavior, manual locks/revisions, stale classification/reorg protections, invariant tests for parent/cluster/count/summary consistency.
+**Addresses:** Manual correction primitives and undo.
+**Avoids:** MindElixir-as-source-of-truth, partial corrections, merge data loss, async classifier/reorg overwrites.
 
-### Wave 2: Service Integration (requires Wave 1)
+### Phase 4: Graph Correction UI
 
-**Phase: Pipeline Wiring + Essay Depth**
-**Rationale:** Wire Wave 1 leaf services into the existing pipeline at their defined seam points. `concept-feed.service.ts` passes `dismissedAnchorIds` to walker and `filterForDiversity` to the news Tavily branch. `post-essay.service.ts` gains `EssayOptions.depth`. Raise the `generateEssayMeta` slice cap to 4000 before any essay lengthening.
-**Delivers:** Dismissed anchors skip in next refill; source diversity filtering active on news branch; `depth: 'deep'` essay path available to PostDetailScreen
-**Addresses:** Dismiss (pipeline-complete); source diversity (pipeline-complete); richer essays (P1 table-stakes)
-**Avoids:** Pitfall 5 (abort chain breakage — audit before lengthening prompts), Pitfall 4 (mutex hold time)
-**Research flag:** May need citation-rendering research if ReactMarkdown `sup`/`a`/`section` override pattern deviates from STACK.md specification
+**Rationale:** With tested commands underneath, UI can stay thin and trustable. The screen should expose local, reversible corrections instead of opaque global reorganization as the primary trust mechanism.
+**Delivers:** Graph/anchor correction sheet, rename/move/merge/detach/prune flows, merge preview, "why here?" placement explanation, undo affordance, selected-node resync after edits/deletes.
+**Addresses:** Learner ownership of graph structure; graph correction as metacognition.
+**Avoids:** UI handlers patching `Question` directly; controls that disappear after navigation; stale always-mounted GraphScreen state.
 
-### Wave 3: UI Layer (requires Waves 1-2)
+### Phase 5: Retrieval and Library Foundation
 
-**Phase: Masonry Layout**
-**Rationale:** `MasonryFeed.tsx` with CSS `column-count: 2` is the visual foundation for everything else in v1.5. Build after service layers are stable so the UI has real data to render.
-**Delivers:** 2-column masonry feed; framer-motion card entrance animations on individual cards; scroll-position restoration (automatic); loading skeleton tiles
-**Addresses:** Masonry layout (P1 table-stakes); tile height buckets (blocking masonry — use per-style CSS min-height, not JS computation)
-**Avoids:** Pitfall 1 (no JS rebalance on image load), Pitfall 6 (scroll restoration automatic), Pitfall 9 (no framer-motion on scroll container), Pitfall 10 (posts-per-swipe unchanged at 4)
-**Research flag:** None — CSS column-count approach is well-documented; no new library integration
+**Rationale:** Retrieval should build only after ingestion and graph identity are trustworthy. It should be a recovery/search layer over known local stores, not a feed ranking layer.
+**Delivers:** `retrieval.service.ts` with MiniSearch lexical index plus optional embedding rerank; `library.service.ts` for tags/bookmarks; ID+snapshot retention rules for tagged/bookmarked/saved content; `LIBRARY_CHANGED`/index dirty events; bounded result model by item type and source.
+**Addresses:** Archive search, tags/bookmarks foundation, podcast transcript search foundation, concept dashboard data.
+**Avoids:** Retrieval-as-feed, ID-only missing content, localStorage quota bloat, search jank, silent web/current retrieval.
 
-**Phase: Engagement UI**
-**Rationale:** Wire the Wave 1 engagement service into the UI layer: action row (like/save/dismiss icons) on ConceptCard in InfoFlow.tsx; HomeScreen subscribes to `ANCHOR_DISMISSED` and adds engagement resync to `[location.pathname]` effect; PostDetailScreen gains "Deep dive" button; Force-New-Day handler updated.
-**Delivers:** Like/save/dismiss controls on tiles and detail; HomeScreen engagement state sync; deep-dive essay trigger; `handleForceNewDay` updated with `engagementService.reset()`
-**Addresses:** Save (P1 — UI-complete); Dismiss (P1 — UI-complete); Like (P2); Teaser→deep essay (P1 — UI-complete)
-**Avoids:** Pitfall 2 (dismiss path audited), Pitfall 3 (Force-New-Day handler updated)
-**Research flag:** None — engagement UI follows existing card action patterns
+### Phase 6: Retrieval Surfaces and Concept Dashboard
 
-### Wave 4: Tech-Debt Hygiene (parallel within wave)
+**Rationale:** UI should consume retrieval/library services instead of embedding multi-store search logic into screens. Start with archive search, then ship concept dashboards once graph IDs and retrieval records are stable.
+**Delivers:** Saved/Liked/History search and filters; result source labels; flat tags/bookmarks UI; concept dashboard v1 or enhanced AnchorDetailScreen with Q&As, posts, saved/liked/history, reviews, podcast mentions, weak/due signals, and tags.
+**Addresses:** Retrieval after feed discovery; concept-level durable home; local-first trust labels.
+**Avoids:** Endless archive browse; recency/engagement-only ranking; "where did I save that?" failures.
 
-**Phase: Dependency Version Sweep**
-**Delivers:** Capacitor 8.3.1, i18next 26.0.10, react-router-dom 7.15.0, typescript-eslint bump; `tsc --strict` audit under 5.9.x; lucide-react icon audit sprint
-**Avoids:** Pitfall 12 (React minor bump reserved for this phase, not mid-feature)
-**Research flag:** None — version compatibility verified in STACK.md
+### Phase 7: Podcast Options and Quality Guardrails
 
-**Phase: Code Quality Sweep**
-**Delivers:** tsc strictness gaps documented; dead-code sweep; perf profiling; project-wide TODO/FIXME triage; operator-note bug sweep
-**Research flag:** None — mechanical audit work
+**Rationale:** Podcast controls are valuable only when concept selection is stable and option identity is explicit. Controls must improve educational quality, not just word count or entertainment tone.
+**Delivers:** Typed length/style/detail options, defaults in settings, options snapshot on `DailyPodcast`, options hash reuse/invalidation, generation ID stale-job dropping, bounded prompt templates, concept coverage constraints, regenerate-with-options UI, configurable TTS model/voice/speed where supported.
+**Addresses:** Length/style controls, regeneration honoring options, weak/due/saved/manual concept inclusion groundwork.
+**Avoids:** Stale podcast cache, freeform style prompt injection, old audio overwrite, style options that drop required concepts.
+
+### Phase 8: Ethical Engagement Foundation and Metrics UI
+
+**Rationale:** Ethical engagement should consume stable ingestion, graph, retrieval, review, post history, and podcast signals. It must not reuse save/like/dismiss as learning success.
+**Delivers:** `learning-engagement.service.ts`, goals, stop cues, reflection/retrieval prompts, cue frequency controls, snooze/disable, learning metrics dashboard, "why this?" labels from local reasons, reset semantics.
+**Addresses:** Goals, stop cues, reflection/retrieval prompts, learning-oriented success metrics.
+**Avoids:** Nagging cues, streak/credit pressure, private engagement signals masquerading as learning, cue telemetry corrupting `engagementService`.
 
 ### Phase Ordering Rationale
 
-- Wave 0 before Wave 1: all new services must be leaf-importable under `node --test`; the shim must exist before any new service imports from it
-- Engagement service before engagement UI: leaf service must exist before UI can call it; walker extension must exist before `concept-feed.service.ts` can pass dismissed IDs
-- Source diversity before pipeline wiring: leaf module must exist before `refillQueue` can call `filterForDiversity`
-- Pipeline wiring before essay UI: `depth: 'deep'` must exist in `post-essay.service.ts` before PostDetailScreen can offer the button
-- Masonry before engagement UI: the masonry card layout must exist before the engagement action row is placed on cards
-- Dependency sweep in Wave 4, not Wave 0: React minor bumps must not occur mid-feature to avoid StrictMode timing surprises (Pitfall 12)
+- Ingestion first: clean durable knowledge prevents review, feed, retrieval, podcast, and metrics pollution.
+- Graph service before graph UI: tested command transactions avoid data corruption and make UI work reversible.
+- Retrieval after graph trust: concept dashboards and search depend on stable anchor IDs and correct ingestion status.
+- Podcast after retrieval/graph identity: selected concepts, weak/due focus, and transcript retrieval are more coherent once graph and library records are stable.
+- Ethical engagement last: goals and cues should reuse mature local signals instead of inventing parallel metrics.
+- Cross-cutting foundations first: schema normalization, event semantics, prompt-stability tests, and privacy payload tests prevent later phases from creating hidden drift.
 
 ### Research Flags
 
-**Phases needing `/gsd:research-phase` during planning:**
-- None — all integration patterns are fully specified in ARCHITECTURE.md. If the ReactMarkdown citation component override pattern proves more complex than STACK.md's `sup`/`a`/`section` approach, request research on remark-gfm footnote customization before the Essay Depth phase.
+Phases likely needing deeper `/gsd:research-phase` during planning:
+- **Phase 3: Graph Command Service and Invariant Suite** - MindElixir remains a renderer, but exact edit affordance inputs and MindElixir 5.11 event hooks need implementation-time validation.
+- **Phase 7: Podcast Options and Quality Guardrails** - OpenAI `gpt-4o-mini-tts` model quality/latency and provider-specific style instruction support need device/audio UAT.
+- **Phase 8: Ethical Engagement Foundation and Metrics UI** - cue copy, frequency, and learner-agency defaults need careful product validation to avoid nagging/reward-loop drift.
 
-**Phases with well-documented patterns (skip research-phase):**
-- All phases: The research files provide complete implementation blueprints. Architecture is derived from direct source-code inspection of the live codebase (ARCHITECTURE.md confidence: HIGH). Pitfalls are drawn from documented v1.4 incident history (PITFALLS.md confidence: HIGH).
-
----
+Phases with standard patterns (skip research-phase unless plan scope changes):
+- **Phase 1: Data Model, Events, and Migration Foundation** - localStorage additive schemas, loader normalization, event union updates, and source-reading tests follow established Trellis patterns.
+- **Phase 2: Ingestion Gate Foundation** - provider layer, Zod validation, and fixture-driven testing are well specified by research.
+- **Phase 5: Retrieval and Library Foundation** - MiniSearch plus local store aggregation is well documented; use implementation profiling before considering IndexedDB persistence.
+- **Phase 6: Retrieval Surfaces and Concept Dashboard** - SavedScreen and AnchorDetail patterns already exist.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All decisions verified against official docs and confirmed incompatibilities (CSS masonry Android WebView, Vite 8 breaking changes, TS 6.0 strictInference). Masonry reconciliation changes the conclusion from STACK.md but is supported by PITFALLS.md analysis and Trellis-specific scroll-container architecture. |
-| Features | HIGH | Feature prioritization draws on 2026 UX research and the existing pipeline architecture. Anti-feature decisions have strong rationale from Phase 33 UAT-4 incident history and spaced-repetition principles. |
-| Architecture | HIGH | All integration points derived from direct source-code inspection of live codebase. Build order reflects real dependency graph. Seam definitions are exact (call sites named, function signatures specified). |
-| Pitfalls | HIGH | Critical pitfalls draw directly from v1.4 incident history (Phase 36 GAP-A/B/C/D, Phase 33 UAT-4, Phase 35 UAT-1). Only Pitfall 9 (framer-motion containing-block analysis) required architectural reasoning rather than incident evidence. |
+| Stack | HIGH | Source research found direct fit with existing React/TS/Vite/Capacitor/local-first stack; only `zod`, `minisearch`, MindElixir, and SQLite minor updates are recommended. |
+| Features | HIGH | Feature ordering directly matches professor feedback and current product gaps; P1/P2/P3 split is clear. |
+| Architecture | HIGH | Existing codebase already uses service ownership, event-bus invalidation, localStorage/SQLite/IndexedDB boundaries, and always-mounted resync patterns. |
+| Pitfalls | HIGH | Pitfalls are grounded in current code paths and prior Trellis incident history; external ecosystem risks are MEDIUM-HIGH. |
 
-**Overall confidence:** HIGH
+**Overall confidence:** HIGH for phase ordering and implementation shape; MEDIUM for experiential quality of podcast audio and ethical cue UX until UAT.
 
 ### Gaps to Address
 
-- **Posts-per-swipe audit if masonry demands more than 4 per swipe:** PITFALL 10 flags that changing posts-per-swipe from 4 to 8 would require re-auditing MAX_QUEUE_SIZE, REFILL_THRESHOLD, walkDerivedList call sites, and assignStylesStratified(N) expected output. Current v1.5 scope does NOT change posts-per-swipe. If UX testing reveals users expect 2-column to pop 2 rows at once (8 posts), this audit must happen before the constant changes.
-
-- **`feedPreferences.service.ts` "less of this" style signal:** Deferred to v1.5.x. If added, `style-assignment.ts` must accept external weights as a dependency-injection parameter (not a direct import) to preserve test determinism. The STYLE_WEIGHTS constant becomes a floor, not an override.
-
-- **SQLite like/save migration:** Research recommends localStorage for all engagement annotations to avoid schema migration. If a future phase requires persisting like/save to SQLite, a migration script in `db.service.ts` with a version bump is required before any write path is added. Current v1.5 design avoids this entirely.
-
-- **Citation rendering scope:** FEATURES.md places "citation render polish" at P3 (future consideration). If the essay depth work surfaces citation formatting issues in UAT, this P3 item may need to be pulled into v1.5 release scope. No research needed — the pattern is fully specified in STACK.md.
-
----
+- **Ingestion metadata naming:** Research uses both `learning/chat_only/security_blocked/needs_review` and `ingested/not_ingested/override_ingested`. Phase 1 should settle canonical enum names before implementation.
+- **Graph edit storage durability:** Decide whether `trellis_graph_edits_v1` is localStorage-only or also backed by SQLite. Corrected graph state is already backed by `questions`; undo durability is the open question.
+- **MiniSearch persistence:** Start in-memory/rebuild-on-demand. Persist serialized index to IndexedDB only if profiling shows visible rebuild latency.
+- **Podcast TTS defaults:** Validate `gpt-4o-mini-tts`, voices, speed, and instruction support on device before making it the only OpenAI default.
+- **Ethical cue thresholds:** Define sparse defaults and copy through UAT; do not equate saves/likes/dismisses with learning progress.
+- **Provider privacy categories:** Each LLM/TTS call site must document which local context categories it sends and tests should assert exclusions for goals, tags, saved/liked history, and correction logs by default.
 
 ## Sources
 
-### Primary (HIGH confidence — direct source inspection or official docs)
+### Primary (HIGH confidence)
+- `.planning/PROJECT.md` - v1.6 milestone goals, local-first decisions, filter-as-ingestion-gate clarification, and prior load-bearing patterns.
+- `.planning/research/STACK.md` - package/version recommendations, additions, alternatives, and confidence notes.
+- `.planning/research/FEATURES.md` - table stakes, differentiators, anti-features, dependencies, and MVP/P2/P3 split.
+- `.planning/research/ARCHITECTURE.md` - service boundaries, data flow, storage/event changes, integration points, anti-patterns, and suggested build order.
+- `.planning/research/PITFALLS.md` - critical pitfalls, performance traps, security mistakes, UX risks, checklists, recovery strategies, and pitfall-to-phase mapping.
+- Local source references cited by research: `question-filter.service.ts`, `question.service.ts`, `useQuestions.ts`, `canonical-knowledge.service.ts`, `graph.service.ts`, `GraphScreen.tsx`, `podcast.service.ts`, `usePodcast.ts`, `PodcastScreen.tsx`, `SavedScreen.tsx`, `engagement.service.ts`, `post-history.service.ts`, `settings.service.ts`, `legacy-migration.service.ts`, and `db.service.ts`.
 
-- `app/src/services/post-queue.service.ts` — derived list, walker, cyclePosition, maxSteps formula
-- `app/src/services/concept-feed.service.ts` — refillQueue, _refillMutex, news branch, allExplored gate
-- `app/src/screens/HomeScreen.tsx` — always-mounted resync pattern, [location.pathname] effects
-- `CLAUDE.md` — all load-bearing sections (Concept Feed Pipeline, Header portal, ChatInput flex, root overflow, SwipeTabContainer resize, event bus, news pipeline, anchor normalization, classification dedup, Ask-chat system prompt, i18n workflow)
-- `.planning/PROJECT.md` — milestone history, v1.4 gap closure incidents, v1.5 goals
-- [CSS Masonry — MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Grid_layout/Masonry_layout) — Android Chrome support status confirmed not available (May 2026)
-- [Chrome for Developers — masonry update](https://developer.chrome.com/blog/masonry-update) — Chrome 140 experimental-flag-only
-- [Vite 8 migration guide](https://vite.dev/guide/migration) — Rolldown/Oxc breaking changes
-- [TypeScript 6.0 announcement](https://devblogs.microsoft.com/typescript/announcing-typescript-6-0/) — strictInference audit requirement
-- [Tavily Search API docs](https://docs.tavily.com/documentation/api-reference/endpoint/search) — `score` field semantics, `exclude_domains` support
-- [@virtuoso.dev/masonry npm](https://www.npmjs.com/package/@virtuoso.dev/masonry) — `useWindowScroll` API reviewed; window-scroll vs per-element-scroll incompatibility identified
-- [masonic GitHub](https://github.com/jaredLunde/masonic) — maintenance status confirmed stale (~1 year no updates)
-
-### Secondary (MEDIUM confidence — community consensus, UX research)
-
-- [Masonry in React: A Performance Hell](https://medium.com/@colecodes/masonry-in-react-a-performance-hell-fb779f5fcebd) — JS rebalance pitfalls
-- [Social Media Algorithms 2026: How Platforms Rank Content (Hootsuite)](https://blog.hootsuite.com/social-media-algorithm/) — engagement signal hierarchy
-- [Content Length Best Practices 2026](https://www.georgescifo.com/2025/10/the-definitive-guide-to-content-length-best-practices-for-2026/) — 150-250w feed, 500-850w expansion norms
-- [RxDB localStorage vs IndexedDB](https://rxdb.info/articles/localstorage-indexeddb-cookies-opfs-sqlite-wasm.html) — performance characteristics at small data scale
-- [remarkjs footnote customization discussion](https://github.com/orgs/remarkjs/discussions/1270) — sup/a override pattern
-- [AbortController + React useEffect cleanup](https://www.j-labs.pl/en/tech-blog/how-to-use-the-useeffect-hook-with-the-abortcontroller/) — D-08 pattern validation
-
-### Tertiary (LOW confidence — inferences from architectural reasoning)
-
-- Pitfall 9 (framer-motion containing-block analysis on masonry cards): derived from CLAUDE.md Header portal rules + framer-motion will-change documentation; not reproduced from an incident
-- Wave-to-wave build ordering: derived from dependency graph analysis, not from a prior comparable project
+### Secondary (MEDIUM-HIGH confidence)
+- MiniSearch docs - browser/Node full-text indexing, field boosts, and serialization.
+- Zod docs - TypeScript-first runtime schema validation.
+- MindElixir docs/GitHub - editable mind-map APIs and renderer behavior.
+- Capacitor Community SQLite metadata - Capacitor 8 peer compatibility.
+- OpenAI TTS docs - `gpt-4o-mini-tts` and speech options.
+- MDN Web Storage / IndexedDB / Storage Quotas - synchronous localStorage limits and IndexedDB suitability.
+- React effects docs - subscription cleanup and Strict Mode behavior.
+- CMU Eberly Center retrieval practice guidance - learning rationale for recall prompts.
+- Digital Promise AI learning framework - agency, opt-out, reflection, learner-facing data, and prompt frequency.
+- Miro, Apple Podcasts, Anki, Obsidian docs - ecosystem norms for mind-map controls, podcast controls, search/tags, and graph filters.
+- OWASP LLM Top 10, OpenAI prompt-injection guidance, W3C Ethical Web Principles - security, privacy, and user-control guardrails.
 
 ---
-
-*Research completed: 2026-05-08*
+*Research completed: 2026-05-13*
 *Ready for roadmap: yes*

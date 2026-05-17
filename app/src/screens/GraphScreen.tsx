@@ -403,7 +403,17 @@ function MasterMap({ nodes, edges, onNodeClick, isVisible }: MasterMapProps & { 
         position: 'relative',
       }}
     >
-      <div ref={containerRef} data-no-swipe-nav="true" style={{ width: '100%', height: '100%' }} />
+      <div
+        ref={containerRef}
+        data-no-swipe-nav="true"
+        style={{
+          width: '100%',
+          height: '100%',
+          touchAction: 'none',
+          willChange: 'transform',
+          transform: 'translateZ(0)',
+        }}
+      />
       <button
         onClick={handleToggleExpand}
         title={allExpanded ? t('graph.toggleCollapseTitle') : t('graph.toggleExpandTitle')}

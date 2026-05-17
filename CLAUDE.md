@@ -259,6 +259,30 @@ Fix: **O(N_anchors) cosine pre-check BEFORE the tree descent** in `classifyAndAn
 
 ---
 
+## Question filter — dual-vector scoring (Phase 47 UAT-5 — load-bearing)
+
+`app/src/services/question-filter.service.ts:layer2Embedding` scores the three labels against **two different query vectors**:
+
+- **Malicious** is scored against the **raw content vector** (no prior-answer prefix).
+- **Off-topic + on-topic** are scored against the **D-11 contextualized vector** (`priorAnswer.slice(0, 240) + ' ' + content`).
+
+When `context.priorAnswer` is empty/undefined, both vectors alias the same `embedText(content)` call — no extra cost on first-turn questions.
+
+### Why this exists
+
+The original D-11 design used a single contextualized vector everywhere so "but why?" follow-ups would stay on-topic when the prior answer was on-topic. UAT-5 (2026-05-17) surfaced that the 240-char benign prefix dilutes the embedding direction enough to drop verbatim-jailbreak cosine from **0.977 (raw)** to **0.755 (contextualized)** — silently below the 0.82 malicious threshold. A user asking a benign question then sending a verbatim jailbreak as turn 2 evaded the classifier entirely. Buried-payload / soft-prefix evasion is a published jailbreak technique; D-11 accidentally re-enabled it for our classifier.
+
+Dual-vector scoring keeps the D-11 follow-up benefit for off-topic detection where context genuinely matters, while denying malicious classification any contextual cover.
+
+### Rules
+
+1. **Don't unify the two vectors back into one.** `tests/services/filter-classifier.unit.test.mjs` Test 18d runs a benign 240-char preamble + verbatim mal-en-001 payload and asserts the result is `malicious`. Test 18a asserts the cold-cache call order is `[rawQuery, contextualizedQuery, ...corpus]`.
+2. **Don't add a priorAnswer prefix to the malicious cosine path.** The whole point of the fix is malicious scoring sees the raw payload, regardless of what came before in the chat.
+3. **Don't drop the contextVec → rawVec aliasing optimization** when no priorAnswer. Doubling embedText calls on first-turn questions is unnecessary cost.
+4. **Threshold tuning is empirical** — same band as Classification dedup: lower to 0.78 if missing real jailbreaks, raise to 0.85 if blocking legitimate questions. Raising too high re-opens the dilution surface even on raw vectors.
+
+---
+
 ## Ask-chat system prompt — byte-stable across turns (Phase 35 — load-bearing)
 
 `app/src/state/useQuestions.ts:askStreaming` constructs a **byte-stable** system prompt (identity directive + safety directive + `WEB_SEARCH_TOOL_PROMPT` only — no per-turn dynamic content). The per-turn `formatCandidateContextPack(candidatePack)` lives in a tail-position assistant message AFTER `...historyMessages`:

@@ -755,7 +755,10 @@
     "offTopicPrompt": "这看起来有点离题。仍要保存吗？",
     "saveAnyway": "是，仍然保存",
     "discard": "放弃",
-    "relatedKnowledge": "🔗 相关知识："
+    "relatedKnowledge": "🔗 相关知识：",
+    "maliciousBlocked": {
+      "body": "这条消息看起来像是提示词注入攻击。如果这是关于 LLM 安全的真实学习问题，请换种方式表达。"
+    }
   },
   "conceptCard": {
     "viewDetails": "查看详情"

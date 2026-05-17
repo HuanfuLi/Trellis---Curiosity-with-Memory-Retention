@@ -4,31 +4,32 @@ import { today } from '../lib/date.ts';
 import { eventBus } from '../lib/event-bus.ts';
 import { settingsService, FEED_DEFAULTS } from './settings.service.ts';
 import { plannerService } from './planner.service.ts';
-import { youtubeService, type YouTubeSearchResult } from './youtube.service';
-import { webSearch } from './web-search.service';
-import { questionService } from './question.service';
-import { postQueueService } from './post-queue.service';
-import { postHistoryService } from './post-history.service';
-import { dailyReadService } from './daily-read.service';
+import { youtubeService, type YouTubeSearchResult } from './youtube.service.ts';
+import { webSearch } from './web-search.service.ts';
+import { questionService } from './question.service.ts';
+import { postQueueService } from './post-queue.service.ts';
+import { postHistoryService } from './post-history.service.ts';
+import { dailyReadService } from './daily-read.service.ts';
 import { engagementService } from './engagement.service.ts';
 import { sourceDiversityService, extractDomain } from './source-diversity.service.ts';
-import { assignStyles, reassignFailures, type ApiAvailability } from './style-assignment';
-import { computeLeafState } from './trellis-state.service';
-import { hasSeenVideoId, addSeenVideoId } from './concept-feed-dedup';
-import { STARTER_POST_IDS, filterDecayedStarters } from './starter-posts-decay';
+import { selectNewsTopSources, mapNewsSourcesToNewsMeta } from './news-source-metadata.ts';
+import { assignStyles, reassignFailures, type ApiAvailability } from './style-assignment.ts';
+import { computeLeafState } from './trellis-state.service.ts';
+import { hasSeenVideoId, addSeenVideoId } from './concept-feed-dedup.ts';
+import { STARTER_POST_IDS, filterDecayedStarters } from './starter-posts-decay.ts';
 import {
   markYoutubeQuotaExhausted,
   markTavilyQuotaExhausted,
   isYoutubeRuntimeAvailable,
   isTavilyRuntimeAvailable,
-} from './api-availability';
+} from './api-availability.ts';
 // Phase 36 GAP-4 — spread helpers extracted to a leaf module so node --test can
 // import them without hitting the i18n JSON-import-attribute chain. Both functions
 // mutate `posts` in place; this module re-exports them too so existing callers
 // (and downstream tests that import from here) keep working.
-import { spreadByStyle, spreadByConcept } from './feed-spread';
+import { spreadByStyle, spreadByConcept } from './feed-spread.ts';
 export { spreadByStyle, spreadByConcept };
-import { createPromiseMutex } from './refill-mutex';
+import { createPromiseMutex } from './refill-mutex.ts';
 
 const STORAGE_KEY = 'trellis_daily_posts';
 const CONNECTION_POSTS_KEY = 'trellis_connection_posts';
@@ -884,7 +885,7 @@ function buildYoutubeQuery(conceptName: string, cycleNumber: number): string {
  */
 interface PreFetchCache {
   youtube: Map<string, YouTubeSearchResult[]>;  // key: `${conceptId}:${style}`
-  news: Map<string, WebSearchResult>;           // key: conceptId
+  news: Map<string, WebSearchResult[]>;         // key: conceptId
 }
 
 /**
@@ -1180,9 +1181,9 @@ Return ONLY a JSON array of 4 strings, nothing else. Example: ["What is X?", "Ho
       const cached = preFetched?.news.get(a.conceptId);
       let result: WebSearchResult | undefined;
       let topSources: WebSearchResult[] = [];  // Phase 41 SC-4 — stored on newsMeta.sources for multi-snippet grounding
-      if (cached) {
-        result = cached;
-        topSources = [cached];  // pre-fetch loop already filtered + stored single chosen result
+      if (cached?.length) {
+        result = cached[0];
+        topSources = cached.slice(0, 3);  // pre-fetch loop stores the filtered top 2-3 results
       } else {
         // Phase 41 D-02 + Pattern 2 — getUsedDomains → exclude → filterForDiversity → recordServedDomain
         const usedDomains = sourceDiversityService.getUsedDomains(a.conceptId);
@@ -1191,9 +1192,8 @@ Return ONLY a JSON array of 4 strings, nothing else. Example: ["What is X?", "Ho
           { maxResults: 3, excludeDomains: [...usedDomains] },
         );
         if (searchResult.success && searchResult.data?.results.length) {
-          const filtered = sourceDiversityService.filterForDiversity(searchResult.data.results, usedDomains);
-          result = filtered[0];
-          topSources = filtered.slice(0, 3);  // Pitfall 2 — store full top-3 for SC-4 multi-snippet grounding
+          topSources = selectNewsTopSources(searchResult.data.results, usedDomains);
+          result = topSources[0];
         }
       }
       if (result) {
@@ -1221,10 +1221,9 @@ Return ONLY a JSON array of 4 strings, nothing else. Example: ["What is X?", "Ho
           origin: 'ai',
           presentationStyle: 'news',
           newsMeta: {
-            // Phase 41 SC-4 — multi-snippet grounding. topSources is filtered.slice(0, 3) from
-            // sourceDiversityService.filterForDiversity (re-ranked unseen-first per Phase 40 D-06).
-            // Old shape was a 1-element array; new shape is up to 3 entries indexed 1..N.
-            sources: topSources.map((r, i) => ({ index: i + 1, title: r.title, url: r.url, snippet: r.content })),
+            // Phase 46 CONTENT-03 — cached and direct news paths both map up
+            // to three selected Tavily entries into stable indexed sources.
+            sources: mapNewsSourcesToNewsMeta(topSources),
             fetchedAt: Date.now(),
           },
         });
@@ -1360,15 +1359,16 @@ export async function refillQueue(questions: Question[]): Promise<void> {
     // burn exhausted the user's 10,000-unit/day YouTube quota in ~10 cycles.
     //
     // Now: pre-validation fetches at full pool size (YOUTUBE_FETCH_POOL_SIZE for
-    // YouTube, maxResults:1 for Tavily since news loop picks results[0]) and
-    // stores the result in preFetched. Generation loops read from the cache.
+    // YouTube, maxResults:3 for Tavily so the news loop can map the filtered
+    // top 2-3 results into newsMeta.sources) and stores the result in preFetched.
+    // Generation loops read from the cache.
     // Halves YouTube calls per cycle; also halves Tavily calls.
     const videoAssigns = assignments.filter(a => a.style === 'video');
     const newsAssigns = assignments.filter(a => a.style === 'news');
     const failedIds = new Set<string>();
     const preFetched: PreFetchCache = {
       youtube: new Map<string, YouTubeSearchResult[]>(),
-      news: new Map<string, WebSearchResult>(),
+      news: new Map<string, WebSearchResult[]>(),
     };
 
     const getConceptName = (id: string) => {
@@ -1418,9 +1418,13 @@ export async function refillQueue(questions: Question[]): Promise<void> {
             }
             failedIds.add(a.conceptId);
           } else {
-            const filtered = sourceDiversityService.filterForDiversity(results.data.results, usedDomains);
-            const chosen = filtered[0];
-            preFetched.news.set(a.conceptId, chosen);
+            const topSources = selectNewsTopSources(results.data.results, usedDomains);
+            const chosen = topSources[0];
+            if (!chosen) {
+              failedIds.add(a.conceptId);
+              return;
+            }
+            preFetched.news.set(a.conceptId, topSources);
             // Phase 41 D-02 — record AFTER commit. extractDomain undefined-guard.
             const domain = extractDomain(chosen.url);
             if (domain) sourceDiversityService.recordServedDomain(a.conceptId, domain);

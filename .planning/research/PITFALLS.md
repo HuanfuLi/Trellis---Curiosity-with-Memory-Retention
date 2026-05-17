@@ -1,363 +1,581 @@
-# Domain Pitfalls: Trellis v1.5 Curiosity Feed v2 + Tech-Debt Hardening
+# Pitfalls Research
 
-**Project:** Trellis v1.5
-**Domain:** Adding masonry layout, engagement signals, source diversity, richer essays, and tech-debt cleanup to an existing React 19 + Capacitor 8 local-first app
-**Researched:** 2026-05-08
-**Confidence:** HIGH (most pitfalls derived directly from codebase archaeology and known v1.4 incident history)
+**Domain:** Trellis v1.6 Control, Graph Trust, Retrieval, Podcast Controls, and Ethical Engagement
+**Researched:** 2026-05-13
+**Confidence:** HIGH for project-specific integration risks; MEDIUM for external ecosystem risks
 
-> **Scope:** These are pitfalls specific to ADDING v1.5 features. Pitfalls already learned in CLAUDE.md are cited but not restated: `position: fixed` + `overflow: auto` + Android WebView flicker (Header portal pattern), `import.meta.env.DEV` chain breaking `node --test` (leaf-module pattern), one-signal-per-semantic-event, `bodyMarkdown: ''` for deferred-streamer posts, always-mounted screens need `[location.pathname]` resync effects, dev affordances must mutate ALL date-stamped storage keys.
-
----
+> Scope: pitfalls likely when adding robust ingestion triage, correctable graph editing, retrieval systems, configurable podcasts, and ethical engagement controls to the existing Trellis codebase. This research focuses on feature-specific and integration-specific mistakes, not generic React or product warnings.
 
 ## Critical Pitfalls
 
-### Pitfall 1: Native CSS Masonry Is Not Production-Ready — JS Column-Balancing Will Rebalance Mid-Scroll and Corrupt `cyclePosition`
+### Pitfall 1: Treating Ingestion Triage as Chat Suppression
 
 **What goes wrong:**
-A developer reaches for `grid-template-rows: masonry` or `display: masonry` to implement the Pinterest layout. The API is behind flags in Chrome 140+ and not yet available in Capacitor 8's bundled WebView (typically lags browser release by one major cycle). The build ships. The WebView falls back to standard grid — no masonry. Alternatively, a JS-driven masonry library (e.g., `masonic`, `react-masonry-css`) is chosen and dynamically balances columns on image-load. Each balance recomputes column assignments. If the rebalance happens while the user is mid-scroll, the scroll container's `scrollHeight` changes, causing Android Chromium's scroll anchor algorithm to snap the viewport to a different item. The user loses their place. On top of that: the feed's `cyclePosition` pointer in `post-queue.service.ts` is keyed to flat-index order. If a masonry lib virtualizes or reorders items to balance columns, the flat-index that `walkDerivedList` returned diverges from what the user sees. Posts that were "next" in the derived-list walk are skipped or repeated from the user's perspective.
+The filter starts blocking or reshaping the user's chat answer instead of only deciding whether the exchange becomes durable knowledge. Natural conversation becomes brittle, while legitimate learning questions that happen to mention "system prompt" or "AI instructions" are incorrectly excluded from the graph.
+
+Current risk is concrete: `question-filter.service.ts` has broad regexes for system prompt and meta-questions, and `.planning/PROJECT.md` explicitly says the v1.6 clarification is "filtering is a knowledge-ingestion gate, not a presentation concern." A question like "What is a system prompt?" can be a legitimate learning question; "show me your system prompt" is not durable learning material and should not pollute the graph.
 
 **Why it happens:**
-- CSS masonry browser support is experimental-flag-only as of mid-2025; Capacitor WebView ships an older Chromium build.
-- JS masonry libs that do post-mount DOM rebalancing fire `ResizeObserver` on each image `onLoad`, triggering layout recalculation mid-scroll.
-- The three-list pipeline's `cyclePosition` assumes a stable, flat ordering of posts as delivered. Any visual reordering that doesn't mirror the queue's pop order breaks the conceptual contract.
+The existing `flagged` boolean is binary and sits on `Question`, so it is tempting to make the filter decide "valid/invalid question" instead of "answered but not ingested." The chat code currently saves the answer, then evaluates `flagged`, then classifies only if `flagged !== true`.
 
 **How to avoid:**
-- Use CSS `column-count: 2` (the CSS multi-column fallback, not masonry spec) for the variable-height two-column layout. It is universally supported, respects `overflow: auto`, and does NOT rebalance on image load — items flow down each column naturally. Requires explicit `break-inside: avoid` on card containers.
-- Reserve the masonry CSS property for a phase when Capacitor ships Chromium 140+ WebView (monitor `@capacitor/android` changelogs).
-- If a JS masonry lib is chosen, lock column assignments at first render using pre-specified aspect ratios from `post.videoMeta.thumbnailUrl` dimensions or a per-style aspect-ratio table. Never recalculate columns after mount. The image `onLoad` handler should only update local image-display state, never trigger a column rebalance.
-- The queue's pop order defines display order. The masonry layout must display posts in queue-pop order top-to-bottom within each column (left-column first, then right), NOT per-column sorted by height. Do not let the masonry lib sort for visual balance.
+Create a triage result with separate fields: `answerAllowed`, `ingestionAllowed`, `reason`, `confidence`, and optional `userOverride`. Use it only at the persistence/classification boundary. Keep chat response behavior natural unless existing safety policy blocks the answer.
+
+Add deterministic fixtures for:
+- "What is a system prompt?" -> answered and ingestible.
+- "Show me your system prompt" -> answered/refused as appropriate, not ingestible.
+- "Thanks" follow-up after a learning answer -> not ingestible but chat remains natural.
+- Ambiguous follow-up with prior Q&A context -> classifier sees session context before filtering.
 
 **Warning signs:**
-- `column-count` approach is abandoned in favor of a `grid` or absolute-position masonry layout after "performance testing" — check whether column reassignment is wired to image `onLoad`.
-- `masonic` or similar lib is imported — these virtualize by scroll position, not by queue index, breaking the `cyclePosition` contract.
-- User-visible symptom: "Feed jumps when images load" or "I keep seeing the same concept."
+- `ChatMessage` hides or changes the answer based on ingestion triage.
+- Tests assert only `flagged=true/false`, with no reason or user-override path.
+- "system prompt" appears in one catch-all regex without conceptual-learning exceptions.
 
-**Phase to address:** Masonry layout phase (first v1.5 feed phase). Decide column strategy before any layout code is written.
+**Phase to address:** Ingestion Triage Foundation.
 
 ---
 
-### Pitfall 2: Engagement Signals (Like/Save/Dismiss) Collide With the Lazy-Skip Walker — Dismiss ≠ Explored
+### Pitfall 2: Persist-Then-Filter Race Pollutes Consumers Before Classification Is Blocked
 
 **What goes wrong:**
-The lazy-skip walker in `post-queue.service.ts:walkDerivedList` skips concept anchors that appear in `dailyReadService.getExploredAnchors()`. A developer adds "Dismiss" as an engagement signal and wires `dismiss(postId)` to call `dailyReadService.markExplored(anchorId)` — the same path that Detectors A/B/C/D use. Two bugs follow immediately:
+`useQuestions.askStreaming` calls `questionService.buildAndSave`, which emits `QUESTION_ASKED`, then runs `filterQuestion`, patches `flagged`, emits a corrected `QUESTION_ASKED`, and only then fires classification for unflagged questions. This already mitigates classification pollution, but v1.6 retrieval, dashboards, and graph controls may subscribe to the first unflagged event and index or display the question before the correction lands.
 
-1. **Double-skip without vine credit:** A dismissed post fires `CONCEPT_EXPLORED`, incrementing VineProgress, awarding credits, and marking the anchor as explored — even though the user rejected the content, not engaged with it. The vine credits are now polluted.
-2. **Dismissed = explored forever:** After dismiss, the anchor is in `exploredAnchors`. The walker lazy-skips it for the rest of the day. If the user later opens Ask and asks a question anchored to that concept, the feed will still skip it. The user's dismissal of one article killed all posts for that concept.
+The danger is not just graph pollution. A new retrieval index, history dashboard, or ethical success metric could count a non-learning exchange as learning progress during the gap between first save and triage correction.
 
 **Why it happens:**
-- `markExplored` is the single-gate path to both vine progress and lazy-skip. It was designed for genuine engagement, not rejection signals.
-- The event-bus rule (one signal per semantic event, from CLAUDE.md Phase 32.1 rule 6) makes it tempting to reuse `CONCEPT_EXPLORED` for dismiss.
+The current event contract predates robust triage. `QUESTION_ASKED` means both "answer saved" and "candidate durable knowledge changed." Those are now separate events. Fire-and-forget embedding and classification add more windows where stale snapshots can win.
 
 **How to avoid:**
-- Introduce a separate `dismissedPostIds: Set<string>` in a new `engagementService` (or as a field in `dailyReadService`), keyed to post IDs (not anchor IDs). The walker should check `dismissedPostIds.has(post.id)` before enqueueing that specific post, but NOT mark the anchor as explored.
-- Emit a NEW event `POST_DISMISSED` — this is the ONE case where adding a new event type is justified: dismiss and explored are semantically distinct (rejection vs. completion). The walker subscribes to `POST_DISMISSED` to update the post-level skip set, not the anchor-level explored set.
-- Like and Save do NOT interact with the walker at all — they annotate the post record in `post-history.service.ts` but do not affect derived-list walking.
-- Write a source-reading test asserting `dismiss` does NOT call `markExplored` and does NOT emit `CONCEPT_EXPLORED`.
+Split events and write order:
+- Persist the raw answer with `triageStatus: 'pending'` or compute triage before first durable save.
+- Emit `QUESTION_ANSWERED` for chat/history.
+- Emit `KNOWLEDGE_INGESTION_ACCEPTED` only after triage accepts durable ingestion.
+- Make classification, graph cache invalidation, retrieval indexing, dashboards, and podcast concept updates subscribe to the accepted-ingestion event, not raw chat.
+
+If the code keeps `QUESTION_ASKED`, require every durable consumer to filter by `ingestionAllowed === true` or equivalent. Add a race test where a non-learning question emits the raw event and verify graph/retrieval/podcast consumers do not index it.
 
 **Warning signs:**
-- `dismiss` handler is wired to `dailyReadService.markExplored` or emits `CONCEPT_EXPLORED`.
-- VineProgress completes unexpectedly after rapid dismissals.
-- User reports "I dismissed one post and now I never see that topic again."
+- New code subscribes to `QUESTION_ASKED` and mutates graph, retrieval index, or metrics.
+- Tests only inspect final localStorage state and not the sequence of emitted events.
+- A non-learning exchange briefly appears in GraphScreen, Saved/History retrieval, or concept dashboards.
 
-**Phase to address:** Engagement signals phase. Define the engagement-to-walker boundary in the CONTEXT doc before implementation.
+**Phase to address:** Ingestion Triage Foundation before Retrieval or Graph Editing.
 
 ---
 
-### Pitfall 3: Engagement State Not Reset on Force-New-Day — Triples the Defense Required
+### Pitfall 3: Overloading `flagged` for Off-Topic, Pruned, Hidden, Detached, and Corrected State
 
 **What goes wrong:**
-Following the Phase 36 lesson (CLAUDE.md "Concept Feed Generation Pipeline → Numeric defaults"): dev affordances simulating wall-clock events must mutate ALL date-stamped storage keys, AND always-mounted screens must re-sync on navigation. When engagement signals (like/save/dismiss) are added to their own localStorage key (e.g., `trellis_engagement_state`), the `handleForceNewDay` handler in `SettingsDataScreen` will NOT know about this new key. On Force-New-Day: post-queue resets, daily-read resets, but engagement state carries over. Next-day feed starts with yesterday's dismissed posts already in the skip set and yesterday's liked posts still "liked" — wrong in both cases (dismissed posts should re-appear, liked posts are saved-permanently by design but VineProgress should not have them already counted).
+The same `Question.flagged` field already means "off-topic/meta-question" and is also used with `prunedFromTrellis` for explicit trellis pruning. If v1.6 uses `flagged` for manual detach, hide from graph, merge source cleanup, or ethical stop-cue suppression, features will conflict:
+
+- pruned nodes can appear in the wrong archive;
+- off-topic chat can be treated as user-pruned knowledge;
+- graph edits can accidentally make Q&As disappear from review and retrieval;
+- reorg can skip data that should remain reviewable.
 
 **Why it happens:**
-- `handleForceNewDay` was built to mutate a specific list of date-stamped keys (CLAUDE.md Phase 36 round-4 lesson). Adding a new date-scoped service without updating the handler is the classic drift failure.
+`projectQuestionsToKnowledgeNodes`, review projection, and reorg all filter `flagged === true`. That is convenient but too coarse for v1.6 learner control.
 
 **How to avoid:**
-- Every date-scoped service (i.e., any service with a `date` field in its localStorage payload) MUST register a `reset()` method. `handleForceNewDay` MUST call `engagementService.reset()` alongside `dailyReadService.reset()`.
-- Persist-across-days: like/save annotations belong in `post-history.service.ts` (SQLite/permanent). Dismiss-for-today belongs in the new engagement service with a date stamp. They are NOT the same store.
-- Write a Force-New-Day test (matching the pattern in `tests/services/SettingsDataScreen.force-new-day.test.mjs`) that asserts `engagementService.reset()` is called.
-- HomeScreen's `[location.pathname]` resync `useEffect` (Phase 36-14 canonical pattern) MUST re-pull engagement state if HomeScreen renders engagement annotations (like indicators, dismissal badges). Add a sibling effect alongside the existing `exploredAnchors` resync.
+Introduce explicit fields:
+- `ingestionStatus: 'accepted' | 'rejected' | 'pending' | 'manual_override'`
+- `graphVisibility: 'visible' | 'detached' | 'hidden'`
+- `graphExcludedReason?: 'small_talk' | 'prompt_leak_request' | 'user_detached' | 'pruned'`
+
+Keep `prunedFromTrellis` for the existing prune archive or migrate it deliberately. Do not add any new meaning to `flagged` without a migration and source-reading tests over `projectQuestionToKnowledgeNode`, `getPrunedQuestions`, `buildAnchorReflectionTree`, and `reorganizeMindmap`.
 
 **Warning signs:**
-- Yesterday's dismissed posts are missing from today's feed after Force-New-Day.
-- Like/Save icons show stale state after navigating to `/home` following a Force-New-Day.
-- `handleForceNewDay` does not call `engagementService.reset()` — a source-reading test catches this.
+- A patch like `patchQuestion(id, { flagged: true })` is added outside filter/prune code.
+- Feature code asks "should this show in graph?" by checking only `flagged`.
+- `getPrunedQuestions` starts returning ingestion-rejected small talk.
 
-**Phase to address:** Engagement signals phase AND tech-debt hygiene phase (update Force-New-Day handler when engagement service lands).
+**Phase to address:** Ingestion Triage Foundation and Graph Correction Data Model.
 
 ---
 
-### Pitfall 4: Source Diversity Domain-Reputation Lookup Blocks the Refill Mutex
+### Pitfall 4: Graph UI Edits Mutate Mind Elixir State Instead of Trellis Canonical State
 
 **What goes wrong:**
-Source diversity scoring requires a per-domain reputation lookup — either a local hardcoded allowlist or a network call to a scoring API. This lookup is placed inside `refillQueue`'s body, which is wrapped in `_refillMutex.run(...)`. If the lookup is async (network call or even a slow synchronous allowlist scan over many domains), it extends the mutex hold time. The refill mutex was designed to serialize LLM generation calls (one refill body at a time). Adding a slow domain-lookup inside the mutex means:
-
-1. Rapid swipes now queue behind the domain lookup, not just the LLM call. The refill threshold of 16 posts was sized for LLM latency, not LLM + domain-lookup latency.
-2. If the domain lookup fails (network error, timeout), the mutex's `try/finally` releases correctly per Phase 36-12's design — but the LLM posts were never generated. The refill returns empty, the queue drains, and the user sees "No more posts" during a domain-lookup outage.
+Mind Elixir supports editing, moving, and data export/import APIs, and Trellis currently initializes it with `editable: false`, `draggable: true`, and custom click/touch handlers. Turning `editable: true` and trusting the library's internal tree will create edits that look right until the next `GRAPH_UPDATED` reload, then vanish or reappear incorrectly because GraphScreen is regenerated from `Question` records via `buildAnchorReflectionTree`.
 
 **Why it happens:**
-- Source diversity is conceptually part of "building the post," so developers put it inside `refillQueue`.
-- The mutex hold time was designed around a single concern (LLM), not a pipeline of concerns.
+GraphScreen's displayed tree is a projection, not the source of truth. Node IDs include synthetic root/branch IDs, real cluster IDs, anchor IDs, and Q&A IDs. Direct drag/drop edits in the rendered tree do not automatically update `parentId`, `clusterNodeId`, `rootLabel`, `branchLabel`, `clusterLabel`, `qaCount`, `nodeSummary`, review projection, or retrieval indexes.
 
 **How to avoid:**
-- Domain reputation lookup must be a pre-computed, synchronous lookup against a local allowlist. No network calls inside `refillQueue`. If a reputation database is fetched from the network, fetch it once at app start and cache in module scope — the lookup inside `refillQueue` reads from the cached copy synchronously.
-- Source diversity filtering (deduplicate Tavily results by domain before building posts) happens in the Tavily result set, BEFORE the LLM generation call, but within the same `_refillMutex.run(...)` block. Keep it synchronous and O(N_results) where N ≤ 10 (Tavily page size).
-- "Diversity filter starves concept of all candidates" is a silent zero-results bug: if the allowlist is too strict and all Tavily results for a concept are from blocked domains, `buildConceptBatch` returns zero posts for that concept. Add a fallback: if all candidates are filtered, allow the lowest-scoring blocked domain as a last resort rather than returning empty.
-- Write a test asserting that with all-blocked Tavily results, at least one post is still generated (the fallback fires).
+Keep Mind Elixir as a view layer. Add explicit graph command methods in a single `graph-correction.service.ts`:
+- `renameAnchor(anchorId, title)`
+- `moveAnchor(anchorId, targetClusterId)`
+- `mergeAnchors(sourceAnchorId, targetAnchorId)`
+- `detachQuestion(questionId)`
+- `moveQuestionToAnchor(questionId, anchorId)`
+
+Each command must patch all derived fields and emit `GRAPH_UPDATED` exactly once after a fresh read-modify-write. If drag/drop is enabled later, treat the UI event as a command input and immediately re-render from Trellis state.
 
 **Warning signs:**
-- `refillQueue` body contains `await fetch(...)` for domain scoring.
-- User sees "No more posts" after enabling source diversity.
-- Refill takes noticeably longer than without source diversity (measure with `console.time`).
+- `enableEdit`, `setNodeTopic`, `moveNodeIn`, or `getData` is used as persistence.
+- Graph edits pass UI tests but disappear after navigation.
+- Edit code updates `topic` but not `Question.title`/labels/parent fields.
 
-**Phase to address:** Source diversity phase.
+**Phase to address:** Graph Correction Data Model before Graph Editing UI.
 
 ---
 
-### Pitfall 5: Richer Essays Break the Existing AbortController Contract — Two Unmount Paths
+### Pitfall 5: Partial Graph Corrections Leave Anchors, Clusters, and Q&A Fields Inconsistent
 
 **What goes wrong:**
-Richer essays (longer 400-600 word target, tighter source grounding, citation rendering) increase the streaming window from ~5 seconds to ~15-20 seconds. The existing `PostDetailScreen` already has a correct AbortController setup (CLAUDE.md "D-06 + D-16" comments at lines 283-386) — one controller aborts on locale change AND on unmount. The risk for v1.5 is that a developer:
+A manual correction patches the field that is visible on screen but misses dependent fields. Examples:
 
-1. **Adds a second async call inside the streaming loop** (e.g., a source-citation fetch for citation rendering) without threading the same `abortController.signal`. The citation fetch completes after unmount, calls `setState`, and React emits a "cannot update unmounted component" warning — and potentially corrupts `patchPostEssayInCache`.
-2. **Increases essay length targets in the prompt** without increasing the `post-essay.service.ts` body slice limit (currently `bodyMarkdown.slice(0, 2000)` in `generateEssayMeta`). At 400-600 words, the slice truncates the body before it reaches the meta call, making `whyCare`/`takeaway`/`quickAskPrompts` less grounded. This is a silent quality regression, not a crash.
-3. **Adds a `generateCitationBlock` call after `generateEssayMeta`** (outside the existing abort-guard chain) that runs after the user has already navigated away.
+- rename anchor changes `title` but not `content`, `summary`, aliases, or retrieval terms;
+- move anchor changes `clusterNodeId` but not `branchLabel`/`clusterLabel` on child Q&As;
+- merge anchors moves Q&As but does not recompute `qaCount` or `nodeSummary`;
+- detach Q&A clears `parentId` but leaves stale `clusterNodeId`;
+- delete anchor leaves child Q&As pointing to a missing parent.
+
+GraphScreen, ClusterDetailScreen, AnchorDetailScreen, ReviewScreen, planner suggestions, and podcast concept selection will then disagree.
 
 **Why it happens:**
-- The existing abort chain is multi-step: stream → check aborted → meta call → check aborted → patch cache. Each step manually checks `abortController.signal.aborted`. A new call added after step 3 is easy to forget the check on.
-- Longer streaming means longer exposure windows for all the intermediate checks.
+The current classification commit writes cluster nodes directly to localStorage in places and uses `questionService.patchQuestion` elsewhere. `graphService.moveToParent` only patches `parentId`. `buildAnchorReflectionTree` derives display from several fields, so no single field is authoritative today.
 
 **How to avoid:**
-- Any new async call added to the `PostDetailScreen` essay-generation `useEffect` MUST receive `{ signal: abortController.signal }` and be preceded by an explicit `if (abortController.signal.aborted) return;` guard. This is the D-08 pattern. Add a source-reading test for each new call site.
-- Raise the `bodyMarkdown.slice(0, 2000)` cap in `generateEssayMeta` to `slice(0, 4000)` to accommodate richer essays before any quality work begins.
-- Citation rendering should be part of the ReactMarkdown pipeline (inline link rendering, not a separate fetch) — avoid any network calls triggered by the rendered essay body.
-- For RTL/CJK layout impact: longer essays in Japanese and Chinese will wrap at different line lengths. Spanish essays at 400 words run ~480 words equivalent width. Add a max-height + scroll on the essay container BEFORE increasing word counts, not after observing overflow.
+Make graph correction commands transactional at the application level:
+- always read fresh `trellis_questions`;
+- validate target IDs and node roles before writing;
+- patch parent and child records in one localStorage write where possible;
+- recompute `qaCount` and `nodeSummary` from child Q&As after every move/merge/detach;
+- persist affected records to SQLite or document localStorage-primary limits;
+- emit one `GRAPH_UPDATED` at the end.
+
+Add invariant tests:
+- every non-hidden Q&A `parentId` points to an existing anchor or is explicitly detached;
+- every anchor `clusterNodeId` points to an existing cluster;
+- every cluster `qaCount` equals sum of child anchor `qaCount`;
+- every anchor `qaCount` equals attached Q&A count;
+- no structural node has a due review date before `9999-12-31`.
 
 **Warning signs:**
-- A new `async function` is added inside the `PostDetailScreen` essay `useEffect` without a call to `abortController.signal.aborted` before it.
-- `generateEssayMeta` is called with `accumulated` that is always truncated to exactly 2000 chars (the current slice limit) — signals the slice cap is too small for the new essay length.
-- "Cannot update unmounted component" warnings in the console after navigating away mid-stream.
+- A graph edit uses `questionService.patchQuestion` directly from a component.
+- Tests assert only the edited node and not affected siblings/children.
+- Selected node card shows a different child count than ClusterDetailScreen.
 
-**Phase to address:** Richer essays phase. Raise the slice cap and audit the abort chain before lengthening the prompt.
+**Phase to address:** Graph Correction Data Model and Graph Editing UI.
 
 ---
 
-## Moderate Pitfalls
-
-### Pitfall 6: Masonry Scroll-Position Restoration After Back-Navigation Is Not Wired
+### Pitfall 6: Manual Corrections Race With Fire-and-Forget Classification and Reorganization
 
 **What goes wrong:**
-Current single-column InfoFlow uses a `scrollRef` on `HomeScreen`'s scroll container. When the user taps a card and navigates to `PostDetailScreen`, the scroll container is still mounted (always-mounted HomeScreen slot, `SwipeTabContainer` keeps it off-screen via `translateX`). On return (back navigation via `navigate(-1)` or `Header backTo`), the scroll container retains its `scrollTop` — this is effectively free for the single-column layout.
+The user corrects an anchor while `classifyAndAnchorIncremental` or `reorganizeMindmap` is still in flight. The async classifier commits stale labels after the manual edit, or reorg writes a new structural store from a snapshot that predates the correction. The user loses trust because "I fixed it and Trellis changed it back."
 
-Pinterest masonry with two columns changes this: if the masonry layout is JS-driven and recalculates column heights on mount/remount, the `scrollTop` value may not correspond to the same visual item because item heights may have changed (image aspect ratios settling, theme re-evaluation). The user returns to a different visual position than where they left off.
+The code already contains race lessons: `buildAndSave` avoids stale pre-LLM snapshots, and reorg reconciles deletes/new Q&As after a 10-30 second LLM window. Manual graph corrections are another concurrent mutation class and need the same treatment.
 
 **Why it happens:**
-- CSS `column-count: 2` does NOT remount on back-navigation (the DOM node stays alive in the always-mounted slot). Scroll is automatically preserved. Problem doesn't exist.
-- A JS masonry lib that uses absolute positioning (masonic, react-virtualized) stores position-to-item mappings internally. On remount or window resize, it recalculates. If it considers a `ResizeObserver` on the SwipeTabContainer slot's becoming `visible` (translateX = 0) a "resize event," it may invalidate its position map and reset scroll to 0.
+Current race defenses track existence of IDs, not structural revision. A manual correction changes structure while preserving IDs, so existing reconciliation sees the node as current and can still overwrite its labels.
 
 **How to avoid:**
-- Use CSS `column-count: 2` (recommended in Pitfall 1). Scroll is preserved automatically.
-- If a JS masonry lib is chosen: override its resize behavior so it does NOT recalculate when the SwipeTabContainer fires a resize event due to slot becoming visible (width did not change — Pitfall directly related to CLAUDE.md SwipeTabContainer `resync()` early-return guard). This requires forking or patching the lib's resize handler.
-- Test the back-navigation flow explicitly: navigate to card, return, assert `scrollTop` matches pre-navigation value.
+Add structural revision metadata before manual editing:
+- `graphRevision` or per-node `structuralUpdatedAt`;
+- `manualStructuralLock?: true` or `lastCorrectedAt`;
+- classifier/reorg commits must re-read the current node and skip overwriting fields changed after their snapshot.
+
+For graph-wide reorg, either block manual edit commands while `_reorgInProgress` is true, or queue them and replay after reorg. For classification, allow it to attach new Q&As but never overwrite manually corrected anchor/cluster labels without explicit user confirmation.
 
 **Warning signs:**
-- User returns from PostDetail to HomeScreen and sees the top of the feed.
-- A JS masonry lib's resize handler is wired to `ResizeObserver` on the slot container (will re-trigger on translateX change).
+- A correction is followed by a `GRAPH_UPDATED` from classification and the correction disappears.
+- Reorg result includes nodes edited after reorg started.
+- Tests simulate correction only when no async classification is active.
 
-**Phase to address:** Masonry layout phase. Validate scroll-restoration in UAT before shipping.
+**Phase to address:** Graph Correction Data Model before enabling manual edits.
 
 ---
 
-### Pitfall 7: Source-Reading Invariant Tests Snap on i18n Leaf-Module Refactor Import-Line Changes
+### Pitfall 7: LocalStorage Schema Changes Are Additive in Types but Not in Loaders
 
 **What goes wrong:**
-Four source-reading tests use regex patterns against raw TypeScript source to assert structural invariants. If the i18n leaf-module refactor renames or moves imports in the files these tests guard, the regex may match an import line instead of the intended call site, producing a false-positive pass — or match nothing and produce a false-negative fail.
-
-The specific tests at risk:
-- `tests/state/useQuestions-system-prompt-stability.test.mjs` — asserts `formatCandidateContextPack` appears inside `role: 'assistant'` content, NOT inside `role: 'system'`. If the refactor adds an import named `formatCandidateContextPack` at the top of `useQuestions.ts`, the import line matches the "is referenced in assistant content" regex before the `role:` context is established.
-- `tests/screens/HomeScreen.exploredAnchors-resync.test.mjs` and `HomeScreen.warm-start-refallback.test.mjs` — use anchor-pair extraction to assert specific `useEffect` structures. If the refactor moves `dailyReadService` import to a leaf module with a different name, the anchor string changes.
-- `tests/screens/SettingsDataScreen.force-new-day.test.mjs` — asserts `dailyReadService.reset()` appears in `handleForceNewDay`. If the service is re-exported from a leaf module under a different local name, the grep misses it.
+v1.6 adds new local-first fields for triage, graph corrections, retrieval tags, podcast options, goals, or ethical cue preferences. TypeScript compiles because fields are optional, but old persisted payloads load with missing fields and new code assumes arrays/objects exist. Conversely, a migration rewrites large `trellis_questions`, `trellis_post_history`, or `trellis_podcasts` payloads synchronously and blocks the UI.
 
 **Why it happens:**
-- Source-reading tests grep or regex raw source files. Import line changes are syntactically outside their intended scope but textually within their match window.
-- The i18n refactor touches import sections across many service files simultaneously (it's a breadth-first sweep), increasing the chance of collateral regex matches.
+Most services parse localStorage and cast directly. Some loaders validate shape (`post-history.service.ts`, `engagement.service.ts`), but others trust JSON more broadly. Browser Web Storage is synchronous and limited; MDN documents that `localStorage` operations block JS execution and Web Storage is limited to about 10 MiB per origin.
 
 **How to avoid:**
-- Run the FULL test suite (`npm test`) after EVERY batch of i18n leaf-module extractions, not just after the whole refactor is complete. The refactor should be done file-by-file with a green test baseline after each file.
-- Before starting the refactor, grep for all source-reading tests: `grep -rl "readFileSync\|fs\.read" app/tests/`. Audit each one against the files the refactor will touch.
-- When renaming a service's import (e.g., `import { dailyReadService } from './daily-read.service'` → `import { dailyReadService } from './daily-read.leaf'`), check whether any source-reading test asserts the string `dailyReadService` in a file that's being touched. Update the test's expected import path simultaneously.
-- The anchor-pair extraction pattern (used in HomeScreen tests) is robust to file restructuring as long as the function NAME in the source stays the same. Preserve function names during refactor; rename files not functions.
+For each new store or field:
+- add a version field only when a real migration is required;
+- prefer additive optional fields plus load-time normalization;
+- validate arrays/objects in `loadState` before returning;
+- keep large/audio/blob/vector data out of localStorage;
+- migrate lazily by record on read or command execution, not via one giant boot rewrite.
+
+Use IndexedDB or SQLite for larger indexes/snapshots. Trellis already uses IndexedDB for podcast audio and SQLite as a cold backup for questions, so follow that precedent.
 
 **Warning signs:**
-- A source-reading test changes from FAIL to PASS during the refactor without any logic change — this is a false-positive caused by the import line matching.
-- `npm test` passes but a specific invariant test's match is against an import line (`import.*formatCandidateContextPack`) rather than a usage site.
+- `JSON.parse(raw) as SomeNewType` followed by direct `.map` on newly added fields.
+- A boot-time migration loops through every question and writes the whole store before first render.
+- New retrieval index duplicates full post bodies in localStorage.
 
-**Phase to address:** i18n leaf-module refactor phase (first v1.5 phase). Run tests after each file, not batch.
+**Phase to address:** Data Migration and Persistence Foundation, before feature-specific UI phases.
 
 ---
 
-### Pitfall 8: Engagement State localStorage Key Not Listed in the `trellis_*` Migration Registry
+### Pitfall 8: Retrieval Becomes Another Feed Instead of a Recovery Tool
 
 **What goes wrong:**
-`legacy-migration.service.ts` migrated all `echolearn_*` keys to `trellis_*` keys at v1.4. If engagement signals add a new `trellis_engagement_state` key, this key will not have a legacy migration entry — that's fine. But if a developer accidentally uses `echolearn_engagement_*` as the key name (copy-paste from an older service file that hasn't been fully rebranded), there is no runtime migration and the key is silently orphaned on upgrade. The user's engagement history vanishes. (Note: the `echolearn_*` prefix is historical: pre-2026-05-07 brand. All such keys were one-shot migrated to `trellis_*` by `legacy-migration.service.ts`. New code MUST use `trellis_*`.)
-
-More commonly: the CLAUDE.md "Brand history" note says `localStorage keys use trellis_*` but the SQLite connection name is still `'echolearn'`. A developer working on engagement signals may reach for the SQLite connection (reasonable, since like/save are permanent records) but use the wrong connection name string literal. (SQLite connection name `'echolearn'` is intentionally preserved; only localStorage keys were rebranded.)
+Search, tags, bookmarks, history, and dashboards are implemented as another infinite stream ranked by recency or engagement. The user gets a second discovery feed, not a way to find, resume, review, or compare prior learning. Ethical engagement goals are undermined because "retrieval" increases scrolling surface area.
 
 **Why it happens:**
-- Brand rename happened in v1.4 (commit `9e5d1f38`). New developers (or agent threads) reading the codebase see both `echolearn` (in SQLite) and `trellis_` (in localStorage) and may cross them up.
-- Copy-paste from existing services that have both names in proximity.
+SavedScreen already consolidates Saved, Liked, and History. It is easy to add search and filters into that same archive as a browseable stream. Existing scorer code includes feed engagement as a ranking signal, so retrieval can accidentally prioritize what was clicked over what needs recalling.
 
 **How to avoid:**
-- All new localStorage keys MUST use the `trellis_` prefix. Add a lint check or source-reading test asserting `localStorage.setItem('echolearn_` never appears in `src/services/`.
-- SQLite connection name `'echolearn'` is intentionally preserved. If engagement signals are persisted to SQLite (like/save permanent records), use the existing `db.service.ts` connection — do NOT create a new connection with a new name.
-- Engagement service must use `trellis_engagement_state` for its date-scoped localStorage payload. Document this explicitly in the service file's header comment.
+Separate retrieval modes by intent:
+- exact search over Q&A, anchors, post titles, summaries, and tags;
+- concept dashboard for one anchor/cluster;
+- review/retrieval-practice entry points;
+- archive filters for saved/liked/history;
+- bounded "recently viewed" lists without infinite recommendations.
+
+Rank retrieval by relevance, concept match, review need, and user tags, not by feed popularity alone. Add empty states that point to Ask/Review, not "generate more posts."
 
 **Warning signs:**
-- `grep -r "echolearn_" app/src/services/` returns results in files created after v1.4.
-- User reports engagement state vanishing after app update.
+- Retrieval screen has endless scroll and no query/filter state.
+- Search results include generated recommendations that were never viewed or saved.
+- User cannot answer "where did I save that concept?" without scrolling.
 
-**Phase to address:** Engagement signals phase.
+**Phase to address:** Retrieval Foundation and Concept Dashboard.
 
 ---
 
-### Pitfall 9: Dependency Sweep — framer-motion `will-change` on Masonry Cards Creates a New Containing Block, Breaks Portalled Headers
+### Pitfall 9: Bookmark/Tag Retrieval Stores IDs Only, Then Loses the Content It Promised to Preserve
 
 **What goes wrong:**
-The masonry card entrance animation (a common touch: cards fade/slide in as they appear in viewport) uses `framer-motion`'s `<motion.div>` with `animate={{ opacity: 1, y: 0 }}`. framer-motion adds `will-change: transform` to animating elements. Per CLAUDE.md "Header positioning": `transform`/`will-change`/`filter`/`contain`/`perspective` on any ancestor of an in-tree `Header` creates a new containing block that breaks `position: fixed` headers inside that ancestor.
+Saved and liked posts currently store IDs in `trellis_engagement_v1` and resolve full posts through `postHistoryService`. This is lean and works because saved/liked IDs are pinned against history purge. v1.6 tags/bookmarks can break if they store only IDs for content that is not guaranteed to exist in `trellis_post_history`, `trellis_daily_posts`, video/news caches, or generated essay caches.
 
-The always-mounted HomeScreen slot is an in-tree header slot (inside `SwipeTabContext`). If a `<motion.div>` wrapping a masonry card is an ancestor of... wait, HomeScreen's Header is above the feed, not inside the cards. The real risk: if the masonry card wrapper becomes a containing block via `will-change: transform`, AND a portalled sub-screen Header is somehow rendered adjacent to it during a transition, the stacking context changes. More concretely: the existing `SwipeTabContainer.tsx:245` translateZ(0) containing block is intentionally the ONLY containing block creator in the top-level slot chain. Adding `will-change: transform` on individual masonry cards does NOT break this — they are leaf nodes, not ancestors of the Header. This is a false alarm for the in-tree case.
-
-The real risk is on `PostDetailScreen` (a portalled sub-screen). If a card's entrance animation is still running when the user taps through to PostDetail, the animating `will-change: transform` element is in the HomeScreen subtree (not PostDetail's subtree). PostDetailScreen's Header is portalled to `document.body` — immune. No regression here either.
-
-The ACTUAL risk: a developer, trying to animate the masonry grid container itself with framer-motion (not individual cards), wraps `<InfoFlow />` or the scroll container in a `<motion.div>`. This creates a `will-change: transform` on an ancestor of the in-tree HomeScreen Header. This breaks the containing block chain and HomeScreen's header may flicker.
-
-**How to avoid:**
-- Animate individual masonry CARDS with `<motion.div>`, never the scroll container or InfoFlow root.
-- Alternatively, use CSS `animation` (not framer-motion) for card entrance: `@keyframes fadeSlideIn` with `opacity` and `transform` only. Avoids adding framer-motion's automatic `will-change` to the DOM.
-- If using framer-motion on cards, pass `layout={false}` and do not set `layoutId` — layout animations recalculate bounding boxes, causing the `ResizeObserver` cascade described in Pitfall 6.
-- Source-reading test: assert the HomeScreen scroll container does NOT have `framer-motion` `motion.*` on its root div (or assert no `will-change` in the container's inline style).
-
-**Warning signs:**
-- HomeScreen Header flickers or repositions during card entrance animations.
-- A `<motion.div>` wraps the `<InfoFlow />` component rather than individual cards inside it.
-
-**Phase to address:** Masonry layout phase. Animation choice is an implementation detail that must be locked early.
-
----
-
-### Pitfall 10: `walkDerivedList` Test Coverage at N=4 Masks Single-Concept Masonry Regression (Repeat of GAP-B Pattern)
-
-**What goes wrong:**
-Phase 36 GAP-B was discovered in UAT, not in tests, because integration smoke tests called `walkDerivedList(2, ...)` on a 4-entry derived list — N=2 is within the `count * 2 = 4 = len` boundary, so truncation didn't fire. The masonry phase will change the number of posts fetched per refill call (a 2-column layout with 4 rows visible pops 8 posts per swipe, not 4, to fill both columns). If the refill call increases `count` from 16 to 32 without also checking that `maxSteps = Math.max(count * 2, len)` still holds for single-anchor users (`len = 4`), the walker will return `min(32*2=64, 4)` → still 4, fine. But the stratified style allocator (`assignStylesStratified`) now receives N=32 entries from a 4-entry derived list, which means 28 of the 32 are repeats of the same 4 anchors. The largest-remainder allocation works correctly on N=32, but all 32 are the same concept — the `spreadByConcept` mixer has nothing to spread.
+Result: a saved/tagged item appears in counts but opens to missing content, or search finds a tag whose post body was purged.
 
 **Why it happens:**
-- Changing the posts-per-swipe constant or the refill batch size without auditing downstream invariants (style allocation, spreadByConcept, cyclePosition arithmetic) is the pattern that bit Phase 36.
-- The v1.5 double-column layout is explicitly called out in CLAUDE.md as the forward-looking reason for the refill threshold increase from 12 to 16. Changing the posts-per-swipe default from 4 to 8 will require re-auditing ALL of those numeric defaults.
+Trellis has multiple post stores and patch paths. `post-essay.service.ts` already had to patch `trellis_post_history` along with daily/video/news caches so streamed essays remain openable from archive surfaces. Retrieval features will multiply these references.
 
 **How to avoid:**
-- Before changing posts-per-swipe for the double-column layout: audit `MAX_QUEUE_SIZE`, `REFILL_THRESHOLD`, `walkDerivedList(count, ...)` call sites, and `assignStylesStratified(N)` expected output. Write the regression test for the new N BEFORE changing the constant (RED-first as per Phase 36 discipline).
-- Add a dedicated test: `walkDerivedList(8, single-anchor-4-entry-derived-list)` → assert returns exactly 8 entries (4 unique + 4 repeats cycling), all from the same anchor.
-- The `spreadByConcept` mixer must handle the degenerate case where all entries are the same concept — it should not infinite-loop or return an empty array.
+Define a retrieval record shape:
+- ID and content type;
+- title, source concept IDs, context label, generatedAt/date;
+- minimal searchable text snapshot;
+- pointer to full post if available;
+- tag/bookmark metadata;
+- retention policy.
+
+Do not duplicate large essays unnecessarily, but do store enough snapshot data for search results and archive rows to remain meaningful after cache eviction. Extend purge tests so saved/liked/tagged/bookmarked content survives as promised.
 
 **Warning signs:**
-- Posts-per-swipe constant is bumped from 4 to 8 without a corresponding refill-queue-integration test at N=8.
-- `spreadByConcept` throws or returns [] for a single-concept derived list.
+- Tag service stores `{ tag: string, postIds: string[] }` only.
+- Search result opens `/posts/:id` but that ID is absent from all cache stores.
+- History purge tests are not updated for tags/bookmarks.
 
-**Phase to address:** Masonry layout phase (if posts-per-swipe changes) or a future posts-per-swipe phase.
+**Phase to address:** Retrieval Persistence before Retrieval UI.
 
 ---
 
-## Minor Pitfalls
-
-### Pitfall 11: i18n Refactor — `_actions-mock-loader.mjs` Doesn't Stub New Leaf Modules
+### Pitfall 10: Podcast Length/Style Controls Are Raw Prompt Strings With No Cache Identity
 
 **What goes wrong:**
-The `test:actions` script registers `_actions-mock-loader.mjs` via `--import` to stub LLM/SQLite/i18n dependencies for trellis-actions tests. When the i18n leaf-module refactor extracts a new module (e.g., `engagement-locale.leaf.ts`), that module may transitively import `src/locales/index.ts` (which pulls `import.meta.env.DEV`). If the new leaf module is not stubbed in `_actions-mock-loader.mjs`, any trellis-actions test that imports a service using the new leaf module will fail with the `import.meta.env.DEV` chain error. This is the exact pattern that caused the 10 carried test failures from v1.4.
-
-**How to avoid:**
-- Every new leaf module extracted during the i18n refactor must be listed in `_actions-mock-loader.mjs` (or its stub registry). Check the existing pattern from Phase 36 leaf modules (`feed-spread.ts`, `refill-mutex.ts`).
-- Run `npm run test:actions` after each new leaf module extraction to catch the failure immediately.
-- The leaf-module pattern rule (CLAUDE.md): pure-logic helpers that must be testable under `node --test` must NOT import from `src/locales/index.ts` — stub the locale dependency or accept it as a parameter.
-
-**Warning signs:**
-- `test:actions` fails after a leaf-module extraction with `import.meta.env` is not defined.
-- A new leaf module imports `useTranslation` or `i18next` directly rather than accepting locale as a parameter.
-
-**Phase to address:** i18n leaf-module refactor phase (first v1.5 phase).
-
----
-
-### Pitfall 12: Dependency Sweep — React 19 Minor Bump May Change `useEffect` Double-Invocation Behavior Under StrictMode
-
-**What goes wrong:**
-React 19 in Strict Mode intentionally double-invokes `useEffect` setup+cleanup in development. This was used in Phase 36 to design the `useRef(dailyPosts.length > 0)` snapshot pattern (StrictMode-safe, commit `06` in Phase 36 round 2). A React 19.x minor bump that changes StrictMode behavior (historically: React 18.0 introduced double-invoke for `useEffect`; React 18.1 adjusted timing) could change the execution order of the `useState` initializer snapshot vs. the `useEffect` resync, causing the HomeScreen warm-start fallback to mis-fire.
-
-**How to avoid:**
-- Lock React to `^19.2.0` (current minor) in package.json and review changelogs before bumping.
-- The StrictMode double-invoke pattern is tested structurally in `HomeScreen.warm-start-guard.test.mjs` — run this test against any React upgrade candidate in isolation first.
-- Do not bump React mid-feature-phase. Reserve dependency bumps for the tech-debt hygiene phase.
-
-**Warning signs:**
-- Warm-start feed shows empty on cold-start in development (Strict Mode) but works in production builds.
-- HomeScreen shows briefly then re-fetches (double-invoke timing changed).
-
-**Phase to address:** Tech-debt dependency sweep phase. Not a feature phase.
-
----
-
-### Pitfall 13: Like/Save Annotations Stored in `post-history.service.ts` Without a Schema Migration
-
-**What goes wrong:**
-`post-history.service.ts` writes post snapshots to SQLite via `db.service.ts`. Adding `liked: boolean` and `saved: boolean` columns to an existing SQLite table without a migration script causes `SQLITE_ERROR: table post_history has no column named liked` on first write after upgrade. The error is silent at the service level (ServiceResult `{ success: false }`) but the like/save action appears to work to the user (optimistic UI) — then vanishes on next app restart.
+The user asks for a shorter, longer, calmer, or more technical podcast, but Trellis returns the existing ready podcast because `generatePodcast` skips generation when today's ready audio blob exists. Or a new style setting changes the script prompt but not the stored podcast identity, so the UI shows stale duration/script under the new controls. If controls are passed as raw prompt text, educational coverage degrades or the model emits stage directions that TTS reads aloud.
 
 **Why it happens:**
-- SQLite schema is not automatically migrated when the app upgrades. `@capacitor-community/sqlite` requires explicit `ALTER TABLE` migrations run in a migration script keyed to a version number.
-- Optimistic UI hides the write failure from the user.
+Current `DailyPodcast` has no options field. `podcast.service.ts` stores one podcast per date and skips ready regeneration if audio exists. The script prompt is fixed at "90-second spoken podcast recap. Conversational radio style."
 
 **How to avoid:**
-- Any schema change to `post_history` (or any other SQLite table) MUST have an accompanying migration in `db.service.ts` with a version bump. Check the existing migration pattern in that file before adding columns.
-- Alternatively, store like/save in a separate localStorage key (simpler, no migration needed). Given that Trellis is local-first with user-managed keys, localStorage is acceptable for engagement annotations.
-- Write an integration test that opens an old-schema DB (without the new columns), runs the migration, and confirms the new columns exist and old data is preserved.
+Add a typed `PodcastOptions` and an `optionsHash` to `DailyPodcast`:
+- `length: 'brief' | 'standard' | 'deep'`
+- `style: 'calm' | 'conversational' | 'quiz' | 'story'`
+- `voice/speed` if relevant.
+
+Only reuse a ready podcast when date, concept IDs, locale, and optionsHash match. Prompt style controls as bounded instructions, with non-negotiable quality constraints: cover every selected concept, no invented references, no stage directions, no music cues, spoken-friendly formatting. Regeneration must clear old audio/script and revoke blob URLs.
 
 **Warning signs:**
-- `ServiceResult<{ liked: boolean }>` returns `{ success: false }` in logs after upgrade.
-- Like/Save state is correct immediately after tap (optimistic) but missing after app restart.
+- `PodcastSettings` grows new fields but `DailyPodcast` does not.
+- `generatePodcast` still has only `(date, conceptIds?)`.
+- "Style" is a freeform textarea sent into the system prompt.
 
-**Phase to address:** Engagement signals phase. Decide storage location (SQLite vs localStorage) before writing any like/save write path.
+**Phase to address:** Podcast Controls Data Model before Podcast UI.
+
+---
+
+### Pitfall 11: Podcast Generation Has No Per-Options Concurrency Guard
+
+**What goes wrong:**
+The user changes length/style and taps regenerate while a previous generation is running. Two fire-and-forget async jobs patch the same podcast ID. The slower older job can overwrite the newer script/audio and emit `PODCAST_GENERATION_COMPLETED` after the UI already shows the new options.
+
+**Why it happens:**
+`podcastService.generatePodcast` starts a background async IIFE, writes `status: 'generating'`, and patches by podcast ID. There is no generation token, abort controller, or options hash check before final `patchPodcast`.
+
+**How to avoid:**
+For every generation, create `generationId` and store it on the podcast. Every progress/final patch must first verify the current podcast still has that generationId and optionsHash. If not, drop the stale result. Add abort support for LLM/TTS where provider APIs allow it; otherwise stale-result dropping is mandatory.
+
+Also add a UI disabled/loading state scoped to the selected options, not a single global `isGenerating` that can hide which version is in flight.
+
+**Warning signs:**
+- Progress events carry only `podcastId` and `progress`.
+- Final completion overwrites by ID without checking current options.
+- Rapid regenerate tests are absent.
+
+**Phase to address:** Podcast Controls Data Model and Podcast Generation Reliability.
 
 ---
 
-## Phase-Specific Warning Table
+### Pitfall 12: Ethical Engagement Cues Become Nagging or Another Reward Loop
 
-| Phase Topic | Likely Pitfall | Mitigation |
-|---|---|---|
-| Masonry layout | Native CSS masonry not supported in Capacitor WebView | Use CSS `column-count: 2` (Pitfall 1) |
-| Masonry layout | Column rebalance on image load corrupts cyclePosition | Lock column assignment at first render (Pitfall 1) |
-| Masonry layout | Back-navigation scroll position lost with JS masonry lib | Validate scroll-restore in UAT; prefer CSS columns (Pitfall 6) |
-| Masonry layout | framer-motion on scroll container breaks Header containing block | Animate individual cards only (Pitfall 9) |
-| Masonry layout | posts-per-swipe bump breaks style allocation at small N | Write RED test before changing the constant (Pitfall 10) |
-| Engagement signals | Dismiss wired to markExplored → vine credit pollution | Separate dismiss skip set from explored anchor set (Pitfall 2) |
-| Engagement signals | Engagement state not reset on Force-New-Day | `engagementService.reset()` in `handleForceNewDay` (Pitfall 3) |
-| Engagement signals | Like/Save schema migration missing from SQLite | Migration script or localStorage storage decision (Pitfall 13) |
-| Engagement signals | New (incorrect) `echolearn_` localStorage key after v1.4 rebrand — historical prefix, pre-2026-05-07 | Lint check: no `echolearn_` in new service files (Pitfall 8) |
-| Source diversity | Domain lookup inside refill mutex holds lock too long | Synchronous local allowlist only; no network inside `_refillMutex.run()` (Pitfall 4) |
-| Source diversity | Strict filter silently returns zero posts for a concept | Fallback: allow lowest-blocked domain when all filtered (Pitfall 4) |
-| Richer essays | New async call in PostDetailScreen essay useEffect missing abort guard | D-08 pattern: every call gets `signal` + aborted-check (Pitfall 5) |
-| Richer essays | `generateEssayMeta` slice cap too small for richer essays | Raise `slice(0, 2000)` to `slice(0, 4000)` before lengthening prompt (Pitfall 5) |
-| Richer essays | CJK/RTL essay overflow at higher word counts | Add max-height + scroll on essay container first (Pitfall 5) |
-| i18n leaf-module refactor | Source-reading invariant tests false-positive on import lines | Run `npm test` after each file; audit regex targets before refactor (Pitfall 7) |
-| i18n leaf-module refactor | New leaf modules not stubbed in `_actions-mock-loader.mjs` | Add to stub registry immediately after extraction (Pitfall 11) |
-| Tech-debt dependency sweep | React 19 minor bump changes StrictMode double-invoke timing | Lock version; bump only in tech-debt phase; validate warm-start test (Pitfall 12) |
+**What goes wrong:**
+Goals, stop cues, reflection prompts, and learning metrics fire too often, use guilt language, or become another streak/credit mechanic. Users learn to dismiss them reflexively. Worse, "ethical" cues can still optimize for more sessions, more posts, or more generated content instead of learning quality.
+
+**Why it happens:**
+Trellis already has feed engagement, likes, saves, dismisses, vine progress, credits, planner suggestions, and review metrics. Adding cues as toasts or modal interruptions reuses the most intrusive surfaces. W3C Ethical Web Principles call out user control, privacy, verification, and avoiding addictive/manipulative patterns; v1.6 should not implement "healthy engagement" with coercive engagement mechanics.
+
+**How to avoid:**
+Make cues user-controlled and sparse:
+- user sets goals and quiet hours;
+- cue frequency has snooze/disable;
+- stop cues are informational and non-blocking;
+- reflection prompts are tied to meaningful transitions, not every scroll threshold;
+- success metrics emphasize retrieval, review completion, concept correction, and user-stated goals, not session length or feed volume.
+
+Do not award credits for dismissing stop cues or continuing after them. Track cue fatigue: dismiss-without-action rate, repeated snoozes, immediate app exit after cue.
+
+**Warning signs:**
+- Cue copy says "keep going" more often than "pause" or "review."
+- Stop cue has no snooze/disable.
+- Metrics dashboard celebrates posts viewed more prominently than recall/review outcomes.
+
+**Phase to address:** Ethical Engagement Foundation and Metrics UI.
 
 ---
+
+### Pitfall 13: New Controls Ignore Always-Mounted Screen Resync Rules
+
+**What goes wrong:**
+Graph corrections, retrieval tags, podcast options, goals, or dismiss/undismiss changes update services while another first-level screen is foregrounded. Because first-level screens remain mounted, the destination screen shows stale state when the user navigates back.
+
+This is a repeated Trellis failure mode already documented in `.planning/PROJECT.md`: always-mounted screens consuming mutable services need `[location.pathname]` resync effects. SavedScreen is not always-mounted and can rely on mount cleanup; HomeScreen and GraphScreen are always-mounted surfaces.
+
+**Why it happens:**
+Event-bus subscriptions feel sufficient during same-screen interactions, but navigation back to an already-mounted screen does not remount or rerun initial state. Bulk resets may intentionally emit no per-item events.
+
+**How to avoid:**
+For every v1.6 service mutation, define:
+- semantic event for live same-screen updates;
+- `[location.pathname]` re-read for always-mounted consumers;
+- bulk reset behavior;
+- source-reading test that the relevant screen re-reads on navigation.
+
+GraphScreen should reload on `GRAPH_UPDATED` and also revalidate selected node after corrections/deletes. HomeScreen retrieval/ethical widgets should mirror the Phase 36/43 sibling-effect pattern.
+
+**Warning signs:**
+- State initializer reads a service and no navigation resync exists.
+- Bulk reset emits no events and no screen re-read covers it.
+- Back navigation shows stale selected node, stale saved/tag state, or old goal progress.
+
+**Phase to address:** Cross-Cutting State/Event Foundation before UI-heavy phases.
+
+---
+
+### Pitfall 14: Retrieval Indexing Pulls Dynamic Graph Context Back Into the Byte-Stable Ask Prompt
+
+**What goes wrong:**
+To improve retrieval, a developer injects richer graph/search context into the Ask system prompt. This regresses the Phase 35 load-bearing invariant: the system prompt must remain byte-stable across turns, with per-turn graph context in a tail assistant message and strict user/assistant alternation for local models like Qwen via LM Studio.
+
+**Why it happens:**
+Retrieval feels like prompt context, and system prompts feel authoritative. But Trellis already paid for this lesson: dynamic system prompt bytes broke provider KV-cache behavior and local chat templates.
+
+**How to avoid:**
+Retrieval context belongs in the existing tail context message pattern or in a separate retrieval result message that preserves strict alternation. Do not interpolate query-specific retrieval results into `systemPrompt`. Extend `useQuestions-system-prompt-stability.test.mjs` if new retrieval context is added.
+
+**Warning signs:**
+- `systemPrompt` references search results, tags, bookmarks, dashboard summaries, or `formatCandidateContextPack`.
+- New retrieval context is inserted as assistant-before-user without the constant user ack.
+- Source-reading prompt-stability tests are edited only to make them pass.
+
+**Phase to address:** Retrieval Foundation and Ask Integration.
+
+---
+
+### Pitfall 15: Privacy Boundary Drift When Retrieval, Graph Trust, and Ethical Metrics Are Added
+
+**What goes wrong:**
+Local-first retrieval indexes, correction history, goals, and engagement metrics quietly become prompt context or provider payloads. A user who consented to AI answers may not expect saved/liked history, goals, or correction logs to be transmitted for every Ask or podcast generation.
+
+**Why it happens:**
+Trellis has a single `aiConsentGiven` preference and multiple providers. New features will be tempted to "improve personalization" by passing broader local context into LLM calls. Current code uses localStorage/SQLite as primary local stores and only transmits specific prompts to configured providers.
+
+**How to avoid:**
+Add context categories and provider-boundary tests:
+- ask question text;
+- graph candidate summaries;
+- retrieval result snippets;
+- saved/liked/tag metadata;
+- goals/reflection notes;
+- correction history.
+
+Each LLM call site must document which categories it sends. Default to minimal context; require user-visible settings for broader personalization. Keep retrieval search local unless user explicitly requests web/current information.
+
+**Warning signs:**
+- A helper called `buildFullUserContext` is used by Ask, podcasts, retrieval, and planner.
+- Goals/reflections appear in podcast or Ask prompts without a setting.
+- Tests mock provider calls but do not assert payload exclusions.
+
+**Phase to address:** Privacy/Context Boundary Gate before Retrieval and Ethical Metrics.
+
+---
+
+## Technical Debt Patterns
+
+Shortcuts that seem reasonable but create long-term problems.
+
+| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
+|----------|-------------------|----------------|-----------------|
+| Reuse `flagged` for every graph exclusion | Fast implementation | Off-topic, prune, detach, and manual hide collide | Never for new v1.6 states |
+| Patch graph fields directly from components | Fewer service methods | Inconsistent anchors/clusters and missing events | Never beyond throwaway prototype |
+| Store retrieval index as full duplicated post/question blobs in localStorage | Easy search implementation | Quota, sync blocking, stale copies | Only tiny derived metadata; large bodies in existing stores/IDB/SQLite |
+| Use raw prompt text for podcast styles | Flexible UI | Quality drift, prompt injection, stale cache identity | Never; use bounded enum controls |
+| Use `QUESTION_ASKED` as durable-ingestion event | Avoids event type additions | Race between answer save, triage, classification, retrieval indexing | Only for chat/history display |
+| Add cue toasts for every ethical nudge | Quick visible feature | Nagging and cue fatigue | Only for rare confirmations/errors, not ongoing habit design |
+| Source-reading tests that only assert "call exists" | Cheap regression guard | False confidence about scope/order | Acceptable only with scoped regions and counterweights |
+
+## Integration Gotchas
+
+Common mistakes when connecting v1.6 features to existing systems.
+
+| Integration | Common Mistake | Correct Approach |
+|-------------|----------------|------------------|
+| Ask -> triage -> graph | Save emits untriaged `QUESTION_ASKED` and durable consumers index it | Split chat-answer events from ingestion-accepted events or require durable consumers to filter triage status |
+| Triage -> classifier | Classifier checks only `flagged !== true` | Classifier consumes explicit `ingestionStatus === 'accepted'` |
+| GraphScreen -> Mind Elixir | Enable library editing and persist exported tree | Use explicit graph commands; re-render from `Question` source of truth |
+| Manual graph edits -> reorg/classification | Async LLM commits overwrite user corrections | Structural revisions/locks; stale commit detection |
+| Retrieval -> SavedScreen | Add infinite browse results to archive tabs | Keep retrieval intent-specific: search, filters, concept dashboard, review entry |
+| Tags/bookmarks -> history purge | Store only IDs and assume post remains | Pin or snapshot enough searchable/openable metadata |
+| Podcast settings -> generation | Add settings but reuse one ready podcast per date | Add optionsHash/generationId and invalidate stale script/audio |
+| Ethical cues -> engagement service | Treat cue dismissal as engagement/exploration | Separate cue telemetry from learning progress and feed exploration |
+| Force-New-Day -> new services | Reset old services only | Every date-scoped service has reset semantics and tests |
+| LLM prompt context -> privacy | Send goals/tags/corrections in every personalization prompt | Document context categories and assert exclusions at provider boundaries |
+
+## Performance Traps
+
+Patterns that work at small scale but fail as usage grows.
+
+| Trap | Symptoms | Prevention | When It Breaks |
+|------|----------|------------|----------------|
+| Rebuilding full retrieval index on every keystroke | Search input jank | Precompute small metadata index, debounce, worker/IDB for larger index | Hundreds of posts/questions |
+| Large synchronous localStorage migrations | Slow boot, blank screen | Lazy migrations and load-time normalization | Thousands of Q&As or long post history |
+| Graph invariant recompute inside every render | GraphScreen drag lag returns | Compute in service command and reload on `GRAPH_UPDATED` | 100+ anchors/Q&As |
+| Podcast regenerate without stale-job dropping | Older audio overwrites newer settings | generationId/optionsHash guard | Two rapid regenerations |
+| Semantic retrieval over all embeddings in UI thread | Search feels frozen | Pre-filter lexical/tag results, cap vector scans, consider worker | 500+ stored vectors |
+| Cue metrics update on every scroll tick | Battery/scroll regressions | Event-level logging only at meaningful transitions | Masonry feed rapid scroll |
+| Mind Elixir editable drag events persisted live | Frequent localStorage writes during drag | Persist only explicit confirmed command | Any mobile drag interaction |
+
+## Security Mistakes
+
+Domain-specific security and privacy issues beyond general web security.
+
+| Mistake | Risk | Prevention |
+|---------|------|------------|
+| Treat "system prompt" keyword as always malicious | Blocks legitimate AI literacy learning | Triage intent with examples and session context |
+| Let user-supplied podcast style text enter system prompt | Prompt injection and low-quality audio | Bounded style enum with fixed prompt templates |
+| Send retrieval archive/goals to LLM by default | Privacy boundary surprise | Minimal-context defaults and provider payload tests |
+| Store API-derived audio/transcripts only in localStorage | Quota errors and potential data loss | IndexedDB for audio blobs; localStorage only metadata |
+| Direct graph edit to synthetic branch/root IDs | Corrupt hierarchy and orphan Q&As | Validate node role and target role before command |
+| Correction history has no revert/audit | User cannot recover from bad merge | Revert snapshot for graph edit batches, similar to reorg snapshot |
+| Web/current retrieval mixed with local retrieval silently | Unwanted network calls | Separate local search from explicit web search toggle |
+
+## UX Pitfalls
+
+Common user experience mistakes in this domain.
+
+| Pitfall | User Impact | Better Approach |
+|---------|-------------|-----------------|
+| Triage labels user chat as "invalid" | User feels judged | "Answered, not added to your map" with override |
+| Graph edit controls expose every operation at once | Fear of breaking graph | Contextual actions: rename, move, merge, detach with preview/revert |
+| Merge has no preview of affected Q&As | Trust loss | Show source/target anchors, Q&A counts, and resulting title/summary |
+| Retrieval screen resembles Home feed | More scrolling, less recovery | Search-first interface with filters and concept dashboards |
+| Podcast style options promise entertainment over learning | Lower educational quality | Style as delivery tone; concept coverage remains fixed |
+| Stop cues interrupt active review | Annoyance and dismissal | Trigger at feed/session boundaries, never mid-answer or mid-review card |
+| Metrics celebrate time spent | Reinforces addictive loop | Celebrate recall, corrections, reviews, and user-set goals |
+
+## "Looks Done But Isn't" Checklist
+
+- [ ] **Ingestion triage:** Non-learning chat is answered but not indexed; legitimate learning about AI/system prompts is ingestible.
+- [ ] **Event ordering:** Durable graph/retrieval/podcast consumers do not subscribe blindly to untriaged `QUESTION_ASKED`.
+- [ ] **Flag migration:** New graph exclusion states do not reuse `flagged` without explicit migration tests.
+- [ ] **Graph commands:** Rename/move/merge/detach recompute child labels, `parentId`, `clusterNodeId`, `qaCount`, `nodeSummary`, and emit one `GRAPH_UPDATED`.
+- [ ] **Manual correction race:** In-flight classification/reorg cannot overwrite corrections made after its snapshot.
+- [ ] **Mind Elixir:** UI edits are command inputs; library internal tree is never treated as source of truth.
+- [ ] **Retrieval persistence:** Saved/tagged/bookmarked results remain searchable/openable after history purge or cache eviction.
+- [ ] **Retrieval ranking:** Search/dashboard ranking is not primarily feed engagement or recency.
+- [ ] **Podcast options:** Date + concept IDs + locale + optionsHash determine reuse; old audio is revoked on regeneration.
+- [ ] **Podcast concurrency:** Stale generation jobs cannot patch current podcast state.
+- [ ] **Ethical cues:** Every cue has snooze/disable or frequency limits; metrics avoid time-spent/feed-volume celebration.
+- [ ] **Navigation resync:** Always-mounted screens re-read relevant services on `[location.pathname]`.
+- [ ] **Provider privacy:** Tests assert which context categories are sent to LLM/TTS providers.
+- [ ] **Migration:** Old localStorage payloads with missing v1.6 fields load without throwing.
+
+## Recovery Strategies
+
+When pitfalls occur despite prevention, how to recover.
+
+| Pitfall | Recovery Cost | Recovery Steps |
+|---------|---------------|----------------|
+| Over-broad triage excluded valid learning questions | MEDIUM | Add `ingestionStatus` reasons, let user review rejected items, reclassify accepted items, add fixtures |
+| Graph pollution from non-learning chat | MEDIUM | Identify rejected reasons, set ingestion rejected, remove orphan anchors/clusters with zero valid Q&As, rebuild counts |
+| Manual merge corrupts anchors | HIGH | Restore from graph edit/reorg snapshot; otherwise recompute anchors from Q&A parent links and ask user to confirm |
+| Classification overwrites correction | MEDIUM | Add structural revision; replay correction from edit log; add stale-commit test |
+| Retrieval IDs open missing posts | MEDIUM | Backfill retrieval snapshots from available caches/history; mark missing records with repair/delete UI |
+| Podcast stale job overwrites current audio | LOW-MEDIUM | Add generationId guard; clear affected podcast audio/script and regenerate |
+| Ethical cues cause fatigue | LOW | Lower default frequency, add snooze/disable, rewrite copy, remove reward coupling |
+| localStorage migration blocks boot | HIGH | Ship lazy migration patch; avoid full-store rewrite; add corrupted/old-payload loader tests |
+| Privacy context over-send | HIGH | Stop sending broad context, add payload tests, surface release note/settings reset if shipped |
+
+## Pitfall-to-Phase Mapping
+
+How roadmap phases should address these pitfalls.
+
+| Pitfall | Prevention Phase | Verification |
+|---------|------------------|--------------|
+| Triage as chat suppression | Ingestion Triage Foundation | Fixture matrix for answer vs ingestion decisions |
+| Persist-then-filter race | Ingestion Triage Foundation | Event sequence test with durable consumers attached |
+| `flagged` overload | Data Model/Migration | Source-reading + loader tests over filter/prune/graph projection |
+| Mind Elixir as source of truth | Graph Correction Data Model | Negative test: no persistence from `getData`/library edit state |
+| Partial graph corrections | Graph Correction Commands | Invariant suite for parent/cluster/count/summary consistency |
+| Manual edit vs async LLM races | Graph Trust Reliability | Revision/stale commit tests for classification and reorg |
+| LocalStorage schema drift | Data Migration Foundation | Old payload and corrupted payload load tests |
+| Retrieval becomes feed | Retrieval IA/Foundation | UAT: user can find saved concept without scrolling feed |
+| ID-only retrieval loss | Retrieval Persistence | Purge/cache eviction tests for tagged/bookmarked/saved items |
+| Podcast controls stale cache | Podcast Controls Data Model | optionsHash reuse/invalidation tests |
+| Podcast generation races | Podcast Generation Reliability | Rapid regenerate stale-result test |
+| Ethical cues nag | Ethical Engagement Foundation | Cue frequency/snooze tests and copy review |
+| Always-mounted stale state | Cross-Cutting Event/Resync | `[location.pathname]` source-reading tests per screen |
+| Prompt stability regression | Retrieval Ask Integration | Extend Phase 35 prompt-stability tests |
+| Privacy boundary drift | Privacy/Context Boundary Gate | Provider payload exclusion tests |
 
 ## Sources
 
-- CLAUDE.md (all load-bearing sections cited throughout) — HIGH confidence (primary source)
-- `.planning/PROJECT.md` (v1.4 phase history, v1.5 goal definition) — HIGH confidence
-- [CSS Masonry — MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Grid_layout/Masonry_layout) — masonry browser support status — MEDIUM confidence
-- [Chrome for Developers: Brick by brick, CSS Masonry](https://developer.chrome.com/blog/masonry-update) — Chromium flag status — MEDIUM confidence
-- [Masonry in React: A Performance Hell](https://medium.com/@colecodes/masonry-in-react-a-performance-hell-fb779f5fcebd) — JS masonry rebalance pitfalls — MEDIUM confidence
-- [localStorage storage event does not fire in same tab](https://www.xjavascript.com/blog/forcing-local-storage-events-to-fire-in-the-same-window/) — cross-tab sync caveat — HIGH confidence
-- [AbortController + React useEffect cleanup](https://www.j-labs.pl/en/tech-blog/how-to-use-the-useeffect-hook-with-the-abortcontroller/) — unmount abort patterns — HIGH confidence
-- [Motion (framer-motion) animation performance](https://motion.dev/docs/performance) — will-change caveats — MEDIUM confidence
-- Phase 36 incident history (GAP-A, GAP-B, GAP-C, GAP-D from `.planning/PROJECT.md`) — HIGH confidence
+**Project sources (HIGH confidence):**
+- `.planning/PROJECT.md` — v1.6 goal, filter-as-ingestion-gate clarification, local-first decisions, prior race/resync lessons.
+- `.planning/STATE.md` — current milestone state and accepted v1.5 baselines.
+- `app/src/services/question-filter.service.ts` — current regex/LLM hybrid filter and broad system-prompt/meta patterns.
+- `app/src/state/useQuestions.ts` — answer persistence, filter patch, corrected event rebroadcast, fire-and-forget classification, byte-stable prompt invariant.
+- `app/src/services/question.service.ts` — localStorage-primary question store, SQLite backup, buildAndSave event emission, fresh read-modify-write race defenses.
+- `app/src/services/canonical-knowledge.service.ts` — classification commit, anchor/cluster structure, reorg snapshot/reconciliation, projection helpers.
+- `app/src/screens/GraphScreen.tsx` — Mind Elixir projection layer, `editable: false`, event reloads, Android drag layer constraints.
+- `app/src/services/graph.service.ts` — existing direct `moveToParent`/edge helpers and their limited patch behavior.
+- `app/src/services/podcast.service.ts` and `app/src/state/usePodcast.ts` — one-podcast-per-date cache, IndexedDB audio storage, async generation events.
+- `app/src/screens/PodcastScreen.tsx` — current podcast UI, concept insertion, regenerate path.
+- `app/src/screens/SavedScreen.tsx`, `app/src/services/engagement.service.ts`, `app/src/services/post-history.service.ts` — Saved/Liked/History retrieval foundation and ID-to-history resolution.
+- `app/src/services/settings.service.ts`, `app/src/services/legacy-migration.service.ts`, `app/src/services/db.service.ts` — settings schema, Trellis key migration, SQLite/localStorage split.
+- Existing regression tests under `app/tests/` for prompt stability, engagement anti-wire, GraphScreen performance layer, SavedScreen, Force-New-Day, and canonical knowledge classification.
+
+**External sources (MEDIUM-HIGH confidence):**
+- MDN Web Storage API: `localStorage`/`sessionStorage` are synchronous and can block JS; IndexedDB is recommended for larger/performance-sensitive data. https://developer.mozilla.org/en-US/docs/Web/API/Web_Storage_API
+- MDN Storage quotas and eviction criteria: Web Storage is limited to about 10 MiB per origin and throws `QuotaExceededError` at limit. https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria
+- MDN IndexedDB API: IndexedDB is a transactional object database for keyed structured-clone objects. https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API
+- React docs, Synchronizing with Effects: Effects need cleanup for subscriptions/async work and Strict Mode remounts stress-test cleanup. https://react.dev/learn/synchronizing-with-effects
+- Mind Elixir API docs: options include `editable`, `draggable`, `contextMenu`, and methods include edit/move/data APIs; Trellis must treat these as view-layer inputs unless mapped to canonical commands. https://docs.mind-elixir.com/docs/api/mind-elixir.options and https://docs.mind-elixir.com/docs/api/mind-elixir.methods
+- W3C Ethical Web Principles: emphasizes privacy, verification, user control, and avoiding manipulative/addictive patterns. https://www.w3.org/TR/ethical-web-principles/
+
+---
+*Pitfalls research for: Trellis v1.6 Control, Graph Trust, Retrieval, Podcast Controls, and Ethical Engagement*
+*Researched: 2026-05-13*
