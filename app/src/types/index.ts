@@ -716,4 +716,50 @@ export type AppEvent =
   // why the graph changed — just re-read store. Replaces the former
   // CLASSIFICATION_COMPLETED event (semantic duplicate of this one; payload was
   // never read by any subscriber).
-  | { type: 'GRAPH_UPDATED' };
+  //
+  // Phase 48 (D-17, R5): payload is OPTIONAL — emit sites that don't need to
+  // discriminate may continue passing `{ type: 'GRAPH_UPDATED' }`. New emit
+  // sites (graphCommandService rename/move/merge/detach/prune/delete/undo) may
+  // pass payload.kind so future Phase 49 toast logic can distinguish an undo
+  // from the original command. The `'undo'` literal lives ONLY in this
+  // event-bus payload union, NEVER in GraphEditLogEntry.cmd (R Summary
+  // point 6 — undo writes the inverse verb with swapped before/after, so the
+  // journal records what literally happened, not the semantic intent).
+  | {
+      type: 'GRAPH_UPDATED';
+      payload?: {
+        kind?: 'rename' | 'move' | 'merge' | 'detach' | 'prune' | 'delete'
+             | 'undo' | 'classification' | 'replant' | 'unprune';
+        anchorId?: string;
+        affectedIds?: string[];
+      };
+    };
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GRAPH EDIT JOURNAL (Phase 48 — D-04)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Append-only edit log written by graphCommandService and consumed by
+// (a) graphCommandService.undo() — pops newest and applies inverse, and
+// (b) reorganizeMindmap()'s system-prompt builder — projects entries as
+// "Manual corrections to preserve:" constraint lines (D-01, D-20).
+//
+// cmd is the SIX real verbs; undo writes the inverse verb with swapped
+// before/after per R Summary point 6. Do NOT add 'undo' to this union —
+// the journal records what literally happened (a rename, a move, etc.),
+// not semantic intent. 'undo' lives only in the GRAPH_UPDATED event-bus
+// payload's `kind` union above so Phase 49 can show "Undid: rename" toasts.
+//
+// `before` shape per R2 spec: compact field diff for rename/move/prune/detach;
+// FULL Question record for delete/merge-loser so undo can resurrect.
+// `before` is validated by isValidPreImage() before being applied (T-48-01
+// tamper-resistance — guards against XSS or malicious browser extensions
+// rewriting trellis_graph_edit_log to inject arbitrary resurrected content).
+export interface GraphEditLogEntry {
+  id: string;                  // `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+  ts: number;                  // Date.now()
+  cmd: 'rename' | 'move' | 'merge' | 'detach' | 'prune' | 'delete';
+  targetIds: string[];
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
+}
