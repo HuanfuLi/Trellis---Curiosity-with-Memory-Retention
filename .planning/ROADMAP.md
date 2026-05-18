@@ -59,7 +59,22 @@ There is **no foundation phase**. The prior agent's FOUND-01..05 scaffolding (cr
   2. Corrected graph records preserve parent IDs, labels, cluster IDs, counts, summaries, review links, source Q&A content, and retrieval identity.
   3. User-visible graph state survives app reload after a command commits.
   4. In-flight classification or global reorganization results cannot overwrite protected manual corrections.
-**Plans**: TBD
+**Plans**: 4 plans
+**Wave 1**
+- [ ] 48-01-PLAN.md — Wave 1: graph-edit-journal.service + GraphEditLogEntry type + GRAPH_UPDATED payload extension + reorganizeMindmap prompt injection (GRAPH-04)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 48-02-PLAN.md — Wave 2: graph-command.service skeleton + rename + move + delete (GRAPH-01, GRAPH-02, GRAPH-03)
+
+**Wave 3** *(blocked on Wave 2 completion; Plan 48-04 sequenced after 48-03 to avoid concurrent edits of `graph-command.service.ts`)*
+- [ ] 48-03-PLAN.md — Wave 3: merge + detach + prune (GRAPH-03)
+- [ ] 48-04-PLAN.md — Wave 3: undo (inverse-verb with swapped snapshots) + integration + reload-survival + operator review (GRAPH-01, GRAPH-03, GRAPH-04)
+
+**Cross-cutting constraints** (every plan's `must_haves.truths` includes these):
+- All commands return `ServiceResult<T>` and route writes through `questionService.patchQuestion` / `questionService.delete` (no direct localStorage writes from `graph-command.service.ts`).
+- Each successful command writes exactly ONE `GraphEditLogEntry` to `trellis_graph_edit_log`, capped at N=10 (append-only; FIFO eviction).
+- Each successful command emits a typed `GRAPH_UPDATED` with `payload.kind` matching the command verb (delete/merge produce an additional untyped emit from `questionService.delete` — intentional and idempotent).
+- Manual corrections appear in the next `reorganizeMindmap` LLM prompt as constraints (D-01, journal-as-prompt-constraint, not per-node lock).
 
 ### Phase 49: Graph Correction UI
 **Goal**: Users can correct selected mind-map nodes through clear local controls backed by the graph command service.

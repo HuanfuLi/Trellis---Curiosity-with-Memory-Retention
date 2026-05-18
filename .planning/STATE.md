@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Control, Graph Trust, Retrieval, and Ethical Engagement
-status: phase_48_context_gathered
-stopped_at: Phase 48 CONTEXT.md gathered (20 decisions across 4 gray areas); ready for /gsd:plan-phase 48
+status: phase_48_planned
+stopped_at: Phase 48 planned — 4 plans across 3 waves; passed plan-checker on iteration 3/3; ready for /gsd:execute-phase 48
 last_updated: "2026-05-17"
 last_activity: 2026-05-17
 progress:
   total_phases: 7
   completed_phases: 1
-  total_plans: 6
+  total_plans: 10
   completed_plans: 6
 ---
 
@@ -58,9 +58,9 @@ Plus the earlier 2026-05-15 corrections (during the same session, before the ful
 
 ## Current Position
 
-Phase: 48 of 53 — **CONTEXT GATHERED** (1 of 7 in v1.6 complete + 1 in planning) — Graph Command Service and Trust Invariants
-Next: /gsd:plan-phase 48 (researcher + planner pass)
-Last activity: 2026-05-17 — Phase 48 discuss-phase produced 48-CONTEXT.md (D-01..D-20) + 48-DISCUSSION-LOG.md; committed at 6ecf29bd
+Phase: 48 of 53 — **PLANNED** (1 of 7 in v1.6 complete + 1 plan-ready) — Graph Command Service and Trust Invariants
+Next: /gsd:execute-phase 48 (4 plans, Wave 1 → Wave 2 → Wave 3)
+Last activity: 2026-05-17 — Phase 48 plan-phase produced 48-RESEARCH.md, 48-VALIDATION.md, and 4 PLAN files; passed plan-checker on iteration 3/3 (5 blockers → 1 blocker → 0)
 
 Progress: 1 / 7 phases complete
 
@@ -119,9 +119,18 @@ None.
 ## Session Continuity
 
 Last session: 2026-05-17
-Stopped at: Phase 48 discuss-phase complete. 20 decisions captured (D-01..D-20) across 4 gray areas — stale-write protection via journal-injected-into-reorg-prompt (D-01/D-02), single durable edit log with N=10 retention (D-03..D-06), explicit-survivor merge with hard-delete + resurrection-undo (D-07..D-11), named-method command surface (rename/move/merge/detach/prune/delete/undo) with operator-trust rename bypassing normalizeAnchorName (D-12..D-16). Operator rejected per-node `rev`/`manuallyEdited` locks as ineffective vs. full-tree reorg restructure; chose detach = re-classify over Unassigned-bucket.
+Stopped at: Phase 48 plan-phase complete. 4 plans written across 3 waves (48-01 foundation in Wave 1; 48-02 rename/move/delete in Wave 2; 48-03 merge/detach/prune + 48-04 undo+integration in Wave 3, sequenced so 48-04 follows 48-03 to avoid concurrent edits of graph-command.service.ts). Plan-checker iterated 3 times: iter 1 flagged 5 blockers (missing VALIDATION.md, questionService.delete signature mismatch, synthetic `cmd:'undo'` contradicting RESEARCH.md's inverse-verb strategy, embeddingVector cleared-before-re-embed breaking retrieval identity, no service-level reload-survival test); orchestrator created 48-VALIDATION.md directly + planner revision fixed Blockers #2-5 and Warnings #1-2/#4-6; iter 2 flagged a Dimension-11 doc-hygiene blocker (RESEARCH.md `## Open Questions` lacked `(RESOLVED)` markers) which orchestrator fixed inline; iter 3 PASS.
 
-Resume file: `.planning/phases/48-graph-command-service-and-trust-invariants/48-CONTEXT.md`. Next action is `/gsd:plan-phase 48`.
+Key Phase 48 artifacts:
+- 48-CONTEXT.md (D-01..D-20, 20 decisions)
+- 48-DISCUSSION-LOG.md (operator reasoning audit)
+- 48-RESEARCH.md (R1-R11 + Files Inventory + Validation Architecture; Open Questions RESOLVED inline)
+- 48-VALIDATION.md (Nyquist contract: 11 new test files, per-task verify map, 60s full-suite budget)
+- 4 PLAN files: 48-01-PLAN.md..48-04-PLAN.md
+
+Critical inversion from naive design: undo writes an inverse journal entry with the SAME cmd and swapped before/after — never introduces a `cmd:'undo'` literal. This keeps the journal-as-reorg-prompt-constraint surface coherent (LLM sees "user renamed X→Y, then renamed Y→X" rather than an opaque "undid the previous edit"). Source-reading negative invariant in Plan 04 enforces it.
+
+Resume file: `.planning/phases/48-graph-command-service-and-trust-invariants/48-01-PLAN.md`. Next action is `/gsd:execute-phase 48`.
 
 Key Phase 47 artifacts:
 - 6 plan summaries: `47-0{1..6}-SUMMARY.md`
