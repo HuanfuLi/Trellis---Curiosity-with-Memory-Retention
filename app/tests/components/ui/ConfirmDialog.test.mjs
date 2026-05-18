@@ -1,8 +1,10 @@
 /**
- * ConfirmDialog.test.mjs — Phase 49-03 (Wave 0 scaffold)
+ * ConfirmDialog.test.mjs — Phase 49-03
  *
- * 2 failing tests that go GREEN when Plan 49-03 ships
- * `app/src/components/ui/ConfirmDialog.tsx`.
+ * 6 tests covering the reusable confirm modal extracted from GraphScreen's
+ * inline reorganize-confirm pattern (lines 851-868 in the pre-49-03 source).
+ * Source-reading approach (matches the rest of the Phase 49 suite) — no jsdom
+ * dependency, no TSX loader required.
  */
 
 import { test } from 'node:test';
@@ -14,8 +16,8 @@ import { dirname, resolve } from 'node:path';
 const here = dirname(fileURLToPath(import.meta.url));
 const SRC_PATH = resolve(here, '../../../src/components/ui/ConfirmDialog.tsx');
 
-// FAILS until Plan 49-03 ships app/src/components/ui/ConfirmDialog.tsx
-test('ConfirmDialog exports component with destructive prop using --danger CSS var', () => {
+// Test 1 — render: open: false → null. open: true → modal at zIndex 300 with backdrop rgba(0,0,0,0.5).
+test('Test 1 — render: open=false returns null; open=true renders zIndex 300 + rgba backdrop', () => {
   assert.equal(
     existsSync(SRC_PATH),
     true,
@@ -24,40 +26,105 @@ test('ConfirmDialog exports component with destructive prop using --danger CSS v
   const src = readFileSync(SRC_PATH, 'utf-8');
   assert.match(
     src,
-    /export\s+function\s+ConfirmDialog\s*\(/,
-    'must export `ConfirmDialog` component',
+    /if\s*\(\s*!\s*open\s*\)\s*return\s+null/,
+    'must early-return null when open=false',
   );
   assert.match(
     src,
-    /destructive\s*\?/,
-    'props interface must declare optional `destructive?` flag (D-09 hard-delete destructive CTA)',
+    /zIndex:\s*300/,
+    'modal backdrop must use zIndex: 300 (matches existing reorganize-modal pattern)',
   );
   assert.match(
     src,
-    /var\(--danger\)/,
-    'destructive variant must use `var(--danger)` background for confirm button',
+    /backgroundColor:\s*['"]rgba\(0,0,0,0\.5\)['"]/,
+    'backdrop must use rgba(0,0,0,0.5) — semi-transparent dim',
   );
 });
 
-// FAILS until Plan 49-03 ships ConfirmDialog with children slot between body and buttons
-test('ConfirmDialog children slot renders between body and buttons (Merge preview host)', () => {
+// Test 2 — buttons: Cancel + Confirm; Cancel invokes onCancel; Confirm invokes onConfirm.
+test('Test 2 — renders Cancel + Confirm buttons wired to onCancel + onConfirm', () => {
   const src = readFileSync(SRC_PATH, 'utf-8');
-  // Children slot must be referenced; structural order body → children → buttons
+  // cancelLabel and confirmLabel must render in buttons.
   assert.match(
     src,
-    /children/,
-    'must declare a `children` prop slot',
+    /\{cancelLabel\}/,
+    'must render the cancelLabel inside a button element',
   );
-  // Body, children, then a button row — assert ordering via string positions.
-  const bodyIdx = src.search(/\bbody\b/);
-  const childrenIdx = src.search(/\bchildren\b/);
-  const buttonIdx = src.search(/onConfirm/);
+  assert.match(
+    src,
+    /\{confirmLabel\}/,
+    'must render the confirmLabel inside a button element',
+  );
+  // Each button must have an onClick wired to the respective handler.
+  assert.match(
+    src,
+    /onClick=\{onCancel\}/,
+    'cancel button must wire onClick={onCancel}',
+  );
+  assert.match(
+    src,
+    /onClick=\{onConfirm\}/,
+    'confirm button must wire onClick={onConfirm}',
+  );
+});
+
+// Test 3 — destructive: false → --primary-40; true → --danger.
+test('Test 3 — destructive variant swaps confirm button color to var(--danger)', () => {
+  const src = readFileSync(SRC_PATH, 'utf-8');
+  assert.match(
+    src,
+    /destructive\s*\?\s*['"]var\(--danger\)['"]\s*:\s*['"]var\(--primary-40\)['"]/,
+    'must declare ternary: destructive ? "var(--danger)" : "var(--primary-40)"',
+  );
+});
+
+// Test 4 — children slot: renders between body and buttons; body omitted when children present.
+test('Test 4 — children slot renders between body and button row', () => {
+  const src = readFileSync(SRC_PATH, 'utf-8');
+  // body, children, then onConfirm — in that source ORDER (already covered partially
+  // by the scaffold test below, kept here as an explicit Test 4 for plan completeness).
+  const bodyMatch = src.search(/\{body\s*&&/);
+  const childrenMatch = src.search(/\{children\s*&&/);
+  const confirmBtnMatch = src.search(/onClick=\{onConfirm\}/);
+  assert.ok(bodyMatch > -1, 'must reference {body && ...} conditionally render body');
+  assert.ok(childrenMatch > -1, 'must reference {children && ...} conditionally render children slot');
+  assert.ok(confirmBtnMatch > -1, 'must reference the confirm button onClick');
   assert.ok(
-    bodyIdx > -1 && childrenIdx > -1 && buttonIdx > -1,
-    'must include body, children, and onConfirm references',
+    bodyMatch < childrenMatch && childrenMatch < confirmBtnMatch,
+    `source order must be body → children → confirm button (got body@${bodyMatch}, children@${childrenMatch}, confirm@${confirmBtnMatch})`,
   );
-  assert.ok(
-    childrenIdx < buttonIdx,
-    `children slot must render BEFORE confirm button row (childrenIdx=${childrenIdx} buttonIdx=${buttonIdx})`,
+});
+
+// Test 5 — backdrop click cancels; inner card stopPropagation prevents cancel.
+test('Test 5 — backdrop onClick=onCancel; inner card onClick stops propagation', () => {
+  const src = readFileSync(SRC_PATH, 'utf-8');
+  // Outer wrapper (the backdrop) must have onClick={onCancel}.
+  assert.match(
+    src,
+    /<div\s+onClick=\{onCancel\}/,
+    'outer backdrop div must wire onClick={onCancel}',
   );
+  // Inner card must stop propagation so clicks inside don't bubble up and trigger onCancel.
+  assert.match(
+    src,
+    /onClick=\{\s*\(\s*e\s*\)\s*=>\s*e\.stopPropagation\(\)\s*\}/,
+    'inner card div must stop propagation on click',
+  );
+});
+
+// Test 6 — source: no Tailwind classes; CSS variables only; zIndex 300.
+test('Test 6 — CSS variables only, no Tailwind classes', () => {
+  const src = readFileSync(SRC_PATH, 'utf-8');
+  // No className= attribute (Tailwind usage). Inline styles only.
+  assert.equal(
+    /className=/.test(src),
+    false,
+    'must not use className= attribute (CSS variables / inline styles only per CLAUDE.md style convention)',
+  );
+  // Must reference CSS variable tokens.
+  assert.match(src, /var\(--surface\)/, 'must reference var(--surface)');
+  assert.match(src, /var\(--radius-xl\)/, 'must reference var(--radius-xl)');
+  assert.match(src, /var\(--shadow-3\)/, 'must reference var(--shadow-3)');
+  assert.match(src, /var\(--border\)/, 'must reference var(--border)');
+  assert.match(src, /var\(--muted-foreground\)/, 'must reference var(--muted-foreground)');
 });
