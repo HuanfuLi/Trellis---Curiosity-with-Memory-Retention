@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: milestone
-status: phase_49_uat_pending
+status: Ready to execute
 stopped_at: Phase 50 planner partial — 9 plans on disk, awaiting Opus rate-limit reset for retry
-last_updated: "2026-05-18T08:11:05.099Z"
-last_activity: "2026-05-18 — Plan 49-04 shipped sequentially after Plans 49-01/02/03. UndoButton (36px circular at right:56px; GRAPH_UPDATED subscriber; B-5 result.data.summary; D-16 reorganizing disable) + PickModeBanner (in-tree below Header; Escape-key cancel; role=status + aria-live=polite) + GraphScreen pickMode state machine with W-2 originalAnchorX/Y preservation (no window-center fallback) + handlePrune soft-prune snackbar with [Undo] action (W-6 toast type 'info' acceptable; flag for operator UAT) + handleDetach B-1 Two-emit GRAPH_UPDATED correlation (captures originalParentId before detach call; subscribes to next emit; 5s timeout fallback; questionService.getAll({ includeFlagged: true }) re-read; detachedNewAnchor vs detachedSameAnchor variants). 9 new i18n keys × 4 locale bundles = 36 new entries. 50/50 plan-specific tests pass; 110/110 Phase 49 regression pass; tsc clean modulo pre-existing SavedScreen.tsx errors; npm test:main 1092 pass / 2 fail (date flake + Plan 49-05 harness scaffold — ZERO Plan 49-04 regressions; 7 Wave-0 scaffolds turned GREEN). All four B-1/B-5/W-2 enforcement greps pass. 4/5 Phase 49 plans complete; 1/5 remains (49-05 i18n + UAT)."
+last_updated: "2026-05-18T08:30:48.659Z"
+last_activity: 2026-05-18 -- Phase 50 planning complete
 progress:
   total_phases: 7
   completed_phases: 3
@@ -62,7 +62,7 @@ Plus the earlier 2026-05-15 corrections (during the same session, before the ful
 
 Phase: 49 of 53 — **EXECUTING** (2 of 7 phases complete + Phase 49 in progress) — Graph Correction UI
 Next: /gsd:execute-phase 49-05 (Wave 3 — i18n Sonnet reconciliation + reload-survival harness + Phase 49 UAT)
-Last activity: 2026-05-18 — Plan 49-04 shipped sequentially after Plans 49-01/02/03. UndoButton (36px circular at right:56px; GRAPH_UPDATED subscriber; B-5 result.data.summary; D-16 reorganizing disable) + PickModeBanner (in-tree below Header; Escape-key cancel; role=status + aria-live=polite) + GraphScreen pickMode state machine with W-2 originalAnchorX/Y preservation (no window-center fallback) + handlePrune soft-prune snackbar with [Undo] action (W-6 toast type 'info' acceptable; flag for operator UAT) + handleDetach B-1 Two-emit GRAPH_UPDATED correlation (captures originalParentId before detach call; subscribes to next emit; 5s timeout fallback; questionService.getAll({ includeFlagged: true }) re-read; detachedNewAnchor vs detachedSameAnchor variants). 9 new i18n keys × 4 locale bundles = 36 new entries. 50/50 plan-specific tests pass; 110/110 Phase 49 regression pass; tsc clean modulo pre-existing SavedScreen.tsx errors; npm test:main 1092 pass / 2 fail (date flake + Plan 49-05 harness scaffold — ZERO Plan 49-04 regressions; 7 Wave-0 scaffolds turned GREEN). All four B-1/B-5/W-2 enforcement greps pass. 4/5 Phase 49 plans complete; 1/5 remains (49-05 i18n + UAT).
+Last activity: 2026-05-18 -- Phase 50 planning complete
 Prior: Phase 48 (Graph Command Service) COMPLETE. Verifier 16/16 must-haves verified. GRAPH-01..04 validated. Service surface committed contract for Phase 49.
 
 Progress: 2 / 7 phases complete (Phase 49 in progress)
