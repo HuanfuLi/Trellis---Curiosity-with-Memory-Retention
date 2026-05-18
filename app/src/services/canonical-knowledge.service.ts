@@ -15,6 +15,15 @@ import type {
 } from '../types/index.ts';
 import { cosine, embedText } from '../providers/embedding/index.ts';
 import { chatCompletion } from '../providers/llm/index.ts';
+// Phase 48-01 D-01/D-20 — stale-write protection via reorg-prompt
+// constraint injection. The journal records manual graph corrections
+// (rename/move/merge/detach/prune/delete); _doReorganize projects them
+// into the LLM system prompt so a full-tree LLM redo cannot silently
+// undo learner edits. See CLAUDE.md §"Event bus — unified GRAPH_UPDATED"
+// for the rule that journal entries surface via the existing event
+// type, not a new one.
+import { graphEditJournal } from './graph-edit-journal.service.ts';
+import { phraseJournalEntry } from './graph-edit-journal-phrasing.ts';
 
 const ROOT_FALLBACK = 'Knowledge';
 const BRANCH_FALLBACK = 'General concepts';
@@ -1619,6 +1628,21 @@ async function _doReorganize(
     k: q.keywords.slice(0, 3),
   }));
 
+  // Phase 48-01 D-01/D-20 — stale-write protection. Read the journal of
+  // manual graph corrections and project each entry through the canonical
+  // phrasing helper. The constraints block sits AFTER the existing
+  // structure rules section and BEFORE the closing JSON-schema directive
+  // (R4 line 430 injection position) so the prefix up through the rules
+  // stays byte-stable across consecutive reorgs — preserving provider
+  // KV-cache reuse (Phase 35 byte-stability discipline applied to this
+  // surface). Empty journal still emits the literal header + a "(none)"
+  // line so the prompt shape is byte-identical empty→empty.
+  const journalEntries = graphEditJournal.list();
+  const constraintsBlock = journalEntries.length === 0
+    ? 'Manual corrections to preserve:\n(none)'
+    : 'Manual corrections to preserve (most recent learner edits — do not undo these in your reorganization):\n'
+      + journalEntries.map((entry, i) => `${i + 1}. ${phraseJournalEntry(entry)}`).join('\n');
+
   const systemPrompt = [
     'You are a knowledge organization assistant. Given a list of Q&A items, organize them into a coherent academic knowledge hierarchy.',
     '',
@@ -1636,6 +1660,8 @@ async function _doReorganize(
     '- Create separate anchors for distinct concepts, even if they share a cluster.',
     '- Prefer fewer, well-organized branches and clusters over many fragmented ones.',
     '- Each anchor must have at least 1 qaId.',
+    '',
+    constraintsBlock,
     '',
     'Respond ONLY with valid JSON (no markdown, no explanation, no trailing characters):',
     '{"hierarchy":[{"rootLabel":"Knowledge","branches":[{"branchLabel":"...","clusters":[{"clusterLabel":"...","anchors":[{"anchorName":"...","keyword":"...","qaIds":["id1","id2"]}]}]}]}]}',
