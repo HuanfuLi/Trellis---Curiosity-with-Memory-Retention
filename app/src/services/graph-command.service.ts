@@ -6,7 +6,7 @@
 //   1. Reads fresh from questionService.getAll() inside the body
 //      (Pattern 1 / R10 risk 1 — no held snapshots across the mutex).
 //   2. Patches via questionService.patchQuestion / .delete — the SINGLE
-//      write path (R1, T-48-05). No direct localStorage.setItem.
+//      write path (R1, T-48-05). No direct localStorage writes from this file.
 //   3. On success: writes EXACTLY ONE GraphEditLogEntry via
 //      graphEditJournal.append.
 //   4. On success: emits EXACTLY ONE typed GRAPH_UPDATED with
@@ -325,11 +325,125 @@ export const graphCommandService = {
   },
 
   /**
-   * Hard-delete a Question. Cascades children to grandparent (anchor→cluster,
-   * cluster→root). Plan 48-02 Task 3 fills this in.
+   * Hard-delete a Question. Cascades children to the grandparent (single
+   * level only per R10 risk 7):
+   *   - Anchor delete: children re-parent to the anchor's parentId (the
+   *     cluster); inherit cluster's clusterNodeId / branchLabel /
+   *     clusterLabel.
+   *   - Cluster delete: child anchors re-parent to ROOT (all placement
+   *     fields cleared to undefined). The QAs attached to those anchors
+   *     are NOT touched — single-level cascade only.
+   *   - Leaf QA delete: no cascade.
+   *
+   * Blocker #2 — abort-before-journal on storage failure: questionService.
+   * delete returns Promise<ServiceResult<void>>. If it reports
+   * { success: false }, we return STORAGE_ERROR WITHOUT writing a journal
+   * entry and WITHOUT emitting from the command boundary. (Children have
+   * already been re-parented; this is acceptable partial state — they are
+   * in a valid placement matching what a successful retry would produce,
+   * and the no-op guards in subsequent commands prevent double-reparent.
+   * See T-48-14 disposition.)
+   *
+   * Warning #4 — double-emit accepted:
+   * questionService.delete at question.service.ts:569 already emits an
+   * UNTYPED { type: 'GRAPH_UPDATED' }. We emit a SECOND, typed event with
+   * payload.kind === 'delete' from the command boundary AFTER the delete
+   * succeeds AND the journal entry is appended. Subscribers are already
+   * idempotent per CLAUDE.md §"Event bus — unified GRAPH_UPDATED" —
+   * re-reading the store twice is harmless. The LAST event observed has
+   * payload.kind === 'delete' (subscriber dedup pattern works as expected).
    */
-  async delete(_id: string, _opts?: { signal?: AbortSignal }): Promise<ServiceResult<{ cascadedChildIds: string[] }>> {
-    return fail<{ cascadedChildIds: string[] }>('NOT_IMPLEMENTED', 'delete() is implemented in Plan 48-02 Task 3.', false);
+  async delete(id: string, _opts?: { signal?: AbortSignal }): Promise<ServiceResult<{ cascadedChildIds: string[] }>> {
+    let result: ServiceResult<{ cascadedChildIds: string[] }> = {
+      success: true,
+      data: { cascadedChildIds: [] },
+    };
+
+    await _mutex.run(async () => {
+      const store = questionService.getAll({ includeFlagged: true });
+      const target = store.find((q) => q.id === id);
+      if (!target) {
+        result = fail<{ cascadedChildIds: string[] }>('NOT_FOUND', `Question ${id} not found.`, false);
+        return;
+      }
+
+      const children = store.filter((q) => q.parentId === id);
+
+      // Snapshot pre-image per D-04. deletedRecord is the FULL Question so
+      // undo can resurrect verbatim. reparentedChildren stores only IDs +
+      // OLD placement fields (not full records) per R10 risk 3 — children
+      // stay in the store, only their parentage changed.
+      const deletedRecord: Record<string, unknown> = { ...target };
+      const reparentedChildren = children.map((c) => ({
+        id: c.id,
+        parentId: c.parentId,
+        clusterNodeId: c.clusterNodeId,
+        branchLabel: c.branchLabel,
+        clusterLabel: c.clusterLabel,
+      }));
+
+      // Compute new placement for cascading children based on target kind.
+      // Anchor → children inherit anchor's parent (cluster). Cluster →
+      // child anchors orphan to root (single-level cascade per R10 risk 7).
+      // Leaf QA → children list is empty, this loop is a no-op.
+      const isClusterTarget = target.isClusterNode === true;
+      for (const child of children) {
+        const childPatch: Partial<Question> = isClusterTarget
+          ? {
+              parentId: undefined,
+              clusterNodeId: undefined,
+              branchLabel: undefined,
+              clusterLabel: undefined,
+            }
+          : {
+              parentId: target.parentId,
+              clusterNodeId: target.clusterNodeId,
+              branchLabel: target.branchLabel,
+              clusterLabel: target.clusterLabel,
+            };
+        questionService.patchQuestion(child.id, childPatch);
+      }
+
+      // Blocker #2 — inspect ServiceResult.success BEFORE journal/emit.
+      const deleteResult = await questionService.delete(id);
+      if (deleteResult.success === false) {
+        // Abort BEFORE journal append AND BEFORE command-boundary emit.
+        // Children have already been re-parented — acceptable partial
+        // state per T-48-14; operator can retry.
+        const msg = deleteResult.error?.message ?? 'Hard delete failed.';
+        result = fail<{ cascadedChildIds: string[] }>('STORAGE_ERROR', msg, true);
+        return;
+      }
+
+      // Success — append journal entry, then emit typed GRAPH_UPDATED.
+      graphEditJournal.append({
+        cmd: 'delete',
+        targetIds: [id],
+        before: { deletedRecord, reparentedChildren },
+        after: {},
+      });
+
+      // NOTE: questionService.delete already emitted an untyped
+      // GRAPH_UPDATED at question.service.ts:569. We emit a SECOND, typed
+      // GRAPH_UPDATED here so subscribers that filter on payload.kind ===
+      // 'delete' see the discriminator. Subscribers are already idempotent
+      // per CLAUDE.md §"Event bus — unified GRAPH_UPDATED" — re-reading
+      // the store twice is harmless. The LAST event observed has
+      // payload.kind === 'delete' (subscriber dedup pattern works as
+      // expected).
+      eventBus.emit({
+        type: 'GRAPH_UPDATED',
+        payload: {
+          kind: 'delete',
+          anchorId: id,
+          affectedIds: [id, ...children.map((c) => c.id)],
+        },
+      });
+
+      result = { success: true, data: { cascadedChildIds: children.map((c) => c.id) } };
+    });
+
+    return result;
   },
 
   // ─── Plan 48-03 stubs ────────────────────────────────────────────────────
