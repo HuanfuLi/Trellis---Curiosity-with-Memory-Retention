@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Control, Graph Trust, Retrieval, and Ethical Engagement
-status: phase_47_complete
-stopped_at: Phase 47 complete — all 6 plans landed; UAT cleared with 1 inline fix (UAT-5 dual-vector at 122cda59); ready for /gsd:plan-phase 48
+status: phase_48_context_gathered
+stopped_at: Phase 48 CONTEXT.md gathered (20 decisions across 4 gray areas); ready for /gsd:plan-phase 48
 last_updated: "2026-05-17"
 last_activity: 2026-05-17
 progress:
@@ -58,9 +58,9 @@ Plus the earlier 2026-05-15 corrections (during the same session, before the ful
 
 ## Current Position
 
-Phase: 47 of 53 — **COMPLETE** (1 of 7 in v1.6 done) — Filter Redesign — Off-Topic + Malicious Prompt Prevention
-Next: Phase 48 (Graph Command Service and Trust Invariants) — ready for /gsd:plan-phase 48
-Last activity: 2026-05-17 — Phase 47 closed; all 6 plans + UAT-5 inline fix landed; CLAUDE.md "Question filter — dual-vector scoring (Phase 47 UAT-5 — load-bearing)" section added
+Phase: 48 of 53 — **CONTEXT GATHERED** (1 of 7 in v1.6 complete + 1 in planning) — Graph Command Service and Trust Invariants
+Next: /gsd:plan-phase 48 (researcher + planner pass)
+Last activity: 2026-05-17 — Phase 48 discuss-phase produced 48-CONTEXT.md (D-01..D-20) + 48-DISCUSSION-LOG.md; committed at 6ecf29bd
 
 Progress: 1 / 7 phases complete
 
@@ -119,9 +119,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-05-17
-Stopped at: Phase 47 execution complete. All 6 plans landed in 4 waves; manual UAT cleared after 1 inline fix (UAT-5 multi-turn jailbreak evasion → `122cda59` dual-vector scoring in `layer2Embedding`). VERIFICATION.md produced by gsd-verifier. CLAUDE.md gained a new "Question filter — dual-vector scoring (Phase 47 UAT-5 — load-bearing)" section. ROADMAP.md and this file marked complete for Phase 47.
+Stopped at: Phase 48 discuss-phase complete. 20 decisions captured (D-01..D-20) across 4 gray areas — stale-write protection via journal-injected-into-reorg-prompt (D-01/D-02), single durable edit log with N=10 retention (D-03..D-06), explicit-survivor merge with hard-delete + resurrection-undo (D-07..D-11), named-method command surface (rename/move/merge/detach/prune/delete/undo) with operator-trust rename bypassing normalizeAnchorName (D-12..D-16). Operator rejected per-node `rev`/`manuallyEdited` locks as ineffective vs. full-tree reorg restructure; chose detach = re-classify over Unassigned-bucket.
 
-Resume file: `.planning/phases/48-graph-command-service-and-trust-invariants/` (to be created by `/gsd:plan-phase 48`). Next action is `/gsd:plan-phase 48`.
+Resume file: `.planning/phases/48-graph-command-service-and-trust-invariants/48-CONTEXT.md`. Next action is `/gsd:plan-phase 48`.
 
 Key Phase 47 artifacts:
 - 6 plan summaries: `47-0{1..6}-SUMMARY.md`
