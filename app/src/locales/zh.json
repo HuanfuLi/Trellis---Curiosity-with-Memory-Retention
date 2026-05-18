@@ -253,9 +253,27 @@
       "reorganizing": "正在重新组织你的知识图谱…"
     },
     "correction": {
+      "actions": {
+        "rename": "重命名",
+        "move": "移动",
+        "merge": "合并",
+        "detach": "分离",
+        "prune": "修剪",
+        "delete": "删除",
+        "close": "关闭"
+      },
+      "rename": {
+        "placeholder": "新名称",
+        "save": "保存",
+        "cancel": "取消",
+        "empty": "名称不能为空",
+        "tooLong": "名称不能超过 100 个字符"
+      },
+      "reorgPaused": "正在重组 — 手动修正已暂停",
       "toast": {
         "dropInvalid": "不是有效的放置目标",
         "moved": "已将 “{{title}}” 移到 “{{target}}”",
+        "renamed": "已重命名为 “{{title}}”",
         "reorgInProgress": "重组进行中 — 请稍后再试",
         "rootNotEditable": "根节点 — 不可编辑",
         "branchNotEditable": "分支标签 — 不可直接编辑"

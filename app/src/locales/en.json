@@ -253,9 +253,27 @@
       "reorganizing": "Reorganizing your knowledge map..."
     },
     "correction": {
+      "actions": {
+        "rename": "Rename",
+        "move": "Move",
+        "merge": "Merge",
+        "detach": "Detach",
+        "prune": "Prune",
+        "delete": "Delete",
+        "close": "Close"
+      },
+      "rename": {
+        "placeholder": "New title",
+        "save": "Save",
+        "cancel": "Cancel",
+        "empty": "Title cannot be empty",
+        "tooLong": "Title cannot exceed 100 characters"
+      },
+      "reorgPaused": "Reorganizing — manual corrections paused",
       "toast": {
         "dropInvalid": "Not a valid drop target",
         "moved": "\"{{title}}\" moved to \"{{target}}\"",
+        "renamed": "Renamed to \"{{title}}\"",
         "reorgInProgress": "Reorganize in progress — try again in a moment",
         "rootNotEditable": "Root node — not editable",
         "branchNotEditable": "Branch label — not directly editable"

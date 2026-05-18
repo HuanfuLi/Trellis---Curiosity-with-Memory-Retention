@@ -253,9 +253,27 @@
       "reorganizing": "知識マップを再編成中…"
     },
     "correction": {
+      "actions": {
+        "rename": "名前を変更",
+        "move": "移動",
+        "merge": "統合",
+        "detach": "切り離す",
+        "prune": "剪定",
+        "delete": "削除",
+        "close": "閉じる"
+      },
+      "rename": {
+        "placeholder": "新しいタイトル",
+        "save": "保存",
+        "cancel": "キャンセル",
+        "empty": "タイトルを空にすることはできません",
+        "tooLong": "タイトルは 100 文字以下にしてください"
+      },
+      "reorgPaused": "再編成中 — 手動修正は一時停止中",
       "toast": {
         "dropInvalid": "ドロップ先として無効です",
         "moved": "「{{title}}」を「{{target}}」に移動しました",
+        "renamed": "「{{title}}」に名前を変更しました",
         "reorgInProgress": "再編成中です — 少し時間をおいてから再試行してください",
         "rootNotEditable": "ルートノード — 編集不可",
         "branchNotEditable": "ブランチラベル — 直接編集できません"
