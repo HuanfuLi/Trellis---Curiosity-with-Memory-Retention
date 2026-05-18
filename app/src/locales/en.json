@@ -287,6 +287,12 @@
         "cancel": "Cancel",
         "confirm": "Delete"
       },
+      "pickMode": {
+        "move": "Tap a cluster to move \"{{title}}\" into it",
+        "merge": "Tap an anchor to merge \"{{title}}\" into",
+        "cancel": "Cancel",
+        "invalidTarget": "Not a valid target"
+      },
       "toast": {
         "dropInvalid": "Not a valid drop target",
         "moved": "\"{{title}}\" moved to \"{{target}}\"",

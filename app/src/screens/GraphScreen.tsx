@@ -20,6 +20,7 @@ import { CorrectionCard, getActionsForNode, type CorrectionAction } from '../com
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { MergeConfirmPreview } from '../components/graph/MergeConfirmPreview';
 import { UndoButton } from '../components/graph/UndoButton';
+import { PickModeBanner } from '../components/graph/PickModeBanner';
 import { questionService } from '../services/question.service';
 import { hapticImpactMedium } from '../lib/haptics';
 
@@ -220,6 +221,14 @@ interface MasterMapProps {
   ) => void;
   // Phase 49-04 — propagated for the persistent UndoButton (D-16 disables tap during reorg).
   reorganizing: boolean;
+  // Phase 49-04 — pick-mode tap interception. When the GraphScreen-owned
+  // pickMode state is non-null, the delegated click listener forwards target
+  // node taps to this callback INSTEAD of the standard inspector-card path.
+  // Returns true if the tap was handled (commit or invalid-target toast), so
+  // the listener can short-circuit. Returns false to fall through to the
+  // standard onNodeClick path (only happens when pickMode is null at click
+  // time — closure-vs-state racing).
+  onPickModeTap: (target: Question) => boolean;
 }
 
 function setAllExpanded(node: NodeObj, expanded: boolean): void {
@@ -241,6 +250,7 @@ function MasterMap({
   onDragMove,
   onDragEnd,
   reorganizing,
+  onPickModeTap,
 }: MasterMapProps & { isVisible: boolean }) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -259,10 +269,13 @@ function MasterMap({
   const onDragStartRef = useRef(onDragStart);
   const onDragMoveRef = useRef(onDragMove);
   const onDragEndRef = useRef(onDragEnd);
+  // Phase 49-04 — pick-mode tap interception ref (same callback-ref pattern).
+  const onPickModeTapRef = useRef(onPickModeTap);
   useEffect(() => { onLongPressReleaseRef.current = onLongPressRelease; }, [onLongPressRelease]);
   useEffect(() => { onDragStartRef.current = onDragStart; }, [onDragStart]);
   useEffect(() => { onDragMoveRef.current = onDragMove; }, [onDragMove]);
   useEffect(() => { onDragEndRef.current = onDragEnd; }, [onDragEnd]);
+  useEffect(() => { onPickModeTapRef.current = onPickModeTap; }, [onPickModeTap]);
   // `t` lives in a ref too — same reason. Locale changes shouldn't tear down
   // MindElixir and rebuild the whole map.
   const tRef = useRef(t);
@@ -347,7 +360,13 @@ function MasterMap({
       const id = tpc.nodeObj.id;
       if (!id || id.startsWith('cat-') || id === 'root-knowledge') return;
       const q = nodeMapRef.current[id];
-      if (q) onNodeClickRef.current(q);
+      if (!q) return;
+      // Phase 49-04 — pick-mode tap interception. The GraphScreen-owned
+      // pickMode state machine decides whether this tap commits move/merge.
+      // If the callback returns true, the tap was consumed (commit or
+      // invalid-target toast) — short-circuit the inspector-card path.
+      if (onPickModeTapRef.current(q)) return;
+      onNodeClickRef.current(q);
     };
     containerRef.current.addEventListener('click', handleClick);
 
@@ -681,6 +700,20 @@ export function GraphScreen() {
   const [deleteConfirm, setDeleteConfirm] = useState<{ node: Question } | null>(null);
   // Phase 49-02 — captured long-press release coordinates feed CorrectionCard placement.
   const [correctionNode, setCorrectionNode] = useState<{ node: Question; anchorX: number; anchorY: number } | null>(null);
+  // Phase 49-04 — pickMode state for menu-driven Move/Merge (D-06). W-2:
+  // originalAnchorX/Y captured at entry so Cancel restores the CorrectionCard
+  // at the EXACT release coords the user saw, not a window-center fallback.
+  const [pickMode, setPickMode] = useState<{
+    kind: 'move' | 'merge';
+    sourceNode: Question;
+    originalAnchorX: number;
+    originalAnchorY: number;
+  } | null>(null);
+  // Latest-state ref so the delegated click listener (which closes over the
+  // pickModeRef at attachment time) sees up-to-date pickMode without forcing
+  // a MindElixir re-init. Mirrors the existing callback-ref pattern.
+  const pickModeRef = useRef(pickMode);
+  useEffect(() => { pickModeRef.current = pickMode; }, [pickMode]);
 
   // Keep dragState accessible from the gesture handler closure (which lives
   // in MasterMap's useEffect). The handler reads via this ref to decide
@@ -763,13 +796,17 @@ export function GraphScreen() {
     [t],
   );
 
-  // Plan 49-02 — dispatch CorrectionCard action selections. Rename is owned
-  // by the card itself (inline graphCommandService.rename); other branches
-  // are filled in incrementally by Plans 49-03 + 49-04.
+  // Plan 49-02/03/04 — dispatch CorrectionCard action selections. Rename is
+  // owned by the card itself (inline graphCommandService.rename). Plan 49-03
+  // wired delete via ConfirmDialog. Plan 49-04 wires move/merge via pickMode,
+  // and prune/detach via handlers below.
   const handleCorrectionAction = useCallback(
     (action: CorrectionAction) => {
-      // Get the node from the currently mounted correctionNode before clearing it.
-      const node = correctionNode?.node;
+      if (!correctionNode) return;
+      const node = correctionNode.node;
+      // W-2 — capture release coords BEFORE clearing correctionNode so pick-
+      // mode entry preserves where the user's finger was.
+      const { anchorX, anchorY } = correctionNode;
       switch (action.kind) {
         case 'rename':
           // Inline rename — CorrectionCard already committed via graphCommandService.rename
@@ -778,21 +815,25 @@ export function GraphScreen() {
         case 'delete':
           // Phase 49-03 — open the destructive ConfirmDialog. Always cascades
           // (no boolean param per Phase 48 D-07 + Phase 49 D-09).
-          if (node) setDeleteConfirm({ node });
-          setCorrectionNode(null);
-          return;
-        case 'merge':
-          // W-1 — menu-driven merge entry lands in Plan 49-04. The drag-driven
-          // path already populates mergeConfirm via handleDragEnd. Here we log
-          // + dismiss; Plan 49-04 replaces this with the pick-mode entry.
-          console.warn('[Phase 49-03] menu-driven merge pending Plan 49-04');
+          setDeleteConfirm({ node });
           setCorrectionNode(null);
           return;
         case 'move':
+          // Phase 49-04 — enter pickMode 'move'. W-2: originalAnchorX/Y
+          // captured here so Cancel returns to this exact card position.
+          setPickMode({ kind: 'move', sourceNode: node, originalAnchorX: anchorX, originalAnchorY: anchorY });
+          setCorrectionNode(null);
+          return;
+        case 'merge':
+          // Phase 49-04 — enter pickMode 'merge'. W-2 same as move.
+          setPickMode({ kind: 'merge', sourceNode: node, originalAnchorX: anchorX, originalAnchorY: anchorY });
+          setCorrectionNode(null);
+          return;
         case 'prune':
         case 'detach':
-          // Plan 49-04 stubs — move pick entry, prune snackbar, detach toast.
-          console.warn(`[Phase 49-03] correction action "${action.kind}" pending Plan 49-04`);
+          // Phase 49-04 Task 3 wires graphCommandService.prune + detach with
+          // their respective toast variants. For now, dismiss the card.
+          console.warn(`[Phase 49-04 Task 2] correction action "${action.kind}" wired in Task 3`);
           setCorrectionNode(null);
           return;
       }
@@ -802,14 +843,69 @@ export function GraphScreen() {
 
   // Plan 49-02 — B-4 + CLAUDE.md always-mounted-screen invariant.
   // Reset surfaces when the user navigates away from /graph so re-entering
-  // the tab does not show stale UI captured before navigation.
+  // the tab does not show stale UI captured before navigation. Plan 49-04
+  // adds setPickMode(null) so any in-progress menu-driven Move/Merge cancels.
   useEffect(() => {
     if (location.pathname !== '/graph') {
       setCorrectionNode(null);
       setDragState(null);
-      // The reset for Plan 49-04's pick-mode state is added alongside its declaration.
+      setPickMode(null);
     }
   }, [location.pathname]);
+
+  // Phase 49-04 — pick-mode tap handler. The MasterMap delegated click
+  // listener invokes this on every node tap; if pickMode is non-null we
+  // commit (move) or open the merge confirm modal (merge) and return true
+  // to short-circuit the inspector-card path. Returns false otherwise.
+  const handlePickModeTap = useCallback(
+    (target: Question): boolean => {
+      const mode = pickModeRef.current;
+      if (!mode) return false;
+      const validTarget =
+        mode.kind === 'move'
+          ? target.isClusterNode === true
+          : target.isAnchorNode === true;
+      if (!validTarget) {
+        toast(t('graph.correction.pickMode.invalidTarget'), 'info');
+        return true;
+      }
+      if (mode.kind === 'move') {
+        void (async () => {
+          const result = await graphCommandService.move(mode.sourceNode.id, target.id);
+          if (result.success) {
+            toast(
+              t('graph.correction.toast.moved', {
+                title: mode.sourceNode.title ?? mode.sourceNode.content,
+                target: target.title ?? target.content,
+              }),
+              'success',
+            );
+          } else {
+            toast(result.error?.message ?? t('graph.correction.toast.dropInvalid'), 'error');
+          }
+        })();
+      } else {
+        // merge: hand off to Plan 49-03's <ConfirmDialog> via mergeConfirm state.
+        setMergeConfirm({ loser: mode.sourceNode, survivor: target });
+      }
+      setPickMode(null);
+      return true;
+    },
+    [t],
+  );
+
+  // Phase 49-04 — Cancel handler. W-2: restore CorrectionCard at the ORIGINAL
+  // release coords captured at pickMode entry, NOT a window-center fallback.
+  const handlePickModeCancel = useCallback(() => {
+    if (pickMode) {
+      setCorrectionNode({
+        node: pickMode.sourceNode,
+        anchorX: pickMode.originalAnchorX,
+        anchorY: pickMode.originalAnchorY,
+      });
+    }
+    setPickMode(null);
+  }, [pickMode]);
 
   const handleDragStart = useCallback(
     (state: DragState, targets: DropTargetSnapshot[]) => {
@@ -1011,6 +1107,12 @@ export function GraphScreen() {
         }
       />
 
+      {/* Phase 49-04 — PickModeBanner renders in-tree below the Header when
+          pickMode !== null. NOT portaled — see R19 + CLAUDE.md Header rule. */}
+      {pickMode && (
+        <PickModeBanner pickMode={pickMode} onCancel={handlePickModeCancel} />
+      )}
+
       <MasterMap
         nodes={nodes}
         edges={edges}
@@ -1021,6 +1123,7 @@ export function GraphScreen() {
         onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}
         reorganizing={reorganizing}
+        onPickModeTap={handlePickModeTap}
       />
 
       {/* Phase 49-01 — portaled drag overlay (ghost + origin-line + halo). */}

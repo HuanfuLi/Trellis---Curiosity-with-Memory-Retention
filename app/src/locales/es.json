@@ -287,6 +287,12 @@
         "cancel": "Cancelar",
         "confirm": "Eliminar"
       },
+      "pickMode": {
+        "move": "Toca un clúster para mover «{{title}}» dentro",
+        "merge": "Toca un ancla para combinar «{{title}}» en ella",
+        "cancel": "Cancelar",
+        "invalidTarget": "Destino no válido"
+      },
       "toast": {
         "dropInvalid": "No es un destino válido",
         "moved": "«{{title}}» movido a «{{target}}»",

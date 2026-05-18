@@ -205,18 +205,19 @@ test('Test 12 — merge + delete write paths route through graphCommandService (
   );
 });
 
-// Test 13 — W-1: NO pickMode state declared in this plan's GraphScreen changes.
-//           Plan 49-04 owns pickMode entirely.
-test('Test 13 — no pickMode state in GraphScreen (W-1: Plan 49-04 owns pickMode)', () => {
+// Test 13 — W-1 inverted post-Plan-49-04: pickMode state IS now declared.
+//           Plan 49-03 forbade pickMode (its W-1 boundary); Plan 49-04 introduces
+//           it for menu-driven Move/Merge. This test asserts the state landed.
+test('Test 13 — pickMode state IS declared in GraphScreen (post-49-04)', () => {
   const src = readFileSync(SRC_PATH, 'utf-8');
-  assert.equal(
-    /\bpickMode\b/.test(src),
-    false,
-    'GraphScreen must NOT reference pickMode in this plan — Plan 49-04 introduces it',
+  assert.match(
+    src,
+    /\bpickMode\b/,
+    'GraphScreen MUST reference pickMode after Plan 49-04 (menu-driven Move/Merge)',
   );
-  assert.equal(
-    /setPickMode\b/.test(src),
-    false,
-    'GraphScreen must NOT reference setPickMode in this plan — Plan 49-04 introduces it',
+  assert.match(
+    src,
+    /setPickMode\b/,
+    'GraphScreen MUST reference setPickMode after Plan 49-04',
   );
 });

@@ -287,6 +287,12 @@
         "cancel": "取消",
         "confirm": "删除"
       },
+      "pickMode": {
+        "move": "点击集群以将 “{{title}}” 移入",
+        "merge": "点击锚点以将 “{{title}}” 合并进去",
+        "cancel": "取消",
+        "invalidTarget": "无效目标"
+      },
       "toast": {
         "dropInvalid": "不是有效的放置目标",
         "moved": "已将 “{{title}}” 移到 “{{target}}”",

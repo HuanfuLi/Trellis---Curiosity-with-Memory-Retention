@@ -287,6 +287,12 @@
         "cancel": "キャンセル",
         "confirm": "削除"
       },
+      "pickMode": {
+        "move": "「{{title}}」を移動するクラスターをタップ",
+        "merge": "「{{title}}」を統合するアンカーをタップ",
+        "cancel": "キャンセル",
+        "invalidTarget": "対象として無効です"
+      },
       "toast": {
         "dropInvalid": "ドロップ先として無効です",
         "moved": "「{{title}}」を「{{target}}」に移動しました",
