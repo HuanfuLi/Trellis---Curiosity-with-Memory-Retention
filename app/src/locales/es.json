@@ -4,6 +4,7 @@
     "cancel": "Cancelar",
     "save": "Guardar",
     "delete": "Eliminar",
+    "undo": "Deshacer",
     "greeting": {
       "morning": "Buenos días",
       "afternoon": "Buenas tardes",
