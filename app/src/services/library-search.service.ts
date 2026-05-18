@@ -25,6 +25,11 @@
 //   3. Consumers MUST wrap `buildIndex(corpus)` in `useMemo` keyed on the
 //      corpus identity (RESEARCH §Pitfall 3). Index creation is ~3ms for
 //      ≤250 posts but allocating per keystroke is 16× wasteful.
+//   4. FUSE_OPTIONS.threshold (0.3) + minMatchCharLength (3) are tuned values.
+//      Do NOT raise threshold above 0.4 or drop minMatchCharLength below 3 —
+//      both regressions reopen the 50-UAT G4 false-positive surface where a
+//      '3D printing' query on Liked tab matched an unrelated Kanji video via
+//      scattered single-char Bitap hits.
 //
 // Public surface:
 //   - FUSE_OPTIONS           — Fuse config (exported for test introspection)
@@ -63,8 +68,10 @@ export const MAX_QUERY_LENGTH = 200;
  *
  * The ignore-location knob below is LOAD-BEARING — see file header rule #1.
  *
- * `threshold: 0.4` matches Fuse's default and is intentionally tunable
- * later. Lower = stricter; higher = more lenient.
+ * `threshold: 0.3` tightened from Fuse's 0.4 default — tuned in 50-11 to
+ * suppress Bitap fuzzy noise that surfaced unrelated posts on short queries
+ * (50-UAT.md G4). `minMatchCharLength: 3` raised from 2 for the same reason —
+ * single-char and 2-char matches drove the scattered-highlight false positive.
  */
 export const FUSE_OPTIONS: IFuseOptions<DailyPost> = {
   keys: [
@@ -73,11 +80,12 @@ export const FUSE_OPTIONS: IFuseOptions<DailyPost> = {
     { name: 'sourceQuestionTitles', weight: 0.15 },
     { name: 'contextLabel',         weight: 0.05 },
   ],
-  threshold: 0.4,
+  // Phase 50 gap closure 50-11 (G4): threshold tightened 0.4→0.3, minMatchCharLength 2→3 to suppress single-char fuzzy noise. Pitfall 1 (ignoreLocation: true) preserved.
+  threshold: 0.3,
   ignoreLocation: true,    // CRITICAL — Pitfall 1; do NOT remove. Body matches past pos 60 silently miss without this.
   includeMatches: true,    // returns indices for HighlightedText (plan 50-06)
   includeScore: true,      // enables D-14 relevance sort
-  minMatchCharLength: 2,
+  minMatchCharLength: 3,
   shouldSort: true,
 };
 
