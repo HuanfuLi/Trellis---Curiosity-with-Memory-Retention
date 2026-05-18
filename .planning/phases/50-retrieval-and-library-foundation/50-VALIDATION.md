@@ -69,6 +69,7 @@ created: 2026-05-18
 | Filter chips appear inline on search-bar focus and disappear on blur | RETRIEVE-01 | Focus/blur animation timing needs visual check across mobile WebView | 1. Open /saved, 2. Tap search bar (focus), 3. Chips slide in below bar, 4. Tap outside (blur), 5. Chips collapse |
 | Tab switch preserves search query but rescopes results | RETRIEVE-01 | Cross-tab interaction state requires user-flow walkthrough | 1. Open /saved, 2. Type query on Saved tab, 3. Switch to Liked tab, 4. Query string persists, 5. Results rescope to Liked |
 | Collection membership pins post against 7-day purge | RETRIEVE-02 | Manual time-travel via dev-tools "Force New Day" to verify post survives purge after >7 days | 1. Save post to a custom collection, 2. Wait or trigger Force-New-Day repeatedly until >7 days simulated, 3. Open /saved → History, 4. Post still visible |
+| FilterPickerSheet drawer scroll boundary feels rigid on device (G5) | RETRIEVE-01 | overscroll-behavior: contain is a CSS property whose runtime effect is only visible on a real mobile WebView (Android Chromium / iOS WKWebView) during fast-scroll. JSDOM does not implement scroll-chaining or rubberband, and getComputedStyle on a transformed element returns inconsistent values across environments. Source-level grep (Task 2 BS-OS-01..05) proves the style key exists and lives on the right element; on-device flick-scroll proves the perceived behavior. | 1. Open /saved on a device (or Capacitor simulator), 2. Focus the search bar and type 'system' (any short query that yields ≥ 5 picker options), 3. Tap the Concept filter chip → FilterPickerSheet opens, 4. Flick-scroll the picker list rapidly DOWN past the bottom — confirm hard stop, no rubberband past the rounded mask, no content visible outside the 20px corner radius, 5. Flick-scroll the picker list rapidly UP past the top — confirm hard stop, no flicker, no end-of-page bleed, 6. Repeat steps 3–5 with CollectionPickerSheet (long-press a feed tile → Save to...) to confirm sibling consumers also inherit the rigid boundary. |
 
 ---
 
@@ -80,5 +81,6 @@ created: 2026-05-18
 - [ ] No watch-mode flags
 - [ ] Feedback latency < 60s
 - [ ] `nyquist_compliant: true` set in frontmatter
+- [ ] G5 on-device re-test passed (Manual-Only Verifications row for FilterPickerSheet drawer scroll boundary)
 
 **Approval:** pending
