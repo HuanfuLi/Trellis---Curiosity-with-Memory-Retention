@@ -33,6 +33,7 @@ import { eventBus } from '../lib/event-bus.ts';
 import { settingsService } from './settings.service.ts';
 import { embedText } from '../providers/embedding/index.ts';
 import { classifyAndAnchorIncremental } from './canonical-knowledge.service.ts';
+import { trellisActionsService } from './trellis-actions.service.ts';
 import { createPromiseMutex } from './refill-mutex.ts';
 
 // ─── Error codes ─────────────────────────────────────────────────────────
@@ -790,8 +791,95 @@ export const graphCommandService = {
     return result;
   },
 
-  async prune(_anchorId: string, _opts?: { signal?: AbortSignal }): Promise<ServiceResult<void>> {
-    return fail('NOT_IMPLEMENTED', 'See Plan 48-03.', false);
+  /**
+   * Soft-delete an anchor — sets flagged=true + prunedFromTrellis=true
+   * via the existing trellisActionsService.prune (R6 / D-14: delegate,
+   * don't replace). Reversible via undo() (Plan 04) or the existing
+   * unpruneQuestion path.
+   *
+   * Why delegate: trellisActionsService.prune has existing consumers
+   * (PlannerScreen "Suggested Moves" scissors button) that depend on its
+   * ANCHOR_DELETED emit to refresh PrunedSection. Consolidating without
+   * preserving that emit would break the chain. The graph-command
+   * boundary adds journaling + a typed GRAPH_UPDATED on top.
+   *
+   * Validation:
+   *   - Target must be an anchor (isAnchorNode === true). QA / cluster
+   *     targets rejected with VALIDATION_ERROR.
+   *   - NOT_FOUND for missing target.
+   *
+   * No-op:
+   *   - If target is already pruned (flagged && prunedFromTrellis),
+   *     returns success without journal write, GRAPH_UPDATED emit, or
+   *     delegate call.
+   *
+   * Emit: trellisActionsService.prune emits ANCHOR_DELETED (NOT
+   * GRAPH_UPDATED). The command boundary then emits GRAPH_UPDATED with
+   * payload.kind='prune'. The two events have distinct types, so there
+   * is no double-emit risk on this verb (unlike delete + merge).
+   */
+  async prune(anchorId: string, _opts?: { signal?: AbortSignal }): Promise<ServiceResult<void>> {
+    let result: ServiceResult<void> = { success: true };
+
+    await _mutex.run(async () => {
+      const store = questionService.getAll({ includeFlagged: true });
+      const target = store.find((q) => q.id === anchorId);
+      if (!target) {
+        result = fail('NOT_FOUND', `Question ${anchorId} not found.`, false);
+        return;
+      }
+
+      // R6 — prune is for anchors only. QAs and clusters use different
+      // verbs (detach + delete).
+      if (target.isAnchorNode !== true) {
+        result = fail(
+          'VALIDATION_ERROR',
+          'Prune is for anchors only — Q&As use detach, clusters use delete.',
+          false,
+        );
+        return;
+      }
+
+      // No-op guard — already pruned. trellisActionsService.prune is
+      // idempotent at the store level, but we still skip the journal +
+      // emit to avoid noisy reorg-prompt entries.
+      if (target.flagged === true && target.prunedFromTrellis === true) {
+        result = { success: true };
+        return;
+      }
+
+      const before = {
+        flagged: target.flagged ?? false,
+        prunedFromTrellis: target.prunedFromTrellis ?? false,
+      };
+
+      // R6 / D-14 — delegate to trellisActionsService. This patches the
+      // anchor (flagged=true + prunedFromTrellis=true) AND emits
+      // ANCHOR_DELETED (preserving PrunedSection's existing subscriber
+      // chain). Synchronous; returns { pruned: true }.
+      trellisActionsService.prune(anchorId);
+
+      // Journal — one entry per command per D-17.
+      graphEditJournal.append({
+        cmd: 'prune',
+        targetIds: [anchorId],
+        before,
+        after: { flagged: true, prunedFromTrellis: true },
+      });
+
+      // D-17 — single typed emit. trellisActionsService.prune emits
+      // ANCHOR_DELETED (different type), NOT GRAPH_UPDATED, so the
+      // command-boundary emit is the ONLY GRAPH_UPDATED. No double-emit
+      // risk on this verb (contrast with delete + merge).
+      eventBus.emit({
+        type: 'GRAPH_UPDATED',
+        payload: { kind: 'prune', anchorId },
+      });
+
+      result = { success: true };
+    });
+
+    return result;
   },
 
   // ─── Plan 48-04 stub ─────────────────────────────────────────────────────
