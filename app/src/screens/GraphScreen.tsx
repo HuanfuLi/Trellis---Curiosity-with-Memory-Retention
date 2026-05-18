@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import MindElixir from 'mind-elixir';
 import 'mind-elixir/style';
@@ -16,6 +16,7 @@ import { settingsService } from '../services/settings.service';
 import { eventBus } from '../lib/event-bus';
 import { createLongPressOrDragMachine } from '../hooks/useLongPressOrDrag';
 import { DragOverlay, type DragState, type DropTargetSnapshot } from '../components/graph/DragOverlay';
+import { CorrectionCard, getActionsForNode, type CorrectionAction } from '../components/graph/CorrectionCard';
 import { hapticImpactMedium } from '../lib/haptics';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -648,6 +649,7 @@ let cachedEdges: GraphEdge[] | null = null;
 
 export function GraphScreen() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useTranslation();
   // With the swipe strip, GraphScreen is always mounted at full width —
   // keeping it visible prevents it from disappearing during horizontal swiping.
@@ -663,13 +665,10 @@ export function GraphScreen() {
   const [dropTargets, setDropTargets] = useState<DropTargetSnapshot[]>([]);
   // Phase 49-01 — Plan 49-03 will read mergeConfirm to mount MergeConfirmPreview.
   const [mergeConfirm, setMergeConfirm] = useState<{ loser: Question; survivor: Question } | null>(null);
-  // Phase 49-01 stub — Plan 49-02 reconciles to the canonical declaration plus
-  // the action-list card mount.
+  // Phase 49-02 — captured long-press release coordinates feed CorrectionCard placement.
   const [correctionNode, setCorrectionNode] = useState<{ node: Question; anchorX: number; anchorY: number } | null>(null);
-  // Silence "declared but never read" for the two Plan-49-02/03 stub states;
-  // these are referenced by downstream plans' tests but not yet rendered.
+  // Silence "declared but never read" for the Plan-49-03 stub state.
   void mergeConfirm;
-  void correctionNode;
 
   // Keep dragState accessible from the gesture handler closure (which lives
   // in MasterMap's useEffect). The handler reads via this ref to decide
@@ -737,14 +736,56 @@ export function GraphScreen() {
         toast(t('graph.correction.toast.branchNotEditable'), 'info');
         return;
       }
-      // Anchor / Cluster / QA-leaf — Plan 49-02 replaces this stub with the
-      // full CorrectionCard mount. For now: dismiss inspector + capture the
-      // selected node so the consumer plan can render the card.
+      // B-6 guard: orphan / flagged / malformed nodes return [] from the
+      // matrix — silent return (no empty card per Plan 49-02 plan-checker B-6).
+      const sourceNode = node as Question;
+      const actions = getActionsForNode(sourceNode);
+      if (actions.length === 0) {
+        return;
+      }
+      // Anchor / Cluster / QA-leaf — dismiss inspector (D-03 coexistence rule)
+      // and open the CorrectionCard at the release point.
       setSelectedNode(null);
-      setCorrectionNode({ node: node as Question, anchorX: x, anchorY: y });
+      setCorrectionNode({ node: sourceNode, anchorX: x, anchorY: y });
     },
     [t],
   );
+
+  // Plan 49-02 — dispatch CorrectionCard action selections. Rename is owned
+  // by the card itself (inline graphCommandService.rename); other branches
+  // are stubbed here and filled in by Plans 49-03 + 49-04.
+  const handleCorrectionAction = useCallback(
+    (action: CorrectionAction) => {
+      switch (action.kind) {
+        case 'rename':
+          // Inline rename — CorrectionCard already committed via graphCommandService.rename
+          // and called onClose. Nothing to do here.
+          return;
+        case 'move':
+        case 'merge':
+        case 'prune':
+        case 'detach':
+        case 'delete':
+          // Stubs — Plans 49-03 (delete + merge confirm) and 49-04 (move/merge
+          // pickMode, prune snackbar, detach toast) replace these.
+          console.warn(`[Phase 49-02] correction action "${action.kind}" pending Plans 49-03/04`);
+          setCorrectionNode(null);
+          return;
+      }
+    },
+    [],
+  );
+
+  // Plan 49-02 — B-4 + CLAUDE.md always-mounted-screen invariant.
+  // Reset surfaces when the user navigates away from /graph so re-entering
+  // the tab does not show stale UI captured before navigation.
+  useEffect(() => {
+    if (location.pathname !== '/graph') {
+      setCorrectionNode(null);
+      setDragState(null);
+      // pickMode reset is added in Plan 49-04 alongside pickMode declaration.
+    }
+  }, [location.pathname]);
 
   const handleDragStart = useCallback(
     (state: DragState, targets: DropTargetSnapshot[]) => {
@@ -870,6 +911,30 @@ export function GraphScreen() {
 
       {/* Phase 49-01 — portaled drag overlay (ghost + origin-line + halo). */}
       <DragOverlay dragState={dragState} targets={dropTargets} />
+
+      {/* Phase 49-02 — CorrectionCard + tap-outside backdrop. */}
+      {correctionNode && (
+        <>
+          <div
+            onClick={() => setCorrectionNode(null)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 249,
+              backgroundColor: 'transparent',
+              pointerEvents: 'auto',
+            }}
+          />
+          <CorrectionCard
+            node={correctionNode.node}
+            anchorX={correctionNode.anchorX}
+            anchorY={correctionNode.anchorY}
+            isReorganizing={reorganizing}
+            onClose={() => setCorrectionNode(null)}
+            onActionSelected={handleCorrectionAction}
+          />
+        </>
+      )}
 
           {selectedNode && (
             <div
