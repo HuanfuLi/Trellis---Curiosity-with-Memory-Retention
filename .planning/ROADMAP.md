@@ -61,7 +61,7 @@ There is **no foundation phase**. The prior agent's FOUND-01..05 scaffolding (cr
   4. In-flight classification or global reorganization results cannot overwrite protected manual corrections.
 **Plans**: 4 plans
 **Wave 1**
-- [ ] 48-01-PLAN.md — Wave 1: graph-edit-journal.service + GraphEditLogEntry type + GRAPH_UPDATED payload extension + reorganizeMindmap prompt injection (GRAPH-04)
+- [x] 48-01-PLAN.md — Wave 1: graph-edit-journal.service + GraphEditLogEntry type + GRAPH_UPDATED payload extension + reorganizeMindmap prompt injection (GRAPH-04) — 2026-05-17
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 48-02-PLAN.md — Wave 2: graph-command.service skeleton + rename + move + delete (GRAPH-01, GRAPH-02, GRAPH-03)
