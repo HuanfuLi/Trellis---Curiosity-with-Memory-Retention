@@ -42,7 +42,12 @@
 //   - onChange debounces via `clearTimeout` + `setTimeout` ~200ms (CONTEXT.md
 //     Claude's Discretion). Input echo is instant via `inputDraft`; Fuse
 //     re-search waits 200ms idle.
-//   - Switching tabs clears query + ALL 3 filter chips (RESEARCH §Pitfall 8).
+//   - Switching tabs preserves query, clears filter chips + flushes debounce
+//     timer (50-12 G6 fix; 50-VALIDATION.md row 4 + D-11).
+//   - 50-12 gap closure: G2 chip-blur-race fix (onPointerDown preventDefault),
+//     G6 tab-change preserves query (only filters + debounce timer reset;
+//     query persists per 50-VALIDATION.md row 4), G7 fixed-value chip padding
+//     for visual rhythm.
 //   - Query is capped at 200 chars at the service boundary (library-search
 //     service `capQuery`); SavedScreen does NOT cap upstream.
 //   - Result row title rendered via HighlightedText with Fuse match indices;
@@ -361,13 +366,23 @@ function FilterChip({ label, active, onTap, onClear }: FilterChipProps) {
   return (
     <button
       type="button"
+      // G2 fix (50-12): preventDefault on pointer/mouse down suppresses the search
+      // input's blur so the chip-row latch (showFilterChips) does not collapse before
+      // onClick fires. Required for the empty-query path where searchFocused /
+      // inputDraft / anyFilterActive are all falsey and the latch hinges entirely on
+      // input focus.
+      onPointerDown={(e) => { e.preventDefault(); }}
+      onMouseDown={(e) => { e.preventDefault(); }}
       onClick={onTap}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
         gap: '4px',
         height: '32px',
-        padding: '0 12px',
+        // G7 fix (50-12): fixed 6px/12px padding for rhythm. Concept/Source/Date
+        // label widths vary; without explicit vertical pad the perceived chip
+        // height drifted by glyph descender.
+        padding: '6px 12px',
         borderRadius: 'var(--radius-pill)',
         fontSize: '12px',
         fontWeight: 500,
@@ -492,13 +507,14 @@ export default function SavedScreen() {
     return unsub;
   }, []);
 
-  // Tab-change reset (RESEARCH §Pitfall 8): clear query + all 3 filter chips
-  // when active tab changes. Tab corpora are independent so leftover
-  // query/filters from a previous tab would feel broken.
+  // Tab-change reset (50-09 + 50-12 gap G6 fix). Pitfall 8 means flush the
+  // pending debounce TIMER so a stale setTimeout from the previous tab does not
+  // bleed results into the new tab. It does NOT mean clear the user-typed query
+  // — per 50-VALIDATION.md row 4 and D-11, query persists across tab change and
+  // Fuse re-indexes against the new tab's corpus automatically (the index
+  // useMemo is keyed on [activeTab, ...]).
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    setInputDraft('');
-    setQuery('');
     setFilterConcept(null);
     setFilterSource(null);
     setFilterDate('all');
