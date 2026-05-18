@@ -4,6 +4,7 @@
     "cancel": "キャンセル",
     "save": "保存",
     "delete": "削除",
+    "undo": "元に戻す",
     "greeting": {
       "morning": "おはようございます",
       "afternoon": "こんにちは",

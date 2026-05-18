@@ -4,6 +4,7 @@
     "cancel": "Cancel",
     "save": "Save",
     "delete": "Delete",
+    "undo": "Undo",
     "greeting": {
       "morning": "Good Morning",
       "afternoon": "Good Afternoon",
