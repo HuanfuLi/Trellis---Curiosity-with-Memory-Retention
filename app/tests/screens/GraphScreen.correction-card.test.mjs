@@ -197,3 +197,115 @@ test('Test G — useEffect resets correctionNode on tab navigation away from /gr
     'reset effect deps must be [location.pathname]',
   );
 });
+
+// ─── Plan 49-04 new tests ────────────────────────────────────────────────────
+
+test('Test 7 — pickMode state declared with originalAnchorX/Y shape (W-2)', () => {
+  const src = readSrc();
+  // pickMode state shape must declare kind, sourceNode, originalAnchorX,
+  // originalAnchorY. The single useState call captures all four fields.
+  assert.match(
+    src,
+    /useState<\{[\s\S]*?kind:\s*['"]move['"]\s*\|\s*['"]merge['"][\s\S]*?sourceNode:\s*Question[\s\S]*?originalAnchorX:\s*number[\s\S]*?originalAnchorY:\s*number[\s\S]*?\}\s*\|\s*null>\(null\)/,
+    'pickMode state must be typed `{ kind, sourceNode, originalAnchorX, originalAnchorY } | null` (W-2)',
+  );
+});
+
+test('Test 8 — always-mounted reset effect extended to clear pickMode', () => {
+  const src = readSrc();
+  // The reset effect from Plan 49-02 must now also setPickMode(null) when
+  // navigating away from /graph. Easiest assertion: setPickMode(null) appears
+  // inside the same conditional block as setCorrectionNode(null).
+  assert.match(
+    src,
+    /if\s*\(\s*location\.pathname\s*!==\s*['"]\/graph['"]\s*\)\s*\{[\s\S]*?setCorrectionNode\(\s*null\s*\)[\s\S]*?setPickMode\(\s*null\s*\)/,
+    'reset effect must call setPickMode(null) alongside setCorrectionNode(null) when off /graph',
+  );
+});
+
+test('Test 9 — handleCorrectionAction move captures originalAnchorX/Y (W-2)', () => {
+  const src = readSrc();
+  // The 'move' case in handleCorrectionAction must set pickMode with
+  // originalAnchorX + originalAnchorY captured from correctionNode (anchorX/Y).
+  assert.match(
+    src,
+    /setPickMode\(\s*\{\s*kind:\s*['"]move['"][\s\S]*?originalAnchorX[\s\S]*?originalAnchorY[\s\S]*?\}\s*\)/,
+    'move case must setPickMode with originalAnchorX/Y captured at entry (W-2)',
+  );
+});
+
+test('Test 10 — handleCorrectionAction merge captures originalAnchorX/Y (W-2)', () => {
+  const src = readSrc();
+  assert.match(
+    src,
+    /setPickMode\(\s*\{\s*kind:\s*['"]merge['"][\s\S]*?originalAnchorX[\s\S]*?originalAnchorY[\s\S]*?\}\s*\)/,
+    'merge case must setPickMode with originalAnchorX/Y captured at entry (W-2)',
+  );
+});
+
+test('Test 11 — pick-mode tap interception checks isClusterNode / isAnchorNode', () => {
+  const src = readSrc();
+  // The delegated click listener must consult pickMode (via ref) and validate
+  // against kind: move → cluster, merge → anchor. Invalid → toast invalidTarget.
+  assert.match(
+    src,
+    /pickModeRef/,
+    'must use a pickModeRef to read latest pickMode inside the delegated listener closure',
+  );
+  assert.match(
+    src,
+    /graph\.correction\.pickMode\.invalidTarget/,
+    'invalid-target tap must toast graph.correction.pickMode.invalidTarget',
+  );
+});
+
+test('Test 12 — valid pick-mode tap commits via graphCommandService.move OR opens mergeConfirm', () => {
+  const src = readSrc();
+  // The pick-mode commit path must:
+  //  - call graphCommandService.move(sourceNode.id, target.id) on a move kind.
+  //  - OR set mergeConfirm = { loser, survivor } on a merge kind so the
+  //    existing ConfirmDialog (Plan 49-03) takes over.
+  // The branch must appear inside the pickModeRef-gated block of the click
+  // listener. We assert the call AND the mergeConfirm branch are present.
+  assert.match(
+    src,
+    /pickModeRef\.current[\s\S]*?graphCommandService\.move\(/,
+    'pick-mode move branch must call graphCommandService.move(...)',
+  );
+  assert.match(
+    src,
+    /pickModeRef\.current[\s\S]*?setMergeConfirm\(/,
+    'pick-mode merge branch must setMergeConfirm({ loser, survivor })',
+  );
+});
+
+test('Test 13 — handlePickModeCancel restores correction card AT ORIGINAL COORDS (W-2)', () => {
+  const src = readSrc();
+  // The cancel handler must read pickMode.originalAnchorX + pickMode.originalAnchorY
+  // and pass them as the CorrectionCard anchor coords.
+  assert.match(
+    src,
+    /pickMode\.originalAnchorX/,
+    'handlePickModeCancel must reference pickMode.originalAnchorX',
+  );
+  assert.match(
+    src,
+    /pickMode\.originalAnchorY/,
+    'handlePickModeCancel must reference pickMode.originalAnchorY',
+  );
+  // NEGATIVE: must NOT use window.innerWidth / 2 as a center fallback (W-2).
+  assert.equal(
+    /window\.innerWidth\s*\/\s*2/.test(src),
+    false,
+    'must NOT use window.innerWidth/2 as anchor fallback (W-2 enforcement)',
+  );
+});
+
+test('Test 14 — GraphScreen mounts PickModeBanner with onCancel + pickMode props', () => {
+  const src = readSrc();
+  assert.match(
+    src,
+    /<PickModeBanner\s/,
+    'must render <PickModeBanner ...> when pickMode !== null',
+  );
+});
