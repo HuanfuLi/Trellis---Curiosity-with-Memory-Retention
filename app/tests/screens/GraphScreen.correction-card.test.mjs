@@ -155,7 +155,7 @@ test('Test E — tap-outside backdrop dismisses correctionNode (zIndex 249)', ()
   );
 });
 
-test('Test F — onLongPressRelease short-circuits root/branch + checks getActionsForNode length', () => {
+test('Test F — onLongPressRecognized short-circuits root/branch + checks getActionsForNode length', () => {
   const src = readSrc();
   // Root toast remains (Plan 49-01 wired) and still uses toast.rootNotEditable.
   assert.match(

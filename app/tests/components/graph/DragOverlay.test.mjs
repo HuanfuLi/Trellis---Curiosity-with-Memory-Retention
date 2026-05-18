@@ -94,3 +94,35 @@ test('DragOverlay.tsx exports DragOverlay, DragState, DropTargetSnapshot', () =>
   assert.match(src, /export\s+interface\s+DragState\b/, 'must export DragState interface');
   assert.match(src, /export\s+interface\s+DropTargetSnapshot\b/, 'must export DropTargetSnapshot interface');
 });
+
+// Phase 49-06 sibling-tick lifecycle (W-9): CorrectionCard mounts at the 480ms
+// recognition tick; DragOverlay mounts at the drag-start tick (480ms + 8px move).
+// These are two separate ticks. The recognition handler must NOT construct a
+// DragState — DragState construction lives inside the factory's onDragStart
+// callback only.
+test('DragOverlay mounts at drag-start, NOT at recognition (lifecycle separation)', () => {
+  const GS_PATH = resolve(here, '../../../src/screens/GraphScreen.tsx');
+  const gs = readFileSync(GS_PATH, 'utf-8');
+
+  // The recognition handler (factory onLongPressRecognized callback) must NOT
+  // construct a DragState. Source-reading the factory option block.
+  const recognitionIdx = gs.indexOf('onLongPressRecognized: (x, y) =>');
+  assert.ok(recognitionIdx > 0, 'factory option onLongPressRecognized must exist');
+  // Scan until the next factory option (onDragStart) to bound the slice.
+  const dragStartOptionIdx = gs.indexOf('onDragStart: (x, y) =>', recognitionIdx);
+  assert.ok(dragStartOptionIdx > recognitionIdx, 'factory option onDragStart must exist after recognition');
+  const recognitionSlice = gs.slice(recognitionIdx, dragStartOptionIdx);
+  assert.doesNotMatch(
+    recognitionSlice,
+    /sourceNode:\s*activeSourceNode/,
+    'DragState construction (sourceNode field) must NOT appear inside the recognition handler — it belongs to onDragStart (sibling-tick lifecycle)',
+  );
+
+  // The drag-start factory option must construct a DragState.
+  const dragStartSlice = gs.slice(dragStartOptionIdx, dragStartOptionIdx + 2000);
+  assert.match(
+    dragStartSlice,
+    /sourceNode:\s*activeSourceNode/,
+    'DragState construction must remain inside the factory onDragStart callback',
+  );
+});

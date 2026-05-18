@@ -207,7 +207,9 @@ interface MasterMapProps {
   edges: GraphEdge[];
   onNodeClick: (q: Question) => void;
   // Phase 49-01 — gesture engine callbacks (W-3 LOCKED — factory-driven delegated listener).
-  onLongPressRelease: (
+  // Phase 49-06 — fires INSIDE the 480ms timer (mid-press); CorrectionCard mounts
+  // while the finger is still down (matches useLongPress.ts:42-45 convention).
+  onLongPressRecognized: (
     node: Question | { kind: 'root' } | { kind: 'branch'; id: string },
     x: number,
     y: number,
@@ -245,7 +247,7 @@ function MasterMap({
   edges,
   onNodeClick,
   isVisible,
-  onLongPressRelease,
+  onLongPressRecognized,
   onDragStart,
   onDragMove,
   onDragEnd,
@@ -265,13 +267,13 @@ function MasterMap({
   // Phase 49-01 — gesture callbacks captured via refs so the delegated
   // listener closure always sees the latest GraphScreen state setters
   // without forcing a heavy MindElixir re-init on callback identity change.
-  const onLongPressReleaseRef = useRef(onLongPressRelease);
+  const onLongPressRecognizedRef = useRef(onLongPressRecognized);
   const onDragStartRef = useRef(onDragStart);
   const onDragMoveRef = useRef(onDragMove);
   const onDragEndRef = useRef(onDragEnd);
   // Phase 49-04 — pick-mode tap interception ref (same callback-ref pattern).
   const onPickModeTapRef = useRef(onPickModeTap);
-  useEffect(() => { onLongPressReleaseRef.current = onLongPressRelease; }, [onLongPressRelease]);
+  useEffect(() => { onLongPressRecognizedRef.current = onLongPressRecognized; }, [onLongPressRecognized]);
   useEffect(() => { onDragStartRef.current = onDragStart; }, [onDragStart]);
   useEffect(() => { onDragMoveRef.current = onDragMove; }, [onDragMove]);
   useEffect(() => { onDragEndRef.current = onDragEnd; }, [onDragEnd]);
@@ -376,10 +378,19 @@ function MasterMap({
     // factory, not hook indirection) so the closure can see latest GraphScreen
     // state via callback refs.
     //
-    // Critical invariants (RESEARCH §R1):
+    // Critical invariants (RESEARCH §R1 + 49-06 gap closure):
     //  - Do NOT stopPropagation() on raw pointerdown — MindElixir's pan still
     //    needs the pointer until long-press is recognized.
-    //  - setPointerCapture only inside onDragStart (after long-press fires).
+    //  - DO stopPropagation() in a CAPTURE-PHASE pointermove listener AFTER
+    //    recognition (480ms tick). Engages inside the factory's
+    //    onLongPressRecognized callback; torn down on pointerup/pointercancel.
+    //  - Also at recognition: call instanceRef.current?.dragMoveHelper?.clear()
+    //    to reset MindElixir's internal mousedown flag (MindElixir.js:908 +
+    //    MindElixir.js:1045). Tier-b fallback mutates helper.mousedown=false
+    //    if dragMoveHelper.clear() is unavailable.
+    //  - setPointerCapture is now called at recognition (on containerRef.current,
+    //    NOT the target node) — the Pointer Events spec releases capture on
+    //    pointerup/cancel automatically.
     //  - touchAction: 'none' on the container (existing) + data-no-swipe-nav
     //    must remain untouched.
     let activeMachine: ReturnType<typeof createLongPressOrDragMachine> | null = null;
@@ -387,6 +398,10 @@ function MasterMap({
     let activeNode: Question | { kind: 'root' } | { kind: 'branch'; id: string } | null = null;
     let activeSnapshot: DropTargetSnapshot[] = [];
     let activePointerDownEvent: PointerEvent | null = null;
+    // Phase 49-06 — capture-phase pan suppressor reference. Stored on a higher-scope
+    // variable so handlePointerUp / handlePointerCancel can remove the same function
+    // reference. null when no gesture is mid-flight.
+    let activePanSuppressor: ((e: PointerEvent) => void) | null = null;
 
     const findNodeFromTarget = (
       target: EventTarget | null,
@@ -436,17 +451,65 @@ function MasterMap({
       activeMachine = createLongPressOrDragMachine({
         longPressMs: 480,
         dragThresholdPx: 8,
-        onLongPressRelease: (x, y) => {
+        onLongPressRecognized: (x, y) => {
           if (activeNode === null) return;
-          onLongPressReleaseRef.current(activeNode, x, y);
-        },
-        onDragStart: (x, y) => {
-          if (!activeSourceNode) return; // root/branch can't drag
+          // Fire the GraphScreen-level recognition handler (mounts CorrectionCard).
+          onLongPressRecognizedRef.current(activeNode, x, y);
+
+          // ─── Phase 49-06 — MindElixir pan suppression (engaged at recognition) ──
+          //
+          // MindElixir co-registers pointerdown/move/up listeners on the SAME
+          // container (MindElixir.js:1095-1101). With editable:false, its
+          // pointerdown handler ALWAYS sets t.mousedown=true and pans the map
+          // on every subsequent pointermove (MindElixir.js:1044-1075). Three
+          // layered defenses are required because pointer-event capture alone
+          // does NOT stop co-registered listeners on the same element from
+          // firing.
+
+          // Tier a — call dragMoveHelper.clear() to reset MindElixir's internal
+          // mousedown flag set in MindElixir.js:1045. Evidence: MindElixir.js:908
+          // invokes the same clear() internally.
           try {
-            (pointerdownEvent.target as Element).setPointerCapture?.(pointerdownEvent.pointerId);
+            instanceRef.current?.dragMoveHelper?.clear();
+          } catch {
+            /* ignore — defensive against MindElixir internal-shape drift */
+          }
+
+          // Tier b — direct mousedown=false mutation as last-resort fallback.
+          // The tier-a call SHOULD have set mousedown=false already; this is
+          // the safety net if dragMoveHelper.clear()'s shape changes in a
+          // future MindElixir release.
+          try {
+            const helper = (instanceRef.current as unknown as { dragMoveHelper?: { mousedown?: boolean } })?.dragMoveHelper;
+            if (helper) helper.mousedown = false;
+          } catch {
+            /* ignore — defensive against MindElixir internal-shape drift */
+          }
+
+          // Capture-phase pointermove listener — stops MindElixir's bubbling
+          // listener on the same element from firing. Stored on activePanSuppressor
+          // so handlePointerUp / handlePointerCancel remove the SAME function ref.
+          const capturePanSuppressor = (e: PointerEvent) => e.stopPropagation();
+          activePanSuppressor = capturePanSuppressor;
+          try {
+            containerRef.current?.addEventListener('pointermove', capturePanSuppressor, { capture: true });
+          } catch {
+            /* ignore — non-DOM test environments */
+          }
+
+          // Pointer capture transfer (W-10). Calling setPointerCapture on the
+          // container silently transfers capture from MindElixir's prior capture
+          // taken at MindElixir.js:1045. Per the Pointer Events spec, the browser
+          // releases capture on pointerup/cancel automatically — no explicit
+          // releasePointerCapture is required.
+          try {
+            containerRef.current?.setPointerCapture?.(pointerdownEvent.pointerId);
           } catch {
             /* ignore — non-Pointer-capture browsers (e.g. tests) */
           }
+        },
+        onDragStart: (x, y) => {
+          if (!activeSourceNode) return; // root/branch can't drag
           const originRect = (pointerdownEvent.target as HTMLElement).getBoundingClientRect();
           const initialDragState: DragState = {
             sourceNode: activeSourceNode,
@@ -486,6 +549,16 @@ function MasterMap({
     const handlePointerMove = (e: PointerEvent) => activeMachine?.onPointerMove(e);
     const handlePointerUp = (e: PointerEvent) => {
       activeMachine?.onPointerUp(e);
+      // Phase 49-06 — tear down capture-phase pan suppressor BEFORE the
+      // null-outs so the same function reference is passed to removeEventListener.
+      if (activePanSuppressor) {
+        try {
+          containerRef.current?.removeEventListener('pointermove', activePanSuppressor, { capture: true } as unknown as EventListenerOptions);
+        } catch {
+          /* ignore */
+        }
+        activePanSuppressor = null;
+      }
       activeMachine = null;
       activeSourceNode = null;
       activeNode = null;
@@ -494,6 +567,15 @@ function MasterMap({
     };
     const handlePointerCancel = (e: PointerEvent) => {
       activeMachine?.onPointerCancel(e);
+      // Phase 49-06 — tear down capture-phase pan suppressor BEFORE the null-outs.
+      if (activePanSuppressor) {
+        try {
+          containerRef.current?.removeEventListener('pointermove', activePanSuppressor, { capture: true } as unknown as EventListenerOptions);
+        } catch {
+          /* ignore */
+        }
+        activePanSuppressor = null;
+      }
       activeMachine = null;
       activeSourceNode = null;
       activeNode = null;
@@ -766,7 +848,7 @@ export function GraphScreen() {
 
   // ─── Phase 49-01 — gesture callbacks fed to MasterMap ────────────────────────
 
-  const handleLongPressRelease = useCallback(
+  const handleLongPressRecognized = useCallback(
     (
       node: Question | { kind: 'root' } | { kind: 'branch'; id: string },
       x: number,
@@ -1044,6 +1126,12 @@ export function GraphScreen() {
 
   const handleDragStart = useCallback(
     (state: DragState, targets: DropTargetSnapshot[]) => {
+      // Phase 49-06 / D-01 — long-press-release and long-press-drag are mutually
+      // exclusive outcomes (49-CONTEXT.md). When the gesture transitions past the
+      // 8px threshold the CorrectionCard mounted at recognition must dismiss.
+      // This MUST be the first statement so the dismiss happens before any
+      // observable side-effects from the drag state.
+      setCorrectionNode(null);
       setDropTargets(targets);
       setDragState(state);
     },
@@ -1253,7 +1341,7 @@ export function GraphScreen() {
         edges={edges}
         onNodeClick={setSelectedNode}
         isVisible={isVisible}
-        onLongPressRelease={handleLongPressRelease}
+        onLongPressRecognized={handleLongPressRecognized}
         onDragStart={handleDragStart}
         onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}

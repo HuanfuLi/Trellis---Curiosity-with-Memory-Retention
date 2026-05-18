@@ -62,7 +62,7 @@ function pe(type, x, y, extras = {}) {
 
 // Phase 49-06 gap closure: recognition signal MUST fire inside the 480ms
 // timer BEFORE any pointerup call. Previously this test waited 25ms then
-// called pointerup then asserted onLongPressRelease — encoding the bug.
+// called pointerup then asserted the old release callback — encoding the bug.
 test('Test 1: onLongPressRecognized fires INSIDE the 480ms timer, BEFORE pointerup', async () => {
   const mod = await import('../../src/hooks/useLongPressOrDrag.ts');
   const { createLongPressOrDragMachine } = mod;
@@ -271,10 +271,10 @@ test('Test 8: useLongPressOrDrag (hook wrapper) is exported and returns { bind, 
 
 // Phase 49-06 gap closure — negative source-reading. Dynamic identifier
 // construction (string-split-and-join) keeps the literal byte sequence out of
-// the test source so Task 2's `! grep -rn "onLongPressRelease" src tests` grep
-// gate remains satisfiable. A literal `/onLongPressRelease/` regex here would
-// trip the gate on this test file itself.
-test('Test 9: useLongPressOrDrag.ts source has no remaining onLongPressRelease identifier', () => {
+// the test source so Task 2's grep gate (scanning app/src + app/tests for the
+// banned identifier) remains satisfiable. A literal regex against the banned
+// identifier here would trip the gate on this test file itself.
+test('Test 9: hook source has no remaining banned callback identifier', () => {
   const src = readFileSync(HOOK_PATH, 'utf-8');
   const banned   = ['onLongPress', 'Release'].join('');
   const expected = ['onLongPress', 'Recognized'].join('');
