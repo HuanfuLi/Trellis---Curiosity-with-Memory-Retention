@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Control, Graph Trust, Retrieval, and Ethical Engagement
 status: phase_48_in_progress
-stopped_at: Phase 48 Wave 1 complete (Plan 48-01 foundation: journal + GraphEditLogEntry + GRAPH_UPDATED payload + reorg-prompt injection landed across 5 atomic commits, 29/29 tests pass). Wave 2 (Plan 48-02 rename/move/delete) is next. Note: Phase 49 CONTEXT.md was gathered in parallel by a separate session (17 decisions across 4 gray areas — iOS gesture model; Undo at viewport corner) — ready for /gsd:plan-phase 49 after Phase 48 finishes.
+stopped_at: Phase 48 Waves 1+2 complete (Plan 48-01 foundation; Plan 48-02 rename/move/delete with Blocker #2/#4 + Warning #3/#4 fixes; 42/42 plan tests pass, full suite 1037/1041 modulo 4 pre-existing failures). Wave 3 next (Plan 48-03 merge/detach/prune → then Plan 48-04 undo+integration sequentially).
 last_updated: "2026-05-17"
 last_activity: 2026-05-17
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 10
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State: v1.6 ROADMAP OVERHAULED — 2026-05-15

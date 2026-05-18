@@ -64,7 +64,7 @@ There is **no foundation phase**. The prior agent's FOUND-01..05 scaffolding (cr
 - [x] 48-01-PLAN.md — Wave 1: graph-edit-journal.service + GraphEditLogEntry type + GRAPH_UPDATED payload extension + reorganizeMindmap prompt injection (GRAPH-04) — 2026-05-17
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 48-02-PLAN.md — Wave 2: graph-command.service skeleton + rename + move + delete (GRAPH-01, GRAPH-02, GRAPH-03)
+- [x] 48-02-PLAN.md — Wave 2: graph-command.service skeleton + rename + move + delete (GRAPH-01, GRAPH-02, GRAPH-03) — 2026-05-17
 
 **Wave 3** *(blocked on Wave 2 completion; Plan 48-04 sequenced after 48-03 to avoid concurrent edits of `graph-command.service.ts`)*
 - [ ] 48-03-PLAN.md — Wave 3: merge + detach + prune (GRAPH-03)
