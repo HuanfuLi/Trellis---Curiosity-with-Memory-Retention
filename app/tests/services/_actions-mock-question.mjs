@@ -19,9 +19,51 @@
 let _store = [];
 let _deleteFail = false;
 
+// Plan 48-04 Warning #6 fix — opt-in localStorage mirror (default OFF).
+// When enabled, every store mutation (patchQuestion / delete / restoreDeleted)
+// ALSO writes JSON.stringify(_store) to localStorage so the reload-survival
+// test can exercise the localStorage round-trip. Default OFF preserves
+// Plan 02 + Plan 03 test behavior exactly (their existing assertions never
+// hit localStorage; turning the mirror on by default would surface
+// quota/serialization noise into unrelated tests).
+let _localStorageMirrorEnabled = false;
+
+export function _enableLocalStorageMirror(enabled = true) {
+  _localStorageMirrorEnabled = !!enabled;
+}
+
+function _mirrorToStorageIfEnabled() {
+  if (!_localStorageMirrorEnabled) return;
+  try {
+    if (typeof localStorage !== 'undefined' && localStorage) {
+      localStorage.setItem('trellis_questions', JSON.stringify(_store));
+    }
+  } catch {
+    // Quota or other storage failure — silent (mirrors real
+    // saveStore() graceful degradation; the test asserts the
+    // SUCCESS path with sufficient quota).
+  }
+}
+
+export function _reloadFromStorage() {
+  try {
+    if (typeof localStorage === 'undefined' || !localStorage) {
+      _store = [];
+      return;
+    }
+    const raw = localStorage.getItem('trellis_questions');
+    _store = raw ? JSON.parse(raw) : [];
+  } catch {
+    _store = [];
+  }
+}
+
 export function _resetStore(questions) {
   _store = questions ? [...questions] : [];
   _deleteFail = false;
+  // Mirror the reset into storage too, so a reload after _resetStore
+  // sees the seeded state instead of yesterday's leftover.
+  _mirrorToStorageIfEnabled();
 }
 
 export function _getStore() {
@@ -47,6 +89,7 @@ export const questionService = {
     const idx = _store.findIndex((q) => q.id === questionId);
     if (idx !== -1) {
       _store[idx] = { ..._store[idx], ...patch };
+      _mirrorToStorageIfEnabled();
     }
   },
 
@@ -58,6 +101,7 @@ export const questionService = {
       };
     }
     _store = _store.filter((q) => q.id !== questionId);
+    _mirrorToStorageIfEnabled();
     // Mirror real impl: emit QUESTION_DELETED + (untyped) GRAPH_UPDATED.
     // The eventBus is imported lazily so we don't create a module-load
     // ordering trap when the mock is registered.
@@ -72,7 +116,17 @@ export const questionService = {
   // journal's full pre-image. Mirrors the real questionService.restoreDeleted
   // shape (sync write-through via saveStore, no separate emit — undo's
   // command-boundary emit covers the GRAPH_UPDATED).
+  //
+  // Warning #6 fix (revision 1): localStorage mirror is opt-in via
+  // _enableLocalStorageMirror(true). Default OFF preserves Plan 02 + Plan 03
+  // test behavior exactly.
   restoreDeleted(question) {
-    _store = [..._store, question];
+    const idx = _store.findIndex((q) => q.id === question.id);
+    if (idx === -1) {
+      _store = [..._store, question];
+    } else {
+      _store[idx] = question;
+    }
+    _mirrorToStorageIfEnabled();
   },
 };
