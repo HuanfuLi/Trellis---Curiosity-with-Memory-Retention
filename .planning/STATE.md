@@ -1,16 +1,17 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.6
-milestone_name: Control, Graph Trust, Retrieval, and Ethical Engagement
+milestone_name: milestone
 status: phase_49_in_progress
-stopped_at: Phase 49 (Graph Correction UI) execution in progress. 49-01 (gesture engine + DragOverlay + 14 Wave-0 scaffolds) shipped 2026-05-18 via commits 88fb509d/16d3ac94/fd0717c6/25f128cc + SUMMARY 2c0fa351. 49-02 (CorrectionCard + per-node-type matrix + reorg gate + B-4 useLocation + B-6 silent-return) shipped 2026-05-18 via commits 772bb4ad (feat — component + matrix + i18n stubs) + 920d9399 (feat — GraphScreen wiring + reset effect). 2 of 5 plans complete. Remaining: 49-03 (ConfirmDialog + Merge/Delete + extended Toast), 49-04 (UndoButton + PickModeBanner + soft-prune snackbar + detach toast), 49-05 (i18n full namespace + reload-survival harness). 16 test:main failures remain — all are Wave-0 scaffolds owned by 49-03/04/05 + 1 pre-existing concept-feed date-related flake; ZERO regression vs. 49-01 baseline.
-last_updated: "2026-05-18"
-last_activity: 2026-05-18
+stopped_at: Phase 50 context gathered
+last_updated: "2026-05-18T04:31:35.942Z"
+last_activity: "2026-05-18 — Plan 49-02 shipped sequentially on top of Plan 49-01. CorrectionCard built with per-node-type matrix (cluster=4, anchor=5, QA-leaf=2, orphan/flagged=[]) + inline Rename sub-flow via graphCommandService.rename + reorg-paused state. GraphScreen wired with useLocation explicit import (B-4 fix), always-mounted reset effect, B-6 silent-return guard. 18/18 source-reading + behavioral tests green; tsc -b --noEmit green; npm test:main 1032 pass / 16 fail (all pre-existing Wave-0 scaffolds owned by 49-03/04/05 + 1 documented date-related flake — ZERO regression). 5/5 plans in Phase 49 are planned; 2/5 executed; 3/5 remain."
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 15
   completed_plans: 12
+  percent: 29
 ---
 
 # Project State: v1.6 ROADMAP OVERHAULED — 2026-05-15
@@ -25,6 +26,7 @@ The v1.6 milestone (drafted 2026-05-13 by a prior agent) was overhauled after th
 4. **No demo urgency.** Presentation already happened; the questions came after. Plan for correctness.
 
 Plus the earlier 2026-05-15 corrections (during the same session, before the full overhaul):
+
 - Operator rejected the four-state ingestion triage (`Added to map / Chat only / Needs review / Security blocked`) the prior agent had introduced under INGEST-01..04.
 - Operator pushed back on the `normalizeQuestion()` migration framework I proposed under FOUND-02; for purely-additive optional fields, no normalize layer is needed.
 
@@ -119,11 +121,12 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-18
-Stopped at: Phase 49 in progress. Plan 49-02 complete. Plans 49-01 + 49-02 executed sequentially on main (no worktree). Resume from Plan 49-03 next.
+Last session: 2026-05-18T04:31:35.934Z
+Stopped at: Phase 50 context gathered
 Earlier 2026-05-17 — Phase 49 plan-phase complete. 5 plans written across 3 waves. Plan-checker iterated 2 times: iter 1 flagged 8 blockers (B-1 detach D-12 needs new anchorId but Phase 48 service returns void; B-2 questionService.getAll() shape mismatch x5 sites; B-3 merge/delete signature mismatches; B-4 useLocation not imported; B-5 UndoButton reads undoneCmd instead of summary; B-6 getActionsForNode edge cases; B-7 Wave 1 plans concurrently edit GraphScreen.tsx; B-8 Wave-0 scaffolds use describe.skip instead of failing tests) + 6 warnings. Planner revision applied all fixes; iter 2 PASS.
 
 Key Phase 49 artifacts:
+
 - 49-CONTEXT.md (D-01..D-17, iOS gesture model + corner Undo)
 - 49-DISCUSSION-LOG.md (operator reasoning audit; verbatim quotes for gesture + Undo placement)
 - 49-RESEARCH.md (R1..R19 + Files Inventory + Validation Architecture; Open Questions RESOLVED inline)
@@ -135,11 +138,12 @@ Critical resolution: detach D-12 (re-anchored vs no-op toast variants) implement
 
 Wave 1 ordering: 49-02 declares `depends_on: ["49-01"]` to serialize edits on GraphScreen.tsx within Wave 1. Executor sees Wave 1 = sequential [49-01 → 49-02].
 
-Resume file: `.planning/phases/49-graph-correction-ui/49-03-PLAN.md`. Next action is `/gsd:execute-phase 49-03`.
+Resume file: .planning/phases/50-retrieval-and-library-foundation/50-CONTEXT.md
 
 Prior — Phase 48 (Graph Command Service) COMPLETE on 2026-05-17. Verifier 16/16 must-haves verified. Service signatures: rename(id, newTitle), move(id, newParentId), merge(loserId, survivorId) → ServiceResult<{ reparentedCount, newSurvivorQaCount }>, detach(qaId) → ServiceResult<void>, prune(id), delete(id) → ServiceResult<{ cascadedChildIds: string[] }>, undo() → ServiceResult<{ undoneCmd, targetIds, summary }>. questionService.getAll(opts?: { includeFlagged?: boolean }) returns Question[] directly. Critical inversion preserved: undo writes inverse journal entry with SAME cmd, swapped before/after.
 
 Key Phase 47 artifacts:
+
 - 6 plan summaries: `47-0{1..6}-SUMMARY.md`
 - Verification: `47-VERIFICATION.md`
 - Load-bearing CLAUDE.md sections added: "Question filter — dual-vector scoring (Phase 47 UAT-5)"
