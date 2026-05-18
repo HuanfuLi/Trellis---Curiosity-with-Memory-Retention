@@ -668,7 +668,16 @@ export type ErrorCode =
   | 'BLOCKED_MALICIOUS'
   // Phase 47 — pre-LLM filter gate (D-19). Returned from question.service.ask
   // when the abort signal fires during the pre-gate (LOCALE_CHANGED, etc.).
-  | 'ABORTED';
+  | 'ABORTED'
+  // Phase 48 — graphCommandService.delete returns this when the underlying
+  // questionService.delete reports { success: false } (e.g. SQLite write
+  // failure). Plan 48-02 Task 3 uses this for the Blocker #2 abort-before-
+  // journal path. Retryable: the operator can retry the command.
+  | 'STORAGE_ERROR'
+  // Phase 48 — Plan 48-02 ships graphCommandService with method-stubs for
+  // merge/detach/prune (filled in Plan 48-03) and undo (filled in Plan
+  // 48-04). Callers see NOT_IMPLEMENTED until the implementing plans land.
+  | 'NOT_IMPLEMENTED';
 
 export interface AskResult {
   question: Question;
