@@ -437,23 +437,13 @@ test('rename writes one journal entry with cmd="rename", targetIds=[id], before 
 // Behavioral test — stubs return NOT_IMPLEMENTED (Plans 03/04 will fill in)
 // ════════════════════════════════════════════════════════════════════════
 
-test('stubs: merge/detach/prune/undo return NOT_IMPLEMENTED (Plans 03/04 fill these)', async () => {
+test('stub: undo() returns NOT_IMPLEMENTED (Plan 04 will fill this in)', async () => {
   await resetAll();
   await freshImports();
   const { graphCommandService } = await import('../../src/services/graph-command.service.ts');
 
-  const m = await graphCommandService.merge('a', 'b');
-  assert.equal(m.success, false);
-  assert.equal(m.error.code, 'NOT_IMPLEMENTED');
-
-  const d = await graphCommandService.detach('a');
-  assert.equal(d.success, false);
-  assert.equal(d.error.code, 'NOT_IMPLEMENTED');
-
-  const p = await graphCommandService.prune('a');
-  assert.equal(p.success, false);
-  assert.equal(p.error.code, 'NOT_IMPLEMENTED');
-
+  // merge/detach/prune are no longer stubs after Plan 48-03 — only undo
+  // remains stubbed; Plan 48-04 implements it.
   const u = await graphCommandService.undo();
   assert.equal(u.success, false);
   assert.equal(u.error.code, 'NOT_IMPLEMENTED');

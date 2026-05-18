@@ -446,10 +446,203 @@ export const graphCommandService = {
     return result;
   },
 
-  // ─── Plan 48-03 stubs ────────────────────────────────────────────────────
+  // ─── Plan 48-03 ──────────────────────────────────────────────────────────
 
-  async merge(_loserId: string, _survivorId: string, _opts?: { signal?: AbortSignal }): Promise<ServiceResult<{ reparentedCount: number; newSurvivorQaCount: number }>> {
-    return fail<{ reparentedCount: number; newSurvivorQaCount: number }>('NOT_IMPLEMENTED', 'See Plan 48-03.', false);
+  /**
+   * Merge loser anchor into survivor. Reparents loser's children to
+   * survivor (D-09), recomputes survivor qaCount + nodeSummary (D-11),
+   * re-embeds survivor's title (D-11), hard-deletes loser (D-10).
+   *
+   * Direction is operator-supplied (D-07); service does NOT auto-pick by
+   * heuristic. Survivor preserves its title / clusterNodeId / parentId /
+   * branchLabel / clusterLabel (D-08) — cross-cluster merge case:
+   * survivor's cluster wins.
+   *
+   * Blocker #2 — abort-before-journal on storage failure: questionService.
+   * delete returns Promise<ServiceResult<void>>. If it reports
+   * { success: false }, we return STORAGE_ERROR WITHOUT writing a journal
+   * entry and WITHOUT emitting from the command boundary. Survivor +
+   * children are left in their re-parented / recomputed state — acceptable
+   * partial state per T-48-14 (operator can retry; the no-op nature of
+   * re-running patchQuestion with the same values prevents corruption).
+   *
+   * Blocker #4 — graceful survivor re-embed (mirrors rename's strategy):
+   *   - isConfigured=false  → skip embed entirely. Patch survivor with
+   *                           { qaCount, nodeSummary } only; OLD vector
+   *                           preserved by spread-merge.
+   *   - embed rejects       → catch + console.warn; same patch shape as
+   *                           the unconfigured path. OLD vector preserved.
+   *   - embed succeeds      → patch survivor with { qaCount, nodeSummary,
+   *                           embeddingVector } atomically in a SINGLE
+   *                           patchQuestion call.
+   *
+   * Per Blocker #4 fix (revision 1): never overwrite a vector with undefined. Either the new vector replaces it atomically, or the old vector stays. Mirrors rename's strategy and preserves D-11 retrieval-identity-degrades-gracefully.
+   *
+   * Warning #4 — double-emit accepted: questionService.delete(loserId)
+   * emits an untyped GRAPH_UPDATED at question.service.ts:569. The
+   * command boundary emits a SECOND, typed GRAPH_UPDATED with
+   * payload.kind === 'merge' AFTER delete succeeds AND journal append.
+   * The LAST event observed has the discriminator; subscribers are
+   * already idempotent per CLAUDE.md §"Event bus — unified GRAPH_UPDATED".
+   */
+  async merge(loserId: string, survivorId: string, _opts?: { signal?: AbortSignal }): Promise<ServiceResult<{ reparentedCount: number; newSurvivorQaCount: number }>> {
+    // R10 risk 13 — self-merge validation OUTSIDE the mutex (pure check).
+    if (loserId === survivorId) {
+      return fail<{ reparentedCount: number; newSurvivorQaCount: number }>(
+        'VALIDATION_ERROR',
+        'Cannot merge a node into itself.',
+        false,
+      );
+    }
+
+    let result: ServiceResult<{ reparentedCount: number; newSurvivorQaCount: number }> = {
+      success: true,
+      data: { reparentedCount: 0, newSurvivorQaCount: 0 },
+    };
+
+    await _mutex.run(async () => {
+      // Read fresh inside the mutex — Pattern 1 / R10 risk 1.
+      const store = questionService.getAll({ includeFlagged: true });
+      const loser = store.find((q) => q.id === loserId);
+      if (!loser) {
+        result = fail<{ reparentedCount: number; newSurvivorQaCount: number }>(
+          'NOT_FOUND',
+          `Loser ${loserId} not found.`,
+          false,
+        );
+        return;
+      }
+      const survivor = store.find((q) => q.id === survivorId);
+      if (!survivor) {
+        result = fail<{ reparentedCount: number; newSurvivorQaCount: number }>(
+          'NOT_FOUND',
+          `Survivor ${survivorId} not found.`,
+          false,
+        );
+        return;
+      }
+
+      const children = store.filter((q) => q.parentId === loserId);
+
+      // Snapshot pre-image for journal per D-04.
+      //   - before.loser = FULL Question so undo can resurrect verbatim.
+      //   - before.survivor = pre-merge values for fields we modify
+      //     (qaCount, nodeSummary, embeddingVector) so undo can restore.
+      //   - before.reparentedChildren = compact diff per child (OLD
+      //     parentage fields) — children stay in store, only parentage
+      //     changed (mirror of delete's reparentedChildren shape).
+      const before = {
+        loser: { ...loser },
+        survivor: {
+          qaCount: survivor.qaCount,
+          embeddingVector: survivor.embeddingVector,
+          nodeSummary: survivor.nodeSummary,
+        },
+        reparentedChildren: children.map((c) => ({
+          id: c.id,
+          parentId: c.parentId,
+          clusterNodeId: c.clusterNodeId,
+          branchLabel: c.branchLabel,
+          clusterLabel: c.clusterLabel,
+        })),
+      };
+
+      // ── Reparent children — survivor's parentage fields win (D-08/D-09) ──
+      for (const child of children) {
+        questionService.patchQuestion(child.id, {
+          parentId: survivorId,
+          clusterNodeId: survivor.clusterNodeId,
+          branchLabel: survivor.branchLabel,
+          clusterLabel: survivor.clusterLabel,
+        });
+      }
+
+      // ── Build new survivor nodeSummary ──
+      // Append `[childId] shortSummary` (Warning #3 — fallback to
+      // content.slice(0, 80) when shortSummary undefined).
+      const appendedLines = children.map((c) => {
+        const lineText = c.shortSummary ?? (c.content ? c.content.slice(0, 80) : '');
+        return `[${c.id}] ${lineText}`;
+      });
+      const newNodeSummary = survivor.nodeSummary
+        ? [survivor.nodeSummary, ...appendedLines].join('\n')
+        : appendedLines.join('\n');
+
+      // ── New survivor qaCount (D-11) = old + reparented count ──
+      const newQaCount = (survivor.qaCount ?? 0) + children.length;
+
+      // ── Embedding strategy — Blocker #4 graceful degradation ──
+      // Per Blocker #4 fix (revision 1): never overwrite a vector with undefined. Either the new vector replaces it atomically, or the old vector stays. Mirrors rename's strategy and preserves D-11 retrieval-identity-degrades-gracefully.
+      const embCfg = settingsService.getSync().embedding;
+      let newVec: number[] | undefined;
+      if (embCfg?.isConfigured === true) {
+        try {
+          newVec = await embedText(survivor.title ?? survivor.content ?? '', embCfg);
+        } catch (err) {
+          console.warn('[Trellis] merge survivor re-embed failed:', err);
+          newVec = undefined;
+        }
+      }
+      const survivorPatch: Partial<Question> = {
+        qaCount: newQaCount,
+        nodeSummary: newNodeSummary,
+      };
+      if (newVec !== undefined) {
+        survivorPatch.embeddingVector = newVec;
+      }
+      questionService.patchQuestion(survivorId, survivorPatch);
+
+      // ── Blocker #2 — hard-delete loser AFTER reparent + survivor update ──
+      // Inspect ServiceResult.success BEFORE journal + command-boundary emit.
+      const deleteResult = await questionService.delete(loserId);
+      if (deleteResult.success === false) {
+        // Abort BEFORE journal append AND BEFORE command-boundary emit.
+        // Children + survivor are in their updated state — acceptable
+        // partial per T-48-14; operator can retry.
+        const msg = deleteResult.error?.message ?? 'Hard delete of loser failed.';
+        result = fail<{ reparentedCount: number; newSurvivorQaCount: number }>(
+          'STORAGE_ERROR',
+          msg,
+          true,
+        );
+        return;
+      }
+
+      // Success — append journal entry, then emit typed GRAPH_UPDATED.
+      graphEditJournal.append({
+        cmd: 'merge',
+        targetIds: [loserId, survivorId],
+        before,
+        after: {
+          reparentedCount: children.length,
+          newSurvivorQaCount: newQaCount,
+        },
+      });
+
+      // NOTE: questionService.delete(loserId) at step "delete" already
+      // emitted an untyped GRAPH_UPDATED (question.service.ts:569). We
+      // emit a SECOND, typed GRAPH_UPDATED here so subscribers that
+      // filter on payload.kind === 'merge' see the discriminator.
+      // Subscribers are already idempotent per CLAUDE.md §"Event bus —
+      // unified GRAPH_UPDATED" — re-reading store twice is harmless. The
+      // LAST event observed has payload.kind === 'merge' (subscriber
+      // dedup pattern).
+      eventBus.emit({
+        type: 'GRAPH_UPDATED',
+        payload: {
+          kind: 'merge',
+          anchorId: survivorId,
+          affectedIds: [loserId, survivorId, ...children.map((c) => c.id)],
+        },
+      });
+
+      result = {
+        success: true,
+        data: { reparentedCount: children.length, newSurvivorQaCount: newQaCount },
+      };
+    });
+
+    return result;
   },
 
   async detach(_qaId: string, _opts?: { signal?: AbortSignal }): Promise<ServiceResult<void>> {
