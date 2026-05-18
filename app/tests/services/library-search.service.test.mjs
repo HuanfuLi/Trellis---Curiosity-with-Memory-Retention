@@ -3,6 +3,7 @@
 // Plan 50-02 wrote this file as a RED scaffold with assert.fail placeholders.
 // Plan 50-04 turns it GREEN by replacing each placeholder with a concrete
 // assertion against the real service (`src/services/library-search.service.ts`).
+// Plan 50-11 (gap G4) added regression tests G4-01..G4-05 for the threshold tightening to 0.3 + minMatchCharLength raise to 3.
 //
 // Guards three RESEARCH pitfalls + one STRIDE threat:
 //   - Pitfall 1: ignoreLocation: true — body match at pos 250 must still
@@ -274,5 +275,94 @@ describe('libraryService search — Phase 50 plan 50-04 (GREEN)', () => {
     assert.ok(byName.title > byName.bodyMarkdown, 'title weight must exceed body weight');
     assert.ok(byName.bodyMarkdown > byName.sourceQuestionTitles, 'body weight must exceed concept weight');
     assert.ok(byName.bodyMarkdown > byName.contextLabel, 'body weight must exceed source weight');
+  });
+});
+
+// ─── Plan 50-11 gap G4 regression tests ─────────────────────────────────────
+
+describe('libraryService search — Phase 50 plan 50-11 gap G4 regression', () => {
+  it('G4-01: "3D printing" query does NOT return unrelated Kanji post with scattered single-char overlap', () => {
+    const postA = makePost({
+      id: 'p-3d',
+      title: '3D Printing at Scale',
+      bodyMarkdown: 'An overview of fused deposition modeling and resin printing',
+    });
+    const postB = makePost({
+      id: 'p-kanji',
+      title: 'Recognizing Kanji Radicals',
+      bodyMarkdown: 'Kanji recognition relies on identifying repeated structural radicals (R) and stroke compositions; this differs from alphabetic recognition.',
+    });
+    const idx = buildIndex([postA, postB]);
+    const results = search(idx, '3D printing');
+    assert.ok(results.length >= 1, 'expected at least one match for "3D printing"');
+    assert.equal(results[0].item.id, postA.id, '3D printing post must be the top hit');
+    assert.ok(
+      results.every((r) => r.item.id !== postB.id),
+      'Kanji post must NOT appear in results — scattered single-char Bitap overlap is a false positive'
+    );
+  });
+
+  it('G4-02: "system" query highlights contiguous run only — no single-char stray fragments', () => {
+    const post = makePost({
+      id: 'p-system',
+      title: 'Understanding the System Prompt',
+      bodyMarkdown: 'The system prompt anchors the assistant behavior across turns.',
+    });
+    const idx = buildIndex([post]);
+    const results = search(idx, 'system');
+    assert.ok(results.length >= 1, 'expected at least one match for "system"');
+    const bodyMatch = results[0].matches?.find((m) => m.key === 'bodyMarkdown');
+    assert.ok(bodyMatch, 'expected a bodyMarkdown match entry');
+    // Every matched index pair on body must span at least 6 chars ("system".length)
+    for (const [start, end] of bodyMatch.indices) {
+      const runLen = end - start + 1;
+      assert.ok(runLen >= 6, `body match run [${start},${end}] has length ${runLen} — expected ≥ 6 for "system"`);
+    }
+  });
+
+  it('G4-03: single-character query "e" returns ZERO results (minMatchCharLength=3 rejection)', () => {
+    const corpus = [
+      makePost({ id: 'p-e1', title: 'Everything Everywhere', bodyMarkdown: 'extended edition' }),
+      makePost({ id: 'p-e2', title: 'Entropy Explained', bodyMarkdown: 'energy and equilibrium' }),
+    ];
+    const idx = buildIndex(corpus);
+    const results = search(idx, 'e');
+    assert.strictEqual(results.length, 0, 'single-char query "e" must return zero results');
+  });
+
+  it('G4-04: two-character query "at" returns ZERO results against non-prefix corpus (minMatchCharLength=3)', () => {
+    // Fuse.js minMatchCharLength suppresses match-run reporting for runs < 3 chars,
+    // but does NOT reject 2-char queries outright. Use a corpus where "at" has no
+    // strong prefix/substring alignment to exercise the threshold + minMatchCharLength
+    // combo rejecting weak fuzzy matches.
+    const corpus = [
+      makePost({ id: 'p-x1', title: 'Photosynthesis Overview', bodyMarkdown: 'chlorophyll pigments' }),
+      makePost({ id: 'p-x2', title: 'Quantum Mechanics', bodyMarkdown: 'wave function collapse' }),
+    ];
+    const idx = buildIndex(corpus);
+    const results = search(idx, 'at');
+    assert.strictEqual(results.length, 0, 'two-char query "at" must return zero results against unrelated corpus');
+  });
+
+  it('G4-05: late-body match at pos >= 200 still returns — ignoreLocation: true regression guard (Pitfall 1)', () => {
+    const phraseStart = LATE_BODY.indexOf('spaced repetition');
+    assert.ok(phraseStart >= 200, `setup check: phrase must be at ≥200 (got ${phraseStart})`);
+    const corpus = [
+      makePost({ id: 'p-late', title: 'Unrelated Title', bodyMarkdown: LATE_BODY }),
+      makePost({ id: 'p-other', title: 'Noise', bodyMarkdown: 'short unrelated body' }),
+    ];
+    const idx = buildIndex(corpus);
+    const results = search(idx, 'spaced repetition');
+    assert.ok(results.length >= 1, 'late-body match must return at least one result');
+    assert.ok(
+      results.some((r) => r.item.id === 'p-late'),
+      'post with late-body match must be in results — ignoreLocation: true is load-bearing'
+    );
+    // Verify the match indices confirm a late-position hit
+    const lateResult = results.find((r) => r.item.id === 'p-late');
+    const bodyMatch = lateResult.matches?.find((m) => m.key === 'bodyMarkdown');
+    assert.ok(bodyMatch, 'expected bodyMarkdown match entry');
+    const hasLateIndex = bodyMatch.indices.some(([start]) => start >= 200);
+    assert.ok(hasLateIndex, 'bodyMarkdown match must include an index pair starting at ≥ 200 (Pitfall 1 regression guard)');
   });
 });
