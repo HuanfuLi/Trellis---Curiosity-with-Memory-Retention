@@ -132,7 +132,7 @@ Plans:
 - [x] 50-10-PLAN.md — Gap closure G1+G3: CollectionPickerSheet no-refresh subscription + Saved pre-checked default
 - [x] 50-11-PLAN.md — Gap closure G4: FUSE_OPTIONS threshold/minMatchCharLength tuning
 - [x] 50-12-PLAN.md — Gap closure G2+G6+G7: SavedScreen chip blur-race + tab-preserves-query + chip padding
-- [ ] 50-13-PLAN.md — Gap closure G5: FilterPickerSheet overscroll-behavior: contain
+- [x] 50-13-PLAN.md — Gap closure G5: FilterPickerSheet overscroll-behavior: contain
 
 **UI hint**: yes
 
@@ -226,7 +226,7 @@ Phases execute in numeric order: 47 → 48 → 49 → 50 → 51 → 52 → 53
 | 47. Filter Redesign — Off-Topic + Malicious Prompt Prevention | 0/6 | Planned | - |
 | 48. Graph Command Service and Trust Invariants | TBD | Not started | - |
 | 49. Graph Correction UI | 5/6 | Complete    | 2026-05-18 |
-| 50. Retrieval and Library Foundation | 9/9 | Complete   | 2026-05-18 |
+| 50. Retrieval and Library Foundation | 13/13 | Complete   | 2026-05-18 |
 | 51. Concept Dashboard and Recovery Surfaces | TBD | Not started | - |
 | 52. Podcast Quality Defaults and Learner Controls | TBD | Not started | - |
 | 53. Engagement Guardrails + Provider Privacy | TBD | Not started | - |
