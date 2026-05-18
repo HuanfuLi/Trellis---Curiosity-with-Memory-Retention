@@ -580,6 +580,23 @@ export interface SessionOrigin {
   context: PostOriginContext;
 }
 
+/**
+ * User-defined post collection (YouTube-playlist analogy). Phase 50 D-03.
+ * Persisted under localStorage key `trellis_collections_v1` by
+ * `collectionService` (50-03). Storage is ID-only — `DailyPost` snapshots are
+ * resolved at read time via `postHistoryService.getPosts()`. A post can
+ * belong to multiple collections; collection membership pins a post against
+ * the 7-day rolling history purge via `engagementService.getPinnedIds()`
+ * (D-09).
+ */
+export interface Collection {
+  id: string;
+  name: string;
+  postIds: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // IMAGE GENERATION DOMAIN
 // ═══════════════════════════════════════════════════════════════════════════
@@ -720,6 +737,19 @@ export type AppEvent =
   | { type: 'CONCEPT_EXPLORED'; payload: { anchorId: string } }
   | { type: 'ANCHOR_DISMISSED'; payload: { anchorId: string } }
   | { type: 'ENGAGEMENT_CHANGED'; payload: { kind: 'save' | 'unsave' | 'like' | 'unlike' | 'undismiss'; id: string } }
+  // Phase 50 D-03 + Claude's Discretion in 50-CONTEXT.md. One signal per
+  // semantic event (CLAUDE.md §"Event bus — unified GRAPH_UPDATED"): a single
+  // COLLECTIONS_CHANGED event with a discriminating `kind` payload covers
+  // create/rename/delete plus add-post / remove-post membership mutations.
+  // Subscribers (SavedScreen Collections sub-tab, collection drill-in view,
+  // CollectionPickerSheet) re-read collectionService on any kind.
+  | {
+      type: 'COLLECTIONS_CHANGED';
+      payload: {
+        kind: 'create' | 'rename' | 'delete' | 'add-post' | 'remove-post';
+        collectionId: string;
+      };
+    }
   // Unified graph-mutation signal. Fires after any classification commit, anchor
   // creation, prune, replant, or reorg step. Subscribers don't need to discriminate
   // why the graph changed — just re-read store. Replaces the former
