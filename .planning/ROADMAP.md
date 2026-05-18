@@ -116,7 +116,22 @@ There is **no foundation phase**. The prior agent's FOUND-01..05 scaffolding (cr
   3. User can tag or bookmark posts and concepts with local metadata that persists after reload.
   4. User can filter retrieval results by saved, liked, history, tag, bookmark, concept, source, and date without entering an infinite recommendation flow.
 
-**Plans**: TBD
+**Plans**: 13 plans (9 original + 4 gap closure from UAT 2026-05-18)
+
+Plans:
+- [x] 50-01-PLAN.md — collectionService leaf module + COLLECTIONS_CHANGED event
+- [x] 50-02-PLAN.md — Wave 0 test scaffolds for collectionService + library-search + screens
+- [x] 50-03-PLAN.md — collectionService implementation + engagement.getPinnedIds extension
+- [x] 50-04-PLAN.md — library-search.service (Fuse.js wrapper) GREEN
+- [x] 50-05-PLAN.md — HighlightedText + LongPressMenu → picker host
+- [x] 50-06-PLAN.md — CollectionPickerSheet + FilterPickerSheet
+- [x] 50-07-PLAN.md — CollectionDrillInScreen + route + Remove-from-collection
+- [x] 50-08-PLAN.md — SavedScreen 4th tab (Collections) + drill-in nav
+- [x] 50-09-PLAN.md — SavedScreen search bar + filter chips + Fuse wiring + i18n bundles
+- [ ] 50-10-PLAN.md — Gap closure G1+G3: CollectionPickerSheet no-refresh subscription + Saved pre-checked default
+- [ ] 50-11-PLAN.md — Gap closure G4: FUSE_OPTIONS threshold/minMatchCharLength tuning
+- [ ] 50-12-PLAN.md — Gap closure G2+G6+G7: SavedScreen chip blur-race + tab-preserves-query + chip padding
+- [ ] 50-13-PLAN.md — Gap closure G5: FilterPickerSheet overscroll-behavior: contain
 **UI hint**: yes
 
 ### Phase 51: Concept Dashboard and Recovery Surfaces
