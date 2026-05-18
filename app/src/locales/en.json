@@ -731,13 +731,78 @@
     "tabs": {
       "saved": "Saved",
       "liked": "Liked",
-      "history": "History"
+      "history": "History",
+      "collections": "Collections"
     },
     "empty": {
       "savedTitle": "Nothing saved yet",
       "savedBody": "Long-press any tile to save a post",
       "likedTitle": "No liked posts yet",
-      "likedBody": "Long-press any tile to like a post"
+      "likedBody": "Long-press any tile to like a post",
+      "collectionsTitle": "No collections yet",
+      "collectionsBody": "Save a post to create your first collection"
+    }
+  },
+  "library": {
+    "search": {
+      "placeholder": "Search...",
+      "clearAria": "Clear search",
+      "noMatches": "No matches in {{tab}}",
+      "clearFilters": "Clear filters"
+    },
+    "filters": {
+      "date": {
+        "label": "Date",
+        "today": "Today",
+        "last7": "Last 7 days",
+        "last30": "Last 30 days",
+        "allTime": "All time"
+      },
+      "concept": {
+        "label": "Concept",
+        "placeholder": "Filter by concept",
+        "emptyTitle": "No concepts yet",
+        "emptyBody": "Save more posts to build your concept list"
+      },
+      "source": {
+        "label": "Source",
+        "placeholder": "Filter by source",
+        "emptyTitle": "No sources tracked yet"
+      }
+    },
+    "collections": {
+      "tabTitle": "Collections",
+      "emptyTitle": "No collections yet",
+      "emptyBody": "Save a post to create your first collection",
+      "drillInEmptyTitle": "This collection is empty",
+      "drillInEmptyBody": "Add posts from the Save sheet",
+      "notFound": "Collection not found",
+      "rename": "Rename",
+      "saveName": "Save name",
+      "delete": "Delete",
+      "keepCollection": "Keep collection",
+      "kebabAria": "Collection options",
+      "deleteConfirm": "Delete \"{{name}}\"? Posts will remain in Saved.",
+      "removeFromCollection": "Remove from collection",
+      "postCount_one": "{{count}} post",
+      "postCount_other": "{{count}} posts",
+      "toast": {
+        "added": "Added to {{collection}}",
+        "addedMultiple": "Added to {{count}} collections",
+        "removed": "Removed from {{collection}}",
+        "renamed": "Renamed to \"{{name}}\"",
+        "deleted": "Deleted \"{{name}}\""
+      }
+    },
+    "savePicker": {
+      "title": "Save to...",
+      "implicitSaved": "Saved",
+      "createNew": "+ New collection",
+      "createPlaceholder": "Collection name",
+      "done": "Done",
+      "nameTooLong": "Name must be 50 characters or fewer",
+      "nameEmpty": "Collection name cannot be empty",
+      "nameDuplicate": "A collection with this name already exists"
     }
   },
   "onboarding": {
