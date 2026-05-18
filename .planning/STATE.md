@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Control, Graph Trust, Retrieval, and Ethical Engagement
-status: phase_49_planned
-stopped_at: Phase 49 (Graph Correction UI) plan-phase COMPLETE. 5 plans written across 3 waves (49-01 gesture engine + DragOverlay; 49-02 CorrectionCard + matrix + reorg gate — depends_on 49-01 for GraphScreen.tsx edit serialization; 49-03 ConfirmDialog + Merge/Delete + extended Toast; 49-04 UndoButton + PickModeBanner + soft-prune snackbar + detach toast; 49-05 i18n + reload-survival + operator UAT). Plan-checker passed on iteration 2/3 (8 blockers + 6 warnings → 0). Key fixes: detach D-12 resolved via two-emit GRAPH_UPDATED correlation (NO Phase 48 amendment); questionService.getAll returns Question[] not ServiceResult; merge/delete signatures match Phase 48 source; useLocation imported explicitly in 49-02; UndoButton uses result.data.summary not undoneCmd; getActionsForNode gates QA-leaf on parentId AND !flagged; 14 Wave-0 test files are FAILING (no .skip); pickMode preserves originalAnchorX/Y. Phase 48 finished execution in parallel (commit 41f09589); Phase 49 unblocked for /gsd:execute-phase 49.
-last_updated: "2026-05-17"
-last_activity: 2026-05-17
+status: phase_49_in_progress
+stopped_at: Phase 49 (Graph Correction UI) execution in progress. 49-01 (gesture engine + DragOverlay + 14 Wave-0 scaffolds) shipped 2026-05-18 via commits 88fb509d/16d3ac94/fd0717c6/25f128cc + SUMMARY 2c0fa351. 49-02 (CorrectionCard + per-node-type matrix + reorg gate + B-4 useLocation + B-6 silent-return) shipped 2026-05-18 via commits 772bb4ad (feat — component + matrix + i18n stubs) + 920d9399 (feat — GraphScreen wiring + reset effect). 2 of 5 plans complete. Remaining: 49-03 (ConfirmDialog + Merge/Delete + extended Toast), 49-04 (UndoButton + PickModeBanner + soft-prune snackbar + detach toast), 49-05 (i18n full namespace + reload-survival harness). 16 test:main failures remain — all are Wave-0 scaffolds owned by 49-03/04/05 + 1 pre-existing concept-feed date-related flake; ZERO regression vs. 49-01 baseline.
+last_updated: "2026-05-18"
+last_activity: 2026-05-18
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 15
-  completed_plans: 10
+  completed_plans: 12
 ---
 
 # Project State: v1.6 ROADMAP OVERHAULED — 2026-05-15
@@ -58,12 +58,12 @@ Plus the earlier 2026-05-15 corrections (during the same session, before the ful
 
 ## Current Position
 
-Phase: 49 of 53 — **PLAN-READY** (2 of 7 in v1.6 complete + 1 plan-ready) — Graph Correction UI
-Next: /gsd:execute-phase 49
-Last activity: 2026-05-17 — Phase 49 plan-phase produced 49-RESEARCH.md (R1..R19), 49-VALIDATION.md (Nyquist contract — 14 new test files), 49-PATTERNS.md, and 5 PLAN files. Plan-checker PASS on iter-2 after revisions. Detach D-12 resolved via two-emit GRAPH_UPDATED correlation (no Phase 48 amendment needed). Wave 1 internal serialization (49-02 depends_on 49-01) avoids GraphScreen.tsx merge conflicts.
+Phase: 49 of 53 — **EXECUTING** (2 of 7 phases complete + Phase 49 in progress) — Graph Correction UI
+Next: /gsd:execute-phase 49-03 (Wave 2 — ConfirmDialog + Merge/Delete + extended Toast)
+Last activity: 2026-05-18 — Plan 49-02 shipped sequentially on top of Plan 49-01. CorrectionCard built with per-node-type matrix (cluster=4, anchor=5, QA-leaf=2, orphan/flagged=[]) + inline Rename sub-flow via graphCommandService.rename + reorg-paused state. GraphScreen wired with useLocation explicit import (B-4 fix), always-mounted reset effect, B-6 silent-return guard. 18/18 source-reading + behavioral tests green; tsc -b --noEmit green; npm test:main 1032 pass / 16 fail (all pre-existing Wave-0 scaffolds owned by 49-03/04/05 + 1 documented date-related flake — ZERO regression). 5/5 plans in Phase 49 are planned; 2/5 executed; 3/5 remain.
 Prior: Phase 48 (Graph Command Service) COMPLETE. Verifier 16/16 must-haves verified. GRAPH-01..04 validated. Service surface committed contract for Phase 49.
 
-Progress: 2 / 7 phases complete
+Progress: 2 / 7 phases complete (Phase 49 in progress)
 
 ```
 [##############------------------------------------] 28%
@@ -119,8 +119,9 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-17
-Stopped at: Phase 49 plan-phase complete. 5 plans written across 3 waves. Plan-checker iterated 2 times: iter 1 flagged 8 blockers (B-1 detach D-12 needs new anchorId but Phase 48 service returns void; B-2 questionService.getAll() shape mismatch x5 sites; B-3 merge/delete signature mismatches; B-4 useLocation not imported; B-5 UndoButton reads undoneCmd instead of summary; B-6 getActionsForNode edge cases; B-7 Wave 1 plans concurrently edit GraphScreen.tsx; B-8 Wave-0 scaffolds use describe.skip instead of failing tests) + 6 warnings. Planner revision applied all fixes; iter 2 PASS.
+Last session: 2026-05-18
+Stopped at: Phase 49 in progress. Plan 49-02 complete. Plans 49-01 + 49-02 executed sequentially on main (no worktree). Resume from Plan 49-03 next.
+Earlier 2026-05-17 — Phase 49 plan-phase complete. 5 plans written across 3 waves. Plan-checker iterated 2 times: iter 1 flagged 8 blockers (B-1 detach D-12 needs new anchorId but Phase 48 service returns void; B-2 questionService.getAll() shape mismatch x5 sites; B-3 merge/delete signature mismatches; B-4 useLocation not imported; B-5 UndoButton reads undoneCmd instead of summary; B-6 getActionsForNode edge cases; B-7 Wave 1 plans concurrently edit GraphScreen.tsx; B-8 Wave-0 scaffolds use describe.skip instead of failing tests) + 6 warnings. Planner revision applied all fixes; iter 2 PASS.
 
 Key Phase 49 artifacts:
 - 49-CONTEXT.md (D-01..D-17, iOS gesture model + corner Undo)
@@ -134,7 +135,7 @@ Critical resolution: detach D-12 (re-anchored vs no-op toast variants) implement
 
 Wave 1 ordering: 49-02 declares `depends_on: ["49-01"]` to serialize edits on GraphScreen.tsx within Wave 1. Executor sees Wave 1 = sequential [49-01 → 49-02].
 
-Resume file: `.planning/phases/49-graph-correction-ui/49-01-PLAN.md`. Next action is `/gsd:execute-phase 49`.
+Resume file: `.planning/phases/49-graph-correction-ui/49-03-PLAN.md`. Next action is `/gsd:execute-phase 49-03`.
 
 Prior — Phase 48 (Graph Command Service) COMPLETE on 2026-05-17. Verifier 16/16 must-haves verified. Service signatures: rename(id, newTitle), move(id, newParentId), merge(loserId, survivorId) → ServiceResult<{ reparentedCount, newSurvivorQaCount }>, detach(qaId) → ServiceResult<void>, prune(id), delete(id) → ServiceResult<{ cascadedChildIds: string[] }>, undo() → ServiceResult<{ undoneCmd, targetIds, summary }>. questionService.getAll(opts?: { includeFlagged?: boolean }) returns Question[] directly. Critical inversion preserved: undo writes inverse journal entry with SAME cmd, swapped before/after.
 

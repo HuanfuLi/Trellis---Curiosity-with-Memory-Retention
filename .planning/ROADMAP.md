@@ -180,7 +180,7 @@ Phases execute in numeric order: 47 → 48 → 49 → 50 → 51 → 52 → 53
 |-------|----------------|--------|-----------|
 | 47. Filter Redesign — Off-Topic + Malicious Prompt Prevention | 0/6 | Planned | - |
 | 48. Graph Command Service and Trust Invariants | TBD | Not started | - |
-| 49. Graph Correction UI | TBD | Not started | - |
+| 49. Graph Correction UI | 2/5 | In progress | - |
 | 50. Retrieval and Library Foundation | TBD | Not started | - |
 | 51. Concept Dashboard and Recovery Surfaces | TBD | Not started | - |
 | 52. Podcast Quality Defaults and Learner Controls | TBD | Not started | - |
