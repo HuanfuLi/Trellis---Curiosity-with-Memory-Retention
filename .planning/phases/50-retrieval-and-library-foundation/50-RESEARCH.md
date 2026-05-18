@@ -883,22 +883,25 @@ useEffect(() => {
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Collection drill-in navigation pattern**
    - What we know: The spec says "compact list mirroring the existing Saved tab layout" with a header kebab. All other sub-screens navigate via react-router-dom with `/anchor/:id` etc. pattern.
    - What's unclear: Should the drill-in be a new route `/collections/:id` (new route entry in App.tsx) or an inline conditional render within SavedScreen (replace tab content area)? The former requires a new route; the latter avoids a new route but means the back-button behavior is a state toggle, not browser history pop.
    - Recommendation: Use a new route `/collections/:id` (matches existing `/anchor/:id`, `/cluster/:id` sub-screen pattern). Phase 49 research confirms the sub-screen-via-Outlet pattern is well-established.
+   - RESOLVED: /collections/:id route implemented in plan 50-08.
 
 2. **Tab count overflow on narrow screens**
    - What we know: TabButton uses `flex: 1` which distributes space equally. At 4 tabs each `flex: 1` on 375px viewport, each tab is ~94px wide. `minHeight: 44px` is set. Text is 14px. "Collections" is the longest label.
    - What's unclear: Does "Collections" fit in 94px at 14px without truncation on a 320px device? Japanese translation could be longer.
    - Recommendation: Set font-size to 13px for tabs when tab count is 4, or truncate with ellipsis. The planner should flag this for the UI phase.
+   - RESOLVED: 13px font-size media query at <360px implemented in plan 50-09.
 
 3. **postHistoryService import in collectionService — lazy vs eager**
    - What we know: Both `engagementService` and `collectionService` import `postHistoryService` for snapshot resolution. `engagementService` imports `collectionService`. Node.js and Vite handle this with eager binding, not lazy.
    - What's unclear: Whether the test environment's `localStorage` shim setup order matters.
    - Recommendation: Mirror the existing test pattern in `engagement.service.test.mjs` exactly — set up `localStorage` shim before any `await import(...)` call.
+   - RESOLVED: mirror engagement.service.test.mjs pattern (plans 50-02 + 50-03).
 
 ---
 
