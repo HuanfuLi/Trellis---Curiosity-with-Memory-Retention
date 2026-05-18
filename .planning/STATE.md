@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: milestone
 status: phase_49_in_progress
-stopped_at: Plan 49-03 complete
-last_updated: "2026-05-18T04:43:01Z"
-last_activity: "2026-05-18 — Plan 49-03 shipped sequentially after Plans 49-01/02. ConfirmDialog reusable component extracted from GraphScreen's inline reorganize-modal (zIndex 300 + destructive variant + children slot). MergeConfirmPreview side-by-side loser/survivor preview with B-3 both-counts-as-props fix. Extended toast() signature with optional 3rd-arg action button (5000ms dismiss when action present, 3000ms otherwise; Test 11 walks src/ to confirm backward compatibility). GraphScreen wired with THREE ConfirmDialog mounts: migrated reorganize (byte-stable visual), drag-driven merge (pre-derives both qa-counts via questionService.getAll({ includeFlagged: true }) BEFORE modal — B-2 fix), destructive delete (no boolean param per B-3, always-cascades per D-09). 14 new i18n keys × 4 locale bundles (Rule 3 — bundle-parity). 19 new tests pass (6 ConfirmDialog + 5 Toast.action + 6 MergeConfirmPreview + 7 GraphScreen.delete-confirm — Tests 1-13 all green); npm test:main 1056 pass / 9 fail (down from 16; all 9 remaining are Plan 49-04/05 scaffolds + 1 pre-existing date flake — ZERO regression). 5/5 Phase 49 plans planned; 3/5 executed; 2/5 remain."
+stopped_at: Phase 50 UI-SPEC approved
+last_updated: "2026-05-18T05:08:57.745Z"
+last_activity: "2026-05-18 — Plan 49-03 shipped sequentially after Plans 49-01/02. ConfirmDialog reusable component + MergeConfirmPreview side-by-side preview (B-3 both-counts-as-props) + extended toast() with optional action button + GraphScreen wired with THREE ConfirmDialog mounts (migrated reorganize, drag-driven merge, destructive delete). B-2 fix applied at both merge + delete derivation sites (questionService.getAll({ includeFlagged: true }) BEFORE modal opens). B-3 fix applied at merge (uses result.data.reparentedCount), delete (no boolean param), and MergeConfirmPreview (counts as required props, no internal service call). W-1 honored — zero pickMode references in this plan's GraphScreen.tsx. 14 new i18n keys × 4 locale bundles. 19/19 tests pass; tsc clean modulo pre-existing SavedScreen.tsx errors (logged to deferred-items.md per Scope Boundary); npm test:main 1056 pass / 9 fail (all 9 are Plan 49-04/05 scaffolds + 1 pre-existing date flake — ZERO regression). 5/5 Phase 49 plans planned; 3/5 executed; 2/5 remain (49-04 + 49-05)."
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 15
   completed_plans: 13
-  percent: 32
+  percent: 29
 ---
 
 # Project State: v1.6 ROADMAP OVERHAULED — 2026-05-15
@@ -121,8 +121,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-18T04:31:35.934Z
-Stopped at: Phase 50 context gathered
+Last session: 2026-05-18T05:08:57.742Z
+Stopped at: Phase 50 UI-SPEC approved
 Earlier 2026-05-17 — Phase 49 plan-phase complete. 5 plans written across 3 waves. Plan-checker iterated 2 times: iter 1 flagged 8 blockers (B-1 detach D-12 needs new anchorId but Phase 48 service returns void; B-2 questionService.getAll() shape mismatch x5 sites; B-3 merge/delete signature mismatches; B-4 useLocation not imported; B-5 UndoButton reads undoneCmd instead of summary; B-6 getActionsForNode edge cases; B-7 Wave 1 plans concurrently edit GraphScreen.tsx; B-8 Wave-0 scaffolds use describe.skip instead of failing tests) + 6 warnings. Planner revision applied all fixes; iter 2 PASS.
 
 Key Phase 49 artifacts:
@@ -138,7 +138,7 @@ Critical resolution: detach D-12 (re-anchored vs no-op toast variants) implement
 
 Wave 1 ordering: 49-02 declares `depends_on: ["49-01"]` to serialize edits on GraphScreen.tsx within Wave 1. Executor sees Wave 1 = sequential [49-01 → 49-02].
 
-Resume file: .planning/phases/50-retrieval-and-library-foundation/50-CONTEXT.md
+Resume file: .planning/phases/50-retrieval-and-library-foundation/50-UI-SPEC.md
 
 Prior — Phase 48 (Graph Command Service) COMPLETE on 2026-05-17. Verifier 16/16 must-haves verified. Service signatures: rename(id, newTitle), move(id, newParentId), merge(loserId, survivorId) → ServiceResult<{ reparentedCount, newSurvivorQaCount }>, detach(qaId) → ServiceResult<void>, prune(id), delete(id) → ServiceResult<{ cascadedChildIds: string[] }>, undo() → ServiceResult<{ undoneCmd, targetIds, summary }>. questionService.getAll(opts?: { includeFlagged?: boolean }) returns Question[] directly. Critical inversion preserved: undo writes inverse journal entry with SAME cmd, swapped before/after.
 
