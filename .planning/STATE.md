@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Control, Graph Trust, Retrieval, and Ethical Engagement
-status: phase_48_complete
-stopped_at: Phase 48 (Graph Command Service and Trust Invariants) COMPLETE. Verifier returned PASSED with 16/16 must-haves verified. All 4 ROADMAP success criteria observably true (single boundary; field+retrieval-identity preservation via Blocker #4 graceful degradation; reload-survival proven at service level for all 7 verbs; stale-write protection via journal-as-reorg-prompt-constraint). All negative invariants hold (no `cmd:'undo'` literal; no `localStorage.setItem` in graph-command.service; no `normalizeAnchorName` per D-16; no new event types). GRAPH-01..04 all validated. Ready for /gsd:plan-phase 49 (CONTEXT.md already gathered by parallel session — D-01..D-17 iOS gesture model locked).
+status: phase_49_planned
+stopped_at: Phase 49 (Graph Correction UI) plan-phase COMPLETE. 5 plans written across 3 waves (49-01 gesture engine + DragOverlay; 49-02 CorrectionCard + matrix + reorg gate — depends_on 49-01 for GraphScreen.tsx edit serialization; 49-03 ConfirmDialog + Merge/Delete + extended Toast; 49-04 UndoButton + PickModeBanner + soft-prune snackbar + detach toast; 49-05 i18n + reload-survival + operator UAT). Plan-checker passed on iteration 2/3 (8 blockers + 6 warnings → 0). Key fixes: detach D-12 resolved via two-emit GRAPH_UPDATED correlation (NO Phase 48 amendment); questionService.getAll returns Question[] not ServiceResult; merge/delete signatures match Phase 48 source; useLocation imported explicitly in 49-02; UndoButton uses result.data.summary not undoneCmd; getActionsForNode gates QA-leaf on parentId AND !flagged; 14 Wave-0 test files are FAILING (no .skip); pickMode preserves originalAnchorX/Y. Phase 48 finished execution in parallel (commit 41f09589); Phase 49 unblocked for /gsd:execute-phase 49.
 last_updated: "2026-05-17"
 last_activity: 2026-05-17
 progress:
   total_phases: 7
   completed_phases: 2
-  total_plans: 10
+  total_plans: 15
   completed_plans: 10
 ---
 
@@ -58,15 +58,15 @@ Plus the earlier 2026-05-15 corrections (during the same session, before the ful
 
 ## Current Position
 
-Phase: 49 of 53 — **CONTEXT GATHERED** (1 of 7 in v1.6 complete + 1 plan-ready + 1 context-ready) — Graph Correction UI
-Next: /gsd:plan-phase 49 (after /gsd:execute-phase 48 lands the service layer)
-Last activity: 2026-05-17 — Phase 49 discuss-phase produced 49-CONTEXT.md (D-01..D-17) + 49-DISCUSSION-LOG.md. Locked iOS-style gesture model (tap=inspect, long-press-release=correction-menu, long-press-drag=relocate with ghost+origin-line+halo). Undo at viewport corner next to expand/collapse. Drop-on-cluster=Move, drop-on-anchor=Merge (dragged=LOSER). Operator counter-proposed both the gesture split (rejecting all 4 preset surface options) and the corner-Undo placement.
-Prior: Phase 48 plan-phase produced 48-RESEARCH.md, 48-VALIDATION.md, and 4 PLAN files; passed plan-checker on iteration 3/3 (5 blockers → 1 blocker → 0). Awaiting /gsd:execute-phase 48.
+Phase: 49 of 53 — **PLAN-READY** (2 of 7 in v1.6 complete + 1 plan-ready) — Graph Correction UI
+Next: /gsd:execute-phase 49
+Last activity: 2026-05-17 — Phase 49 plan-phase produced 49-RESEARCH.md (R1..R19), 49-VALIDATION.md (Nyquist contract — 14 new test files), 49-PATTERNS.md, and 5 PLAN files. Plan-checker PASS on iter-2 after revisions. Detach D-12 resolved via two-emit GRAPH_UPDATED correlation (no Phase 48 amendment needed). Wave 1 internal serialization (49-02 depends_on 49-01) avoids GraphScreen.tsx merge conflicts.
+Prior: Phase 48 (Graph Command Service) COMPLETE. Verifier 16/16 must-haves verified. GRAPH-01..04 validated. Service surface committed contract for Phase 49.
 
-Progress: 1 / 7 phases complete
+Progress: 2 / 7 phases complete
 
 ```
-[#######-------------------------------------------] 14%
+[##############------------------------------------] 28%
 ```
 
 ## Milestone Shape
@@ -120,18 +120,23 @@ None.
 ## Session Continuity
 
 Last session: 2026-05-17
-Stopped at: Phase 48 plan-phase complete. 4 plans written across 3 waves (48-01 foundation in Wave 1; 48-02 rename/move/delete in Wave 2; 48-03 merge/detach/prune + 48-04 undo+integration in Wave 3, sequenced so 48-04 follows 48-03 to avoid concurrent edits of graph-command.service.ts). Plan-checker iterated 3 times: iter 1 flagged 5 blockers (missing VALIDATION.md, questionService.delete signature mismatch, synthetic `cmd:'undo'` contradicting RESEARCH.md's inverse-verb strategy, embeddingVector cleared-before-re-embed breaking retrieval identity, no service-level reload-survival test); orchestrator created 48-VALIDATION.md directly + planner revision fixed Blockers #2-5 and Warnings #1-2/#4-6; iter 2 flagged a Dimension-11 doc-hygiene blocker (RESEARCH.md `## Open Questions` lacked `(RESOLVED)` markers) which orchestrator fixed inline; iter 3 PASS.
+Stopped at: Phase 49 plan-phase complete. 5 plans written across 3 waves. Plan-checker iterated 2 times: iter 1 flagged 8 blockers (B-1 detach D-12 needs new anchorId but Phase 48 service returns void; B-2 questionService.getAll() shape mismatch x5 sites; B-3 merge/delete signature mismatches; B-4 useLocation not imported; B-5 UndoButton reads undoneCmd instead of summary; B-6 getActionsForNode edge cases; B-7 Wave 1 plans concurrently edit GraphScreen.tsx; B-8 Wave-0 scaffolds use describe.skip instead of failing tests) + 6 warnings. Planner revision applied all fixes; iter 2 PASS.
 
-Key Phase 48 artifacts:
-- 48-CONTEXT.md (D-01..D-20, 20 decisions)
-- 48-DISCUSSION-LOG.md (operator reasoning audit)
-- 48-RESEARCH.md (R1-R11 + Files Inventory + Validation Architecture; Open Questions RESOLVED inline)
-- 48-VALIDATION.md (Nyquist contract: 11 new test files, per-task verify map, 60s full-suite budget)
-- 4 PLAN files: 48-01-PLAN.md..48-04-PLAN.md
+Key Phase 49 artifacts:
+- 49-CONTEXT.md (D-01..D-17, iOS gesture model + corner Undo)
+- 49-DISCUSSION-LOG.md (operator reasoning audit; verbatim quotes for gesture + Undo placement)
+- 49-RESEARCH.md (R1..R19 + Files Inventory + Validation Architecture; Open Questions RESOLVED inline)
+- 49-VALIDATION.md (Nyquist contract: 14 new test files, ~60-100 new tests, ~6-8s full-suite impact)
+- 49-PATTERNS.md (existing-file analogs for 7 new production files)
+- 5 PLAN files: 49-01-PLAN.md..49-05-PLAN.md
 
-Critical inversion from naive design: undo writes an inverse journal entry with the SAME cmd and swapped before/after — never introduces a `cmd:'undo'` literal. This keeps the journal-as-reorg-prompt-constraint surface coherent (LLM sees "user renamed X→Y, then renamed Y→X" rather than an opaque "undid the previous edit"). Source-reading negative invariant in Plan 04 enforces it.
+Critical resolution: detach D-12 (re-anchored vs no-op toast variants) implemented via TWO-EMIT GRAPH_UPDATED correlation in Plan 49-04 — captures originalParentId before detach, listens for the second GRAPH_UPDATED event (the classify-completion fire, Phase 48 R7), re-reads questionService.getAll({ includeFlagged: true }) to find newParentId, compares against original. 5s timeout silent fallback. NO Phase 48 service amendment needed.
 
-Resume file: `.planning/phases/48-graph-command-service-and-trust-invariants/48-01-PLAN.md`. Next action is `/gsd:execute-phase 48`.
+Wave 1 ordering: 49-02 declares `depends_on: ["49-01"]` to serialize edits on GraphScreen.tsx within Wave 1. Executor sees Wave 1 = sequential [49-01 → 49-02].
+
+Resume file: `.planning/phases/49-graph-correction-ui/49-01-PLAN.md`. Next action is `/gsd:execute-phase 49`.
+
+Prior — Phase 48 (Graph Command Service) COMPLETE on 2026-05-17. Verifier 16/16 must-haves verified. Service signatures: rename(id, newTitle), move(id, newParentId), merge(loserId, survivorId) → ServiceResult<{ reparentedCount, newSurvivorQaCount }>, detach(qaId) → ServiceResult<void>, prune(id), delete(id) → ServiceResult<{ cascadedChildIds: string[] }>, undo() → ServiceResult<{ undoneCmd, targetIds, summary }>. questionService.getAll(opts?: { includeFlagged?: boolean }) returns Question[] directly. Critical inversion preserved: undo writes inverse journal entry with SAME cmd, swapped before/after.
 
 Key Phase 47 artifacts:
 - 6 plan summaries: `47-0{1..6}-SUMMARY.md`
