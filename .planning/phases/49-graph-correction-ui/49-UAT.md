@@ -1,5 +1,5 @@
 ---
-status: complete
+status: diagnosed
 phase: 49-graph-correction-ui
 source: 49-05-SUMMARY.md
 started: 2026-05-18T00:00:00Z
@@ -80,5 +80,22 @@ blocked: 0
   findings:
     - "Long-press menu fires on FINGER RELEASE rather than at the 480ms TIMER tick. Expected: menu pops while finger is still down at 480ms (matches feed post tile long-press behavior)."
     - "Canvas pans along with the dragged ghost — node stays visually centered, so it cannot be repositioned relative to other anchors. MindElixir pan/zoom is not suppressed during long-press-drag."
-  artifacts: []
-  missing: []
+  root_cause_finding_1: "useLongPressOrDrag.ts createLongPressOrDragMachine (lines 78-149) is structurally wrong: the 480ms setTimeout (line 104-108) only sets internal didLongPress=true + fires haptic; it never invokes a consumer-visible 'long-press recognized' callback. onLongPressRelease fires from inside onPointerUp (line 148), gated on didLongPress && !didDrag. GraphScreen wires CorrectionCard mount to onLongPressRelease (GraphScreen.tsx:439-442 → handleLongPressRelease at 769-797), so the card only mounts after the user lifts their finger. Diverges from the codebase feed-tile convention at useLongPress.ts:42-45 which fires the callback INSIDE the timer."
+  root_cause_finding_2: "Two stacked issues. (a) MindElixir registers its own pointerdown/pointermove/pointerup listeners on the SAME container GraphScreen attaches its delegated gesture listener to (MindElixir.js:1095-1101). (b) With Trellis's editable:false config, MindElixir's pointerdown handler ALWAYS falls into the pan branch — t.mousedown=true + setPointerCapture(pointerId) on first touch (MindElixir.js:1044-1045). Every subsequent pointermove calls t.onMove(dx,dy) → e.move(dx,dy) which pans the map. GraphScreen never neutralizes MindElixir's pan after long-press is recognized: no mei.dragMoveHelper.clear(), no capture-phase stopPropagation, no override of MindElixir's pointer capture. setPointerCapture at GraphScreen.tsx:446 fires only on onDragStart (480ms + 8px later) and only reroutes events — it does NOT prevent MindElixir's co-registered listener on the same container from firing."
+  artifacts:
+    - path: "app/src/hooks/useLongPressOrDrag.ts"
+      issue: "Missing onLongPressRecognized callback inside the 480ms timer (Finding 1)"
+    - path: "app/src/screens/GraphScreen.tsx"
+      issue: "handlePointerDown (line 404-484) never engages MindElixir pan-suppression; comment at 379-380 acknowledges half of the constraint without implementing the other half (Finding 2)"
+    - path: "app/tests/hooks/useLongPressOrDrag.test.mjs"
+      issue: "Test 1 (lines 64-87) asserts onLongPressRelease fires AFTER pointerup, encoding the bug; no test asserts mid-press recognition"
+    - path: "app/tests/components/graph/DragOverlay.test.mjs"
+      issue: "No behavioral test for the 'MindElixir pan suppressed during drag' invariant"
+  missing:
+    - "onLongPressRecognized callback invoked inside the 480ms timer (alongside didLongPress=true + haptic). Match useLongPress.ts:42-45 pattern."
+    - "GraphScreen wires setCorrectionNode to onLongPressRecognized instead of onLongPressRelease (drop the latter — no consumer the new callback doesn't already cover)."
+    - "MindElixir pan-suppression engaged at the same 480ms recognition point. Three layered defenses in the new onLongPressRecognized GraphScreen handler: (a) call mei.dragMoveHelper.clear() to reset MindElixir's internal mousedown=true; (b) attach capture-phase pointermove listener on container calling event.stopPropagation(), torn down on pointerup/pointercancel; (c) re-setPointerCapture to the container (not the target node) so MindElixir's pointerup also routes correctly. Move existing setPointerCapture out of onDragStart."
+    - "Rewrite useLongPressOrDrag.test.mjs Test 1 to assert onLongPressRecognized fires at the 480ms tick BEFORE any pointerup."
+    - "Add integration test app/tests/screens/GraphScreen.gesture-isolation.test.mjs asserting mei.move is NOT invoked between recognition and pointerup."
+    - "Update load-bearing comment at GraphScreen.tsx:379-380 to reflect the new symmetric 'DO stopPropagation AFTER recognition' policy."
+  debug_session: ".planning/debug/phase-49-gesture-engine.md"
