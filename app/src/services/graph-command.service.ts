@@ -968,17 +968,23 @@ export const graphCommandService = {
       };
 
       // R6 / D-14 — delegate to trellisActionsService. This patches the
-      // anchor (flagged=true + prunedFromTrellis=true) AND emits
-      // ANCHOR_DELETED (preserving PrunedSection's existing subscriber
-      // chain). Synchronous; returns { pruned: true }.
-      trellisActionsService.prune(anchorId);
+      // anchor (flagged=true + prunedFromTrellis=true), cascades flag to
+      // its un-flagged QA children (Phase 49-06 follow-up — preserve the
+      // 4-layer hierarchy during prune), AND emits ANCHOR_DELETED
+      // (preserving PrunedSection's existing subscriber chain).
+      // Synchronous; returns { pruned: true, cascadedQaIds }.
+      const { cascadedQaIds } = trellisActionsService.prune(anchorId);
 
-      // Journal — one entry per command per D-17.
+      // Journal — one entry per command per D-17. cascadedQaIds is stored
+      // in `after` because it's an EFFECT of the prune command (not a
+      // pre-condition). Undo passes this list back to unpruneQuestion so
+      // it un-flags PRECISELY these IDs and nothing else (precision matters
+      // when an off-topic-flagged QA happens to live under the same anchor).
       graphEditJournal.append({
         cmd: 'prune',
         targetIds: [anchorId],
         before,
-        after: { flagged: true, prunedFromTrellis: true },
+        after: { flagged: true, prunedFromTrellis: true, cascadedQaIds },
       });
 
       // D-17 — single typed emit. trellisActionsService.prune emits
@@ -1274,8 +1280,11 @@ export const graphCommandService = {
         case 'prune': {
           // Delegate to trellisActionsService.unpruneQuestion (R6 — preserve
           // the existing emit chain). It flips flagged + prunedFromTrellis
-          // back to false and emits GRAPH_UPDATED itself; our command-boundary
-          // emit below adds the typed payload.kind === 'undo'.
+          // back to false on the anchor AND un-flags PRECISELY the QA leaves
+          // recorded in the journal's cascadedQaIds (Phase 49-06 follow-up).
+          // The journal-driven precision matters: it's wrong to blanket
+          // un-flag every QA under this anchor because an off-topic flagged
+          // QA might live there independently and should stay flagged.
           const targetId = entry.targetIds[0];
           const target = store.find((q) => q.id === targetId);
           if (!target) {
@@ -1284,7 +1293,11 @@ export const graphCommandService = {
             result = fail<UndoData>('NOT_FOUND', 'Original record no longer exists.', false);
             return;
           }
-          trellisActionsService.unpruneQuestion(targetId);
+          const after = entry.after as Record<string, unknown>;
+          const cascadedQaIds = Array.isArray(after.cascadedQaIds)
+            ? (after.cascadedQaIds as string[])
+            : [];
+          trellisActionsService.unpruneQuestion(targetId, { cascadedQaIds });
           break;
         }
 

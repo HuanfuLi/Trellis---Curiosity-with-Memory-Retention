@@ -112,6 +112,113 @@ test('unpruneQuestion clears flagged and prunedFromTrellis and emits GRAPH_UPDAT
   assert.equal(events.length, 1, 'must emit GRAPH_UPDATED');
 });
 
+// ════════════════════════════════════════════════════════════════════════
+// Phase 49-06 follow-up — prune cascades flag to QA leaves
+// ════════════════════════════════════════════════════════════════════════
+
+function makeQa(overrides = {}) {
+  return {
+    id: `qa-${Math.random().toString(16).slice(2)}`,
+    content: 'QA content',
+    answer: 'QA answer',
+    title: 'Q',
+    keywords: [],
+    timestamp: Date.now(),
+    date: '2026-04-10',
+    flagged: false,
+    prunedFromTrellis: false,
+    reviewSchedule: { nextReviewDate: '2025-01-01', reviewCount: 0, easeFactor: 2.5 },
+    ...overrides,
+  };
+}
+
+test('prune cascade: flags ALL unflagged QA leaves of the anchor (preserves 4-layer hierarchy)', async () => {
+  storage.clear();
+  const { _resetStore, _getStore } = await import('./_actions-mock-question.mjs');
+  const anchor = makeAnchor({ id: 'anchor-1' });
+  const qa1 = makeQa({ id: 'qa-1', parentId: 'anchor-1' });
+  const qa2 = makeQa({ id: 'qa-2', parentId: 'anchor-1' });
+  const unrelatedQa = makeQa({ id: 'qa-other', parentId: 'anchor-other' });
+  _resetStore([anchor, qa1, qa2, unrelatedQa]);
+
+  const { trellisActionsService } = await import('../../src/services/trellis-actions.service.ts');
+  const result = trellisActionsService.prune('anchor-1');
+
+  assert.deepEqual(result.cascadedQaIds.sort(), ['qa-1', 'qa-2'], 'returns cascaded IDs');
+
+  const store = _getStore();
+  assert.equal(store.find((q) => q.id === 'qa-1').flagged, true);
+  assert.equal(store.find((q) => q.id === 'qa-1').prunedFromTrellis, true);
+  assert.equal(store.find((q) => q.id === 'qa-2').flagged, true);
+  assert.equal(store.find((q) => q.id === 'qa-other').flagged, false, 'unrelated QA untouched');
+});
+
+test('prune cascade: skips QAs already flagged (off-topic) — they stay flagged but are NOT in cascadedQaIds', async () => {
+  storage.clear();
+  const { _resetStore, _getStore } = await import('./_actions-mock-question.mjs');
+  const anchor = makeAnchor({ id: 'anchor-1' });
+  const cleanQa = makeQa({ id: 'qa-clean', parentId: 'anchor-1' });
+  const offTopicQa = makeQa({ id: 'qa-offtopic', parentId: 'anchor-1', flagged: true, prunedFromTrellis: false });
+  _resetStore([anchor, cleanQa, offTopicQa]);
+
+  const { trellisActionsService } = await import('../../src/services/trellis-actions.service.ts');
+  const result = trellisActionsService.prune('anchor-1');
+
+  assert.deepEqual(result.cascadedQaIds, ['qa-clean'], 'only clean QA is cascaded');
+  const offTopic = _getStore().find((q) => q.id === 'qa-offtopic');
+  assert.equal(offTopic.prunedFromTrellis, false, 'off-topic QA prunedFromTrellis stays false');
+});
+
+test('unpruneQuestion cascade: precise mode (cascadedQaIds opt) un-flags only those IDs', async () => {
+  storage.clear();
+  const { _resetStore, _getStore } = await import('./_actions-mock-question.mjs');
+  const anchor = makeAnchor({ id: 'anchor-1', flagged: true, prunedFromTrellis: true });
+  const cascadedQa = makeQa({ id: 'qa-cascaded', parentId: 'anchor-1', flagged: true, prunedFromTrellis: true });
+  // An off-topic QA that was flagged BEFORE the prune ran — must NOT be un-flagged.
+  const offTopicQa = makeQa({ id: 'qa-offtopic', parentId: 'anchor-1', flagged: true, prunedFromTrellis: false });
+  _resetStore([anchor, cascadedQa, offTopicQa]);
+
+  const { trellisActionsService } = await import('../../src/services/trellis-actions.service.ts');
+  trellisActionsService.unpruneQuestion('anchor-1', { cascadedQaIds: ['qa-cascaded'] });
+
+  const store = _getStore();
+  assert.equal(store.find((q) => q.id === 'anchor-1').flagged, false, 'anchor un-flagged');
+  assert.equal(store.find((q) => q.id === 'qa-cascaded').flagged, false, 'cascaded QA un-flagged');
+  assert.equal(store.find((q) => q.id === 'qa-offtopic').flagged, true, 'off-topic QA stays flagged');
+});
+
+test('unpruneQuestion cascade: blanket mode (no cascadedQaIds) un-flags all prunedFromTrellis children', async () => {
+  storage.clear();
+  const { _resetStore, _getStore } = await import('./_actions-mock-question.mjs');
+  const anchor = makeAnchor({ id: 'anchor-1', flagged: true, prunedFromTrellis: true });
+  const cascadedQa = makeQa({ id: 'qa-cascaded', parentId: 'anchor-1', flagged: true, prunedFromTrellis: true });
+  const offTopicQa = makeQa({ id: 'qa-offtopic', parentId: 'anchor-1', flagged: true, prunedFromTrellis: false });
+  _resetStore([anchor, cascadedQa, offTopicQa]);
+
+  const { trellisActionsService } = await import('../../src/services/trellis-actions.service.ts');
+  trellisActionsService.unpruneQuestion('anchor-1');
+
+  const store = _getStore();
+  assert.equal(store.find((q) => q.id === 'qa-cascaded').flagged, false, 'cascaded QA un-flagged via blanket');
+  assert.equal(store.find((q) => q.id === 'qa-offtopic').flagged, true, 'off-topic QA stays flagged (prunedFromTrellis filter)');
+});
+
+test('getPrunedQuestions filter: cascaded QA leaves (isAnchorNode=false) do NOT surface in pruned section', async () => {
+  storage.clear();
+  const { _resetStore } = await import('./_actions-mock-question.mjs');
+  const anchor = makeAnchor({ id: 'anchor-1' });
+  const qa = makeQa({ id: 'qa-1', parentId: 'anchor-1' });
+  _resetStore([anchor, qa]);
+
+  const { trellisActionsService } = await import('../../src/services/trellis-actions.service.ts');
+  trellisActionsService.prune('anchor-1');
+
+  const { questionService } = await import('./_actions-mock-question.mjs');
+  const result = questionService.getPrunedQuestions();
+  assert.equal(result.length, 1, 'only the anchor surfaces in pruned list');
+  assert.equal(result[0].id, 'anchor-1');
+});
+
 // D-18: hardDelete calls through to questionService.delete
 test('hardDelete removes the question from the store', async () => {
   storage.clear();

@@ -119,21 +119,61 @@ export const trellisActionsService = {
   },
 
   /**
-   * D-15/D-17: Prune (archive) an anchor. Flips flagged=true so getPrunedQuestions
-   * surfaces it, and emits ANCHOR_DELETED so the trellis removes it from rendering
-   * (per RESEARCH Open Question 4 — same visual effect as deletion, but reversible).
+   * D-15/D-17: Prune (archive) an anchor AND its Q&A leaves. Flips flagged=true
+   * + prunedFromTrellis=true on the anchor so getPrunedQuestions surfaces it,
+   * AND on each of its un-flagged QA children so the 4-layer hierarchy stays
+   * intact (Knowledge → Branch → Cluster → Anchor → QAs). Without the
+   * cascade, leaf QAs whose parent is flagged still render — UAT 2026-05-19
+   * surfaced this as "promoting leaves to anchors". Emits ANCHOR_DELETED so
+   * the trellis removes the anchor from rendering (RESEARCH Open Question 4).
+   *
+   * Returns the list of QA IDs that were cascaded so the caller's journal
+   * (graphCommandService.prune) can record EXACTLY which children were
+   * flagged — undo via unpruneQuestion(id, { cascadedQaIds }) restores
+   * precisely without touching QAs that were already flagged for unrelated
+   * reasons (e.g. off-topic ingest).
    */
-  prune(anchorId: string): { pruned: true } {
+  prune(anchorId: string): { pruned: true; cascadedQaIds: string[] } {
+    const store = questionService.getAll({ includeFlagged: true });
+    const cascadedQaIds: string[] = [];
+    for (const q of store) {
+      if (q.parentId !== anchorId) continue;
+      if (q.flagged === true) continue;
+      questionService.patchQuestion(q.id, { flagged: true, prunedFromTrellis: true });
+      cascadedQaIds.push(q.id);
+    }
     questionService.patchQuestion(anchorId, { flagged: true, prunedFromTrellis: true });
     eventBus.emit({ type: 'ANCHOR_DELETED', payload: { anchorId } });
-    return { pruned: true };
+    return { pruned: true, cascadedQaIds };
   },
 
   /**
-   * Restore a pruned anchor back to the trellis. Flips flagged=false and emits
-   * GRAPH_UPDATED to trigger useTrellisData recompute.
+   * Restore a pruned anchor back to the trellis along with its QA leaves.
+   * Symmetric counterpart to prune.
+   *
+   * - If `opts.cascadedQaIds` is provided (graphCommandService.undo path),
+   *   un-flag PRECISELY those IDs. This avoids accidentally un-flagging a
+   *   QA that was already flagged before the prune ran.
+   * - Otherwise (PrunedSection unprune button), blanket-cascade: un-flag
+   *   every QA with parentId === anchorId AND prunedFromTrellis === true.
+   *   The `prunedFromTrellis === true` filter keeps off-topic-flagged
+   *   QAs (flagged=true but prunedFromTrellis=false) untouched.
+   *
+   * Single GRAPH_UPDATED emit per unprune command (R7 / D-17).
    */
-  unpruneQuestion(anchorId: string): void {
+  unpruneQuestion(anchorId: string, opts?: { cascadedQaIds?: string[] }): void {
+    if (opts?.cascadedQaIds && opts.cascadedQaIds.length > 0) {
+      for (const id of opts.cascadedQaIds) {
+        questionService.patchQuestion(id, { flagged: false, prunedFromTrellis: false });
+      }
+    } else {
+      const store = questionService.getAll({ includeFlagged: true });
+      for (const q of store) {
+        if (q.parentId !== anchorId) continue;
+        if (q.flagged !== true || q.prunedFromTrellis !== true) continue;
+        questionService.patchQuestion(q.id, { flagged: false, prunedFromTrellis: false });
+      }
+    }
     questionService.patchQuestion(anchorId, { flagged: false, prunedFromTrellis: false });
     eventBus.emit({ type: 'GRAPH_UPDATED' });
   },

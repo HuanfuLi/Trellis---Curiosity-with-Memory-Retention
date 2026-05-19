@@ -577,12 +577,17 @@ export const questionService = {
   /**
    * Return pruned (archived) anchor nodes only.
    * Per D-16, pruning flips flagged=true on anchor Q&As; filtering requires BOTH
-   * flagged AND isAnchorNode because regular Q&As flagged for off-topic reasons
-   * should not appear in the pruned section.
+   * flagged AND prunedFromTrellis AND isAnchorNode because:
+   *   - regular Q&As flagged for off-topic reasons (flagged=true, prunedFromTrellis=false)
+   *     should not appear in the pruned section.
+   *   - cascaded QA leaves of a pruned anchor (flagged=true, prunedFromTrellis=true,
+   *     isAnchorNode=false) should not appear either — PrunedSection lists ANCHOR
+   *     cards, not individual QA cards. The QA leaves are restored implicitly when
+   *     the operator restores the parent anchor.
    */
   getPrunedQuestions(): Question[] {
     return loadStore({ includeFlagged: true }).filter(
-      (q) => q.flagged === true && q.prunedFromTrellis === true,
+      (q) => q.flagged === true && q.prunedFromTrellis === true && q.isAnchorNode === true,
     );
   },
 

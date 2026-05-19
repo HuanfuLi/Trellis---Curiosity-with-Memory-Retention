@@ -495,6 +495,42 @@ test('undo of prune: flagged + prunedFromTrellis both false; trellisActionsServi
   }
 });
 
+test('undo of prune cascade: precisely restores cascaded QA leaves AND leaves off-topic-flagged QAs alone (Phase 49-06 follow-up)', async () => {
+  await resetAll();
+  const { _resetStore, _getStore } = await import('./_actions-mock-question.mjs');
+  _resetStore([
+    makeNode({ id: 'anchor-A', isAnchorNode: true, flagged: false, prunedFromTrellis: false }),
+    makeNode({ id: 'qa-clean-1', parentId: 'anchor-A', flagged: false, prunedFromTrellis: false }),
+    makeNode({ id: 'qa-clean-2', parentId: 'anchor-A', flagged: false, prunedFromTrellis: false }),
+    // Off-topic flagged BEFORE the prune ran — must remain flagged after undo.
+    makeNode({ id: 'qa-offtopic', parentId: 'anchor-A', flagged: true, prunedFromTrellis: false }),
+  ]);
+
+  const { graphCommandService } = await import('../../src/services/graph-command.service.ts');
+  await graphCommandService.prune('anchor-A');
+
+  // Post-prune: anchor + both clean QAs flagged + prunedFromTrellis=true.
+  let store = _getStore();
+  assert.equal(store.find((q) => q.id === 'qa-clean-1').flagged, true);
+  assert.equal(store.find((q) => q.id === 'qa-clean-2').flagged, true);
+  assert.equal(store.find((q) => q.id === 'qa-offtopic').flagged, true, 'off-topic stays flagged through prune');
+
+  // Journal records cascadedQaIds in entry.after.
+  const { graphEditJournal } = await import('../../src/services/graph-edit-journal.service.ts');
+  const pruneEntry = graphEditJournal.list()[0];
+  const cascaded = pruneEntry.after.cascadedQaIds;
+  assert.ok(Array.isArray(cascaded));
+  assert.deepEqual(cascaded.sort(), ['qa-clean-1', 'qa-clean-2'], 'cascadedQaIds excludes off-topic QA');
+
+  await graphCommandService.undo();
+
+  store = _getStore();
+  assert.equal(store.find((q) => q.id === 'anchor-A').flagged, false, 'anchor un-flagged');
+  assert.equal(store.find((q) => q.id === 'qa-clean-1').flagged, false, 'cascaded QA un-flagged');
+  assert.equal(store.find((q) => q.id === 'qa-clean-2').flagged, false, 'cascaded QA un-flagged');
+  assert.equal(store.find((q) => q.id === 'qa-offtopic').flagged, true, 'off-topic QA still flagged (precision matters)');
+});
+
 // ════════════════════════════════════════════════════════════════════════
 // Behavior — undo of delete (resurrection)
 // ════════════════════════════════════════════════════════════════════════

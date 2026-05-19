@@ -82,7 +82,9 @@ export const questionService = {
   },
 
   getPrunedQuestions() {
-    return _store.filter((q) => q.flagged === true && q.prunedFromTrellis === true);
+    return _store.filter(
+      (q) => q.flagged === true && q.prunedFromTrellis === true && q.isAnchorNode === true,
+    );
   },
 
   patchQuestion(questionId, patch) {
