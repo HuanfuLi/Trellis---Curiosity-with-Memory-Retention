@@ -148,7 +148,12 @@ Plans:
   3. User can jump from the dashboard to the original post, Q&A, review action, podcast mention, or tag-filtered retrieval result.
   4. Dashboard and retrieval surfaces prioritize search, filters, dashboard navigation, and review actions instead of endless scrolling.
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+- [ ] 51-01-PLAN.md — useConceptDashboard hook + LeafStateBadge + test scaffolds
+- [ ] 51-02-PLAN.md — ConceptDashboardScreen layout + route + concept-linked navigation
+- [ ] 51-03-PLAN.md — Dashboard sections + bounded views + action routes
+
 **UI hint**: yes
 
 ### Phase 52: Podcast Quality Defaults and Learner Controls
@@ -164,7 +169,20 @@ Plans:
   4. Podcast output preserves required concept coverage across length/style settings; style controls cannot degrade learning density into entertainment-only output.
   5. TTS model, voice, and speed changes have provider-safe fallback behavior and device UAT evidence before defaults change.
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+**Wave 0**
+
+- [ ] 52-01-PLAN.md — Wave 0: PodcastOptions types + podcast-prompt.ts (prompt assembly + options hash) + prompt tests (PODCAST-01, PODCAST-02, PODCAST-04)
+
+**Wave 1** *(blocked on Wave 0 completion)*
+
+- [ ] 52-02-PLAN.md — Wave 1: podcast.service.ts options integration + cache invalidation + scheduler default options + TTS model config + usePodcast pass-through (PODCAST-01..05)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 52-03-PLAN.md — Wave 2: PodcastScreen option chips + player badges + regenerate button + SettingsFeaturesScreen defaults + SettingsAIScreen TTS model + i18n bundles (PODCAST-02, PODCAST-03, PODCAST-05)
+
 **UI hint**: yes
 
 ### Phase 53: Engagement Guardrails + Provider Privacy
@@ -227,8 +245,8 @@ Phases execute in numeric order: 47 → 48 → 49 → 50 → 51 → 52 → 53
 | 48. Graph Command Service and Trust Invariants | TBD | Not started | - |
 | 49. Graph Correction UI | 5/6 | Complete    | 2026-05-18 |
 | 50. Retrieval and Library Foundation | 13/13 | Complete   | 2026-05-18 |
-| 51. Concept Dashboard and Recovery Surfaces | TBD | Not started | - |
-| 52. Podcast Quality Defaults and Learner Controls | TBD | Not started | - |
+| 51. Concept Dashboard and Recovery Surfaces | 0/3 | Not started | - |
+| 52. Podcast Quality Defaults and Learner Controls | 0/3 | Not started | - |
 | 53. Engagement Guardrails + Provider Privacy | TBD | Not started | - |
 
 ---
