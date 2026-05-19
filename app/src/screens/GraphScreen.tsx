@@ -313,7 +313,26 @@ function MasterMap({
 
     injectMindMapStyles();
 
+    // Phase 49-06.3 — preserve viewport across data-driven re-inits. GRAPH_UPDATED
+    // (e.g. after a drag-drop reparent) fires reload() → nodes change → this
+    // useEffect re-runs. Without capturing the prior transform + scaleVal, the
+    // setTimeout below resets scale to 0.5 + recenters — operator UAT 2026-05-18
+    // Test 3 reported the view snapping back to default after a drop at 0.3× zoom.
+    // MindElixir stores pan/zoom in `map.style.transform` (MindElixir.js:580) and
+    // `scaleVal`; both can be re-applied verbatim on the fresh instance.
+    let priorTransform: string | null = null;
+    let priorScale: number | null = null;
     if (instanceRef.current) {
+      try {
+        const oldMei = instanceRef.current as unknown as { map?: HTMLElement; scaleVal?: number };
+        const t = oldMei.map?.style?.transform;
+        if (t && t !== 'none' && t.includes('scale')) {
+          priorTransform = t;
+          priorScale = oldMei.scaleVal ?? null;
+        }
+      } catch {
+        /* ignore — first init or MindElixir internal-shape drift */
+      }
       instanceRef.current.destroy();
       instanceRef.current = null;
     }
@@ -344,11 +363,34 @@ function MasterMap({
     // "Cannot read properties of undefined (reading 'getBoundingClientRect')".
     const initTimeoutId = window.setTimeout(() => {
       if (mei !== instanceRef.current || !containerRef.current) return;
-      mei.scale(0.5);
-      mei.toCenter();
-      const containerWidth = containerRef.current.offsetWidth;
-      if (containerWidth > 0) {
-        mei.move(-containerWidth * 0.25, 0);
+      if (priorTransform !== null && priorScale !== null) {
+        // Re-init due to data change (e.g. drag-drop fired GRAPH_UPDATED).
+        // Restore the captured viewport verbatim so the user's pan/zoom is
+        // preserved instead of snapping to default center+scale (49-06.3).
+        try {
+          const newMei = mei as unknown as {
+            map: HTMLElement;
+            scaleVal: number;
+            bus?: { fire: (event: string, value: number) => void };
+          };
+          newMei.map.style.transform = priorTransform;
+          newMei.scaleVal = priorScale;
+          newMei.bus?.fire('scale', priorScale);
+        } catch {
+          // Fallback to default centering if MindElixir internal shape drifted.
+          mei.scale(0.5);
+          mei.toCenter();
+          const w = containerRef.current.offsetWidth;
+          if (w > 0) mei.move(-w * 0.25, 0);
+        }
+      } else {
+        // First init — no prior view to restore. Default centering applies.
+        mei.scale(0.5);
+        mei.toCenter();
+        const containerWidth = containerRef.current.offsetWidth;
+        if (containerWidth > 0) {
+          mei.move(-containerWidth * 0.25, 0);
+        }
       }
       containerRef.current.style.opacity = '1';
     }, 0);
