@@ -17,7 +17,20 @@ updated: 2026-05-18T11:30:00Z
 
 ## Current Test
 
-[testing complete]
+number: 4
+name: Search highlight on /saved
+expected: |
+  Open /saved. Tap the search bar (sticky top). Type a substring matching a
+  known saved post title or body. Matched substrings render visually distinct
+  (bg-tinted highlight using --primary-40). Body snippet renders ~120 chars
+  centered on the first match. No raw HTML, no escape artifacts.
+
+  RE-UAT after fixes (50-11):
+  - G4: FUSE_OPTIONS tuned — threshold 0.4 → 0.3, minMatchCharLength 2 → 3
+  - Effect: "3D printing" should NOT match unrelated Kanji video; single-char
+    and two-char queries return zero results instead of scattered fuzzy noise
+phase: re-uat
+awaiting: user response
 
 ## Tests
 
@@ -35,15 +48,27 @@ expected: |
   slides in from the bottom. "Saved" row is pre-checked. List shows any existing
   custom collections with empty checkboxes. "Create new collection" row is visible
   at the top or bottom of the list.
-result: issue
-reported: |
-  "Fail: 1. Saved collection is NOT pre-checked as expected. 2. In the inline
-  collection creation process, after user clicked the 'Save name' button, no
-  new collection was displayed until user refresh the page. This refresh issue
-  has happened dozens of times during this project implementation, please take
-  it into your memory and keep in mind: Mobile app users do not have the refresh
-  option!"
-severity: major
+result: pass
+note: |
+  Original 2026-05-18: "Fail: 1. Saved collection is NOT pre-checked as expected. 2. In
+  the inline collection creation process, after user clicked the 'Save name' button, no
+  new collection was displayed until user refresh the page. This refresh issue has happened
+  dozens of times during this project implementation, please take it into your memory and
+  keep in mind: Mobile app users do not have the refresh option!"
+
+  Re-UAT 2026-05-18 after gap-closure plans 50-10 (G1+G3) + commit b9165f98 (G8 dep-loop fix):
+  All 7 sub-conditions PASS. Saved is pre-checked, inline-create renders immediately,
+  no refresh required, no render-loop crash.
+
+  3 NEW findings during re-UAT (logged as G9/G10/G11):
+  - G9 (cosmetic): bookmark icon on the implicit Saved row turns dark when checked,
+    mismatches user-created collections whose folder icons don't darken.
+  - G10 (major): no "Saved" folder appears in /saved → Collections tab. Implicit Saved
+    is a real collection from the user's POV — they expect to retrieve it from the
+    Collections tab.
+  - G11 (minor/design): Liked tab in /saved is redundant with Save (overlap UX).
+    Operator suggests dropping the Liked tab; keep Like as a pure recommendation signal
+    only.
 
 ### 3. Create new collection inline + add post in one flow
 expected: |
@@ -61,14 +86,34 @@ expected: |
   known saved post title or body. Matched substrings render visually distinct
   (bg-tinted highlight using --primary-40). Body snippet renders ~120 chars
   centered on the first match. No raw HTML, no escape artifacts.
-result: issue
+result: blocked
+blocked_by: long-press-broken-on-touch-device
 reported: |
-  "Partial: Would work but has false positives sometimes. Screenshot: searched
-  '3D printing' on Liked tab, top hit is a Kanji video. Body snippet has many
-  scattered single-char/2-char highlights ('i R', 'di', 'T', 'nd', 'ti', 'n',
-  'R', 'R', 'eco', 'gniti'). User asks if this is a plugin (Fuse.js) issue or
-  app issue."
-severity: major
+  Original 2026-05-18: "Partial: Would work but has false positives sometimes.
+  Searched '3D printing' on Liked tab, top hit is a Kanji video. Body snippet
+  has scattered single-char/2-char highlights." — addressed by 50-11 Fuse tuning,
+  needs re-verification.
+
+  Re-UAT 2026-05-18 device: "On device issue found: When user clicked the
+  bookmark icon in the top right corner, the system keyboard was invoked
+  although user did not click the search bar and the search bar is not focused.
+  Also, the long-press on post face tiles does not work on phones (not responding
+  to long-press event), and it actually works in a weird way in browser (mouse
+  scroll disabled after long-press). I do feel the haptics though. This blocked
+  the test because I cannot save a post in this way."
+
+  Logged as two new gaps:
+  - G12 (keyboard-on-bookmark, major): needs device localization
+  - G13 (long-press fails on touch device, blocker): root cause confirmed
+    — useLongPress.ts:57 cancels timer on ANY pointermove. Touch jitter fires
+    pointermove constantly, so timer never reaches 480ms on real hardware.
+    Mouse-driven browser works (no jitter); user feels OS-native long-press
+    haptic but JS recognizer never fires.
+
+  G13 is the blocker for completing Test 4 — without long-press the user
+  cannot reach CollectionPickerSheet to save posts, so /saved has no corpus
+  to search against.
+severity: blocker
 analysis: |
   Both. Fuse.js's Bitap algorithm fuzzy-matches by default. With FUSE_OPTIONS
   threshold=0.6 (the Fuse default) and minMatchCharLength unset (defaults to 1),
@@ -168,12 +213,12 @@ reason: "Operator does not wish to time-travel now. Defer to a follow-up UAT ses
 ## Summary
 
 total: 8
-passed: 3
-issues: 4
+passed: 4
+issues: 3
 pending: 0
 skipped: 1
-blocked: 0
-gaps: 9 (G1–G7 awaiting re-UAT after 50-10..50-13 execution; G8 fixed inline 2026-05-18)
+blocked: 1
+gaps: 14 total — G1+G3 fixed (50-10 verified Test 2 pass); G8 fixed (b9165f98); G9/G10/G11 net-new from re-UAT Test 2; G12/G13 net-new from re-UAT Test 4 (device-only); G2/G4/G5/G6/G7 still awaiting re-UAT Tests 4/5/6 once G13 unblocks long-press
 
 ## Gaps
 
@@ -264,3 +309,48 @@ gaps: 9 (G1–G7 awaiting re-UAT after 50-10..50-13 execution; G8 fixed inline 2
     3. Inlined originalSaved as (postId ? true : false) at the setDraftSavedChecked call site.
     4. NR-09 source-reading regression test parses the reseed useEffect and asserts deps === ['postId'].
     Verification: 9/9 no-refresh tests pass; 12/12 CollectionPickerSheet base tests pass; tsc -b --noEmit clean.
+- truth: "Bookmark icon on the implicit Saved row in CollectionPickerSheet visually matches user-created collection rows when checked — same fill behavior, no jarring color shift unique to the implicit row."
+  status: failed
+  reason: "Operator reported during Test 2 re-UAT 2026-05-18: when the Saved row is checked, its bookmark icon turns dark (filled var(--primary-40) via fill='currentColor'), looking ugly and mismatching user-created collection rows whose Folder icons stay neutral on check. Screenshot: green check + dark-filled bookmark + 已保存 label. Fix candidate: in CollectionPickerSheet.tsx:299-303, drop the fill='currentColor' branch on the Bookmark (keep color shift only, or no shift at all — match the user-collection rows that pass static color='var(--foreground)' to Folder)."
+  severity: cosmetic
+  test: 2
+  root_cause: ""
+  artifacts: []
+  missing: []
+  debug_session: ""
+- truth: "User-saved posts (saved via the implicit Saved row of the picker) are retrievable as a 'Saved' folder in /saved → Collections tab. The implicit Saved bucket behaves as a real collection from the user's POV."
+  status: failed
+  reason: "Operator reported during Test 2 re-UAT 2026-05-18: 'There should be a default collection named Saved that will be checked by default when user save a post, and if user saved to that collection they can retrieve the posts in Saved collection in the saved path. Currently, there is no Saved collection in saved path, which is weird because user saved to Saved but cannot see a saved folder in that tab.' Currently the implicit Saved row is plumbed through engagementService.savePost (the global Saved bucket) and surfaces only in the Saved tab — not as a row in the Collections tab. Fix candidates: (a) auto-create a real Collection named 'Saved' on first install + treat its postIds as the canonical engagement.savedPosts bucket, dropping the special-case branch; (b) keep the implicit/explicit split but render a synthetic 'Saved' card at the top of the Collections tab that links to /saved (Saved tab). Choice is a design call — operator likely prefers (a) for consistency."
+  severity: major
+  test: 2
+  root_cause: ""
+  artifacts: []
+  missing: []
+  debug_session: ""
+- truth: "/saved tab structure reflects only the engagement signals the user wants to surface. Liked posts are NOT surfaced as a top-level tab if Save covers the same retrieval use case."
+  status: deferred
+  reason: "Operator design feedback during Test 2 re-UAT 2026-05-18: 'we probably don't need a Liked tab to display what user liked, but just use the hint to optimize recommendation system, since it overlapped with Save feature?' Suggested fix: remove the Liked tab from SavedScreen tab strip; keep Like as a pure recommendation signal (engagement-only, no /saved surface). This is a design decision, not a strict UAT bug — log as deferred for /gsd:discuss-phase or /gsd:plan-phase. Touches SavedScreen.tsx tab list + the recommendation pipeline (engagement.service consumers of Like signal)."
+  severity: minor
+  test: 2
+  root_cause: ""
+  artifacts: []
+  missing: []
+  debug_session: ""
+- truth: "Tapping a bookmark icon (visual save-state badge) on /saved does NOT invoke the system keyboard. The keyboard appears only when the user explicitly taps a focusable input."
+  status: failed
+  reason: "Operator reported during Test 4 re-UAT 2026-05-18 on physical device: 'When user clicked the bookmark icon in the top right corner, the system keyboard was invoked although user did not click the search bar and the search bar is not focused.' Most likely candidates for the bookmark element: (a) corner-chip Bookmark icon on a feed tile (MasonryFeed.tsx:394+ engagement corner overlay) — if tapping the tile navigates to PostDetailScreen and that screen's ChatInput receives focus on mount via Capacitor's keyboard plugin resize behavior; (b) less likely, a Bookmark icon on a /saved internal element. Needs device repro to localize. Workaround: avoid corner-bookmark taps until isolated."
+  severity: major
+  test: 4
+  root_cause: ""
+  artifacts: []
+  missing: []
+  debug_session: ""
+- truth: "Long-press (480ms hold) on feed tiles fires the recognition callback on real touch hardware. LongPressMenu / CollectionPickerSheet open as expected. Sub-pixel finger jitter does not cancel the timer."
+  status: failed
+  reason: "Operator reported during Test 4 re-UAT 2026-05-18 on physical device: 'the long-press on post face tiles does not work on phones (not responding to long-press event), and it actually works in a weird way in browser (mouse scroll disabled after long-press). I do feel the haptics though. This blocked the test because I cannot save a post in this way.' Root cause: useLongPress.ts:57 binds onPointerMove: cancel. On real touch hardware, sub-pixel finger jitter fires pointermove events constantly during a held press, so the 480ms timer never elapses. Mouse-driven browser works because mouse pointermove only fires on actual pixel movement. The OS-native long-press still fires haptic (Android/iOS WebView system level), which is why the user 'feels haptics' even though the JS recognizer never fires. Fix: replace onPointerMove: cancel with an 8px Euclidean movement-threshold check, matching the sibling useLongPressOrDrag.ts:132-159 pattern. Cancel only when displacement from start coord exceeds 8px (scroll intent), not on every micro-jitter."
+  severity: blocker
+  test: 4
+  root_cause: "useLongPress.ts:57 cancels timer on any pointermove. Touch jitter = constant pointermoves = timer never elapses. Sibling useLongPressOrDrag.ts already implements the 8px threshold correctly."
+  artifacts: []
+  missing: ["Hook lacks movement-threshold logic that's already present in useLongPressOrDrag.ts. Codebase had two long-press hooks but the simpler one is broken on touch devices."]
+  debug_session: ""

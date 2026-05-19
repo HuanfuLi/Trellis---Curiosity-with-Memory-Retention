@@ -51,7 +51,7 @@
 //   LongPressMenu (UI-SPEC §Surface 9).
 
 import { useEffect, useState } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, MoreVertical, Folder } from 'lucide-react';
@@ -89,9 +89,13 @@ function SavedRow({ post, indexInList, onOpen, onLongPress }: SavedRowProps) {
   // Compose bind onto our own pointer handlers so the pressed-state visual
   // stays in sync AND the long-press timer participates per useLongPress
   // contract (RESEARCH §useLongPress + LongPressMenu.tsx host pattern).
-  const handlePointerDown = () => {
+  //
+  // Phase 50 UAT G13: bind.onPointerDown and bind.onPointerMove now require
+  // the React PointerEvent so the hook can capture coords + apply the 8px
+  // movement threshold. Forward the event from each composed handler.
+  const handlePointerDown = (e: ReactPointerEvent) => {
     setPressed(true);
-    bind.onPointerDown();
+    bind.onPointerDown(e);
   };
   const handlePointerUp = () => {
     setPressed(false);
@@ -101,8 +105,8 @@ function SavedRow({ post, indexInList, onOpen, onLongPress }: SavedRowProps) {
     setPressed(false);
     bind.onPointerLeave();
   };
-  const handlePointerMove = () => {
-    bind.onPointerMove();
+  const handlePointerMove = (e: ReactPointerEvent) => {
+    bind.onPointerMove(e);
   };
 
   const handleClick = () => {

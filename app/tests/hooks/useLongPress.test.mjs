@@ -73,3 +73,55 @@ test('useLongPress source has at least 30 lines (sanity floor)', () => {
   const lines = source.split('\n').length;
   assert.ok(lines >= 30, `Expected at least 30 lines; got ${lines}`);
 });
+
+// ─── G13 regression: movement-threshold logic must exist ──────────────────────
+// Phase 50 UAT-4 surfaced that the original onPointerMove: cancel binding made
+// long-press completely non-functional on real touch hardware (finger jitter
+// fires constant pointermoves during a held press → timer never elapses).
+// The fix mirrors useLongPressOrDrag.ts:132-159: cancel only when displacement
+// from start coord exceeds DRAG_THRESHOLD_PX (8px Euclidean). These tests
+// guard against regression to the broken "cancel-on-any-move" shape.
+
+test('G13: useLongPress has DRAG_THRESHOLD_PX constant (or equivalent 8-px threshold)', () => {
+  const source = readFileSync(HOOK_PATH, 'utf-8');
+  assert.match(
+    source,
+    /DRAG_THRESHOLD_PX\s*=\s*8/,
+    'Expected DRAG_THRESHOLD_PX = 8 — without a movement threshold, touch jitter cancels every long-press on real hardware.',
+  );
+});
+
+test('G13: useLongPress captures pointerdown coords for threshold comparison', () => {
+  const source = readFileSync(HOOK_PATH, 'utf-8');
+  // The hook must remember where the pointer started so it can compute
+  // displacement on every move event.
+  assert.match(
+    source,
+    /startCoord(?:Ref)?[\s\S]{0,80}clientX/,
+    'Expected start-coord capture using e.clientX / clientY in pointerdown handler.',
+  );
+});
+
+test('G13: useLongPress computes Euclidean distance on pointermove (not cancel-on-any-move)', () => {
+  const source = readFileSync(HOOK_PATH, 'utf-8');
+  // Either Math.hypot or sqrt(dx*dx + dy*dy) is acceptable. Whichever is used,
+  // a deliberate-vs-jitter discrimination must be present.
+  const hasHypot = /Math\.hypot\s*\(/.test(source);
+  const hasManualDist = /Math\.sqrt\s*\([^)]*\*[^)]*\+[^)]*\*[^)]*\)/.test(source);
+  assert.ok(
+    hasHypot || hasManualDist,
+    'Expected Math.hypot or equivalent Euclidean distance computation in pointermove handler — required to discriminate finger jitter from deliberate movement.',
+  );
+});
+
+test('G13: useLongPress onPointerMove is NOT directly aliased to cancel', () => {
+  const source = readFileSync(HOOK_PATH, 'utf-8');
+  // The original broken shape had `onPointerMove: cancel`. The new shape must
+  // route move events through a threshold-checking handler (handleMove, or any
+  // name other than the bare cancel). This regex catches the exact regression.
+  assert.doesNotMatch(
+    source,
+    /onPointerMove\s*:\s*cancel\b/,
+    'REGRESSION: onPointerMove must NOT be aliased directly to cancel. Touch hardware fires pointermove constantly from finger jitter — every long-press will be cancelled. Use a movement-threshold handler instead (see useLongPressOrDrag.ts:132-159).',
+  );
+});

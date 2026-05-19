@@ -1,4 +1,5 @@
 import { useRef, useEffect, useCallback } from 'react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 
 /**
  * 480ms long-press hook — codebase-wide convention (see CLAUDE.md "Best practices",
@@ -16,13 +17,20 @@ import { useRef, useEffect, useCallback } from 'react';
  *   WebView surfaces the native text-selection menu on long-press if that handler
  *   is unhandled. The timer-only path here avoids surfacing it (verified by the
  *   live ChatMessage.tsx pattern).
- * - onPointerMove cancels the timer so vertical scrolling never accidentally
- *   triggers a long-press.
+ * - onPointerMove cancels the timer ONLY when displacement from the pointerdown
+ *   coord exceeds DRAG_THRESHOLD_PX (8). Phase 50 UAT-4 G13 fix: cancelling on
+ *   ANY pointermove broke long-press on real touch hardware because finger
+ *   jitter fires constant pointermoves during a held press. Mirror the 8px
+ *   threshold from useLongPressOrDrag.ts:132-159 so vertical scrolling still
+ *   cancels (any deliberate movement >8px) but micro-jitter does not.
  */
+const DRAG_THRESHOLD_PX = 8;
+
 export function useLongPress(ms: number, onLongPress: () => void) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
   const callbackRef = useRef(onLongPress);
+  const startCoordRef = useRef<{ x: number; y: number } | null>(null);
 
   // Keep latest callback in a ref so the timer always invokes the freshest closure
   useEffect(() => {
@@ -34,16 +42,35 @@ export function useLongPress(ms: number, onLongPress: () => void) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
+    startCoordRef.current = null;
   }, []);
 
-  const start = useCallback(() => {
-    didLongPress.current = false;
-    cancel();
-    timerRef.current = setTimeout(() => {
-      didLongPress.current = true;
-      callbackRef.current();
-    }, ms);
-  }, [ms, cancel]);
+  const start = useCallback(
+    (e: ReactPointerEvent) => {
+      didLongPress.current = false;
+      if (timerRef.current) clearTimeout(timerRef.current);
+      startCoordRef.current = { x: e.clientX, y: e.clientY };
+      timerRef.current = setTimeout(() => {
+        didLongPress.current = true;
+        callbackRef.current();
+      }, ms);
+    },
+    [ms],
+  );
+
+  // Cancel only on deliberate movement (>8px Euclidean) — micro-jitter from
+  // a held finger on touch hardware must NOT cancel the press. See G13.
+  const handleMove = useCallback((e: ReactPointerEvent) => {
+    const start = startCoordRef.current;
+    if (start === null || timerRef.current === null) return;
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+    if (Math.hypot(dx, dy) > DRAG_THRESHOLD_PX) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+      startCoordRef.current = null;
+    }
+  }, []);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -54,7 +81,7 @@ export function useLongPress(ms: number, onLongPress: () => void) {
     onPointerDown: start,
     onPointerUp: cancel,
     onPointerLeave: cancel,
-    onPointerMove: cancel,
+    onPointerMove: handleMove,
   };
 
   return { didLongPress, bind };
