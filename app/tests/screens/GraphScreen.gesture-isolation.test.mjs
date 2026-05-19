@@ -37,6 +37,22 @@ test('Assertion 1a: capture-phase pointermove stopPropagation IS engaged (sole p
   );
 });
 
+test('Assertion 1c: capture-phase listener drives activeMachine.onPointerMove (49-06.2)', () => {
+  // After 49-06.1 stopPropagation, the bubble-phase handlePointerMove no longer
+  // fires post-recognition. The state machine therefore must be driven by the
+  // capture-phase listener itself, otherwise the 8px drag-threshold transition
+  // (long-press → drag) never trips. Operator UAT 2026-05-18: this was the
+  // root cause of "long-press shows card but node can't move".
+  const capturePanIdx = src.indexOf('capturePanSuppressor');
+  assert.ok(capturePanIdx > 0, 'capturePanSuppressor must be declared');
+  const slice = src.slice(capturePanIdx, capturePanIdx + 1500);
+  assert.match(
+    slice,
+    /activeMachine\?\.onPointerMove\(/,
+    'capturePanSuppressor body must invoke activeMachine.onPointerMove so the state machine sees post-recognition moves',
+  );
+});
+
 test('Assertion 1b: tier-a/b mousedown poisoning and container setPointerCapture transfer are NOT present', () => {
   // These three call patterns broke MindElixir's pointerup cleanup of its
   // pinch-zoom Map `s` (MindElixir.js:960), stranding a pointerId per long-

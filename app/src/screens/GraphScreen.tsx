@@ -458,13 +458,22 @@ function MasterMap({
           // Fire the GraphScreen-level recognition handler (mounts CorrectionCard).
           onLongPressRecognizedRef.current(activeNode, x, y);
 
-          // ─── Phase 49-06.1 — MindElixir pan suppression (minimal interference) ──
+          // ─── Phase 49-06.1 — MindElixir pan suppression + state-machine feed ──
           //
           // MindElixir's pointermove handler (MindElixir.js:1046-1075, registered
           // on this container at MindElixir.js:1098) pans the map on every touch
           // pointermove when editable:false. We attach a CAPTURE-PHASE listener
-          // that calls stopPropagation, so the bubble-phase MindElixir handler
-          // never fires for the duration of the gesture — no pan side-effect.
+          // that BOTH drives our state machine AND stops propagation, so the
+          // bubble-phase MindElixir handler never fires for the duration of the
+          // gesture — no pan side-effect.
+          //
+          // 49-06.2 NOTE: driving activeMachine.onPointerMove inside the
+          // capture-phase listener is load-bearing. stopPropagation prevents the
+          // bubble-phase `handlePointerMove` (registered via addEventListener
+          // below at the same container) from also firing — without the explicit
+          // feed here, the state machine would never see post-recognition moves
+          // and the 8px drag-threshold transition (long-press → drag) would
+          // never trip. Operator UAT 2026-05-18: long-press worked, drag did not.
           //
           // Earlier iterations (tiers a/b + container setPointerCapture transfer)
           // pre-emptively cleared MindElixir's internal mousedown flag at 480ms.
@@ -472,9 +481,16 @@ function MasterMap({
           // pointer-capture release + state clear on mousedown. Result: each
           // long-press stranded a pointerId in MindElixir's pinch-zoom Map `s`
           // (MindElixir.js:960), and the next single-finger pan tripped the
-          // s.size >= 2 pinch branch at MindElixir.js:1052. The capture-phase
-          // pointermove stop is sufficient on its own.
-          const capturePanSuppressor = (e: PointerEvent) => e.stopPropagation();
+          // s.size >= 2 pinch branch at MindElixir.js:1052. Capture-phase
+          // pointermove suppression is sufficient on its own.
+          const capturePanSuppressor = (e: PointerEvent) => {
+            // Feed the state machine FIRST so it can transition to drag at the
+            // 8px threshold. Then stop propagation so MindElixir's bubble-phase
+            // pan handler — AND our own bubble-phase handlePointerMove (now
+            // redundant after recognition) — both stay silent for this event.
+            activeMachine?.onPointerMove(e);
+            e.stopPropagation();
+          };
           activePanSuppressor = capturePanSuppressor;
           try {
             containerRef.current?.addEventListener('pointermove', capturePanSuppressor, { capture: true });
