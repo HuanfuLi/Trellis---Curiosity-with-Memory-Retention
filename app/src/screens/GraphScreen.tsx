@@ -286,53 +286,35 @@ function MasterMap({
   // Node lookup ref — populated synchronously inside the main effect
   const nodeMapRef = useRef<Record<string, Question>>({});
 
-  // Reset init tracking when nodes change so the map reinitializes with new data
-  useEffect(() => {
-    initCompletedRef.current = false;
-  }, [nodes, edges]);
-
+  // ─── Phase 49-06.4 — MindElixir lifecycle split (load-bearing) ─────────────
+  //
+  // The MindElixir instance is created ONCE on mount (effect with [] deps) and
+  // DATA UPDATES are applied via `mei.refresh(newData)` in a sibling effect
+  // with [nodes, edges] deps. The prior unified effect destroyed + recreated
+  // the instance on every nodes change, which reset scale + center (Test 3
+  // UAT 2026-05-18: drag-drop snapped view back to default 0.5x centered).
+  //
+  // mei.refresh() (MindElixir.js:662-663, `gn`) swaps nodeData / arrows /
+  // summaries, re-runs G() processing, calls layout() and linkDiv() — without
+  // touching map.style.transform or scaleVal. User's viewport survives.
+  //
+  // DO NOT re-add [nodes, edges] to the init effect's deps. The cleanup tears
+  // down listeners + destroys the instance; React calls cleanup on every dep
+  // change, so any data-change re-run would lose the user's view AND require
+  // re-attaching all pointer listeners (49-06.3 attempted to capture/restore
+  // the transform string and failed — MindElixir's init() resets it).
   useEffect(() => {
     if (!containerRef.current) return;
 
     // Skip initialization when not visible (prevents 0-width MindElixir bug)
     if (!isVisible) return;
 
-    // If already initialized with current data, just re-center/re-scale
-    if (initCompletedRef.current && instanceRef.current) {
-      const mei = instanceRef.current;
-      mei.toCenter();
-      const containerWidth = containerRef.current.offsetWidth;
-      if (containerWidth > 0) {
-        mei.move(-containerWidth * 0.25, 0);
-      }
-      return;
-    }
-
     // Populate nodeMap synchronously before creating listeners
     nodeMapRef.current = Object.fromEntries(nodes.map((n) => [n.id, n]));
 
     injectMindMapStyles();
 
-    // Phase 49-06.3 — preserve viewport across data-driven re-inits. GRAPH_UPDATED
-    // (e.g. after a drag-drop reparent) fires reload() → nodes change → this
-    // useEffect re-runs. Without capturing the prior transform + scaleVal, the
-    // setTimeout below resets scale to 0.5 + recenters — operator UAT 2026-05-18
-    // Test 3 reported the view snapping back to default after a drop at 0.3× zoom.
-    // MindElixir stores pan/zoom in `map.style.transform` (MindElixir.js:580) and
-    // `scaleVal`; both can be re-applied verbatim on the fresh instance.
-    let priorTransform: string | null = null;
-    let priorScale: number | null = null;
     if (instanceRef.current) {
-      try {
-        const oldMei = instanceRef.current as unknown as { map?: HTMLElement; scaleVal?: number };
-        const t = oldMei.map?.style?.transform;
-        if (t && t !== 'none' && t.includes('scale')) {
-          priorTransform = t;
-          priorScale = oldMei.scaleVal ?? null;
-        }
-      } catch {
-        /* ignore — first init or MindElixir internal-shape drift */
-      }
       instanceRef.current.destroy();
       instanceRef.current = null;
     }
@@ -363,34 +345,11 @@ function MasterMap({
     // "Cannot read properties of undefined (reading 'getBoundingClientRect')".
     const initTimeoutId = window.setTimeout(() => {
       if (mei !== instanceRef.current || !containerRef.current) return;
-      if (priorTransform !== null && priorScale !== null) {
-        // Re-init due to data change (e.g. drag-drop fired GRAPH_UPDATED).
-        // Restore the captured viewport verbatim so the user's pan/zoom is
-        // preserved instead of snapping to default center+scale (49-06.3).
-        try {
-          const newMei = mei as unknown as {
-            map: HTMLElement;
-            scaleVal: number;
-            bus?: { fire: (event: string, value: number) => void };
-          };
-          newMei.map.style.transform = priorTransform;
-          newMei.scaleVal = priorScale;
-          newMei.bus?.fire('scale', priorScale);
-        } catch {
-          // Fallback to default centering if MindElixir internal shape drifted.
-          mei.scale(0.5);
-          mei.toCenter();
-          const w = containerRef.current.offsetWidth;
-          if (w > 0) mei.move(-w * 0.25, 0);
-        }
-      } else {
-        // First init — no prior view to restore. Default centering applies.
-        mei.scale(0.5);
-        mei.toCenter();
-        const containerWidth = containerRef.current.offsetWidth;
-        if (containerWidth > 0) {
-          mei.move(-containerWidth * 0.25, 0);
-        }
+      mei.scale(0.5);
+      mei.toCenter();
+      const containerWidth = containerRef.current.offsetWidth;
+      if (containerWidth > 0) {
+        mei.move(-containerWidth * 0.25, 0);
       }
       containerRef.current.style.opacity = '1';
     }, 0);
@@ -685,7 +644,29 @@ function MasterMap({
       instanceRef.current = null;
       initCompletedRef.current = false;
     };
-  }, [nodes, edges, isVisible]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 49-06.4: nodes/edges
+    // intentionally excluded; mutation handled by the sibling refresh effect below.
+  }, [isVisible]);
+
+  // ─── Phase 49-06.4 — data sync via mei.refresh() ─────────────────────────────
+  //
+  // Updates the in-place MindElixir instance when nodes/edges change. Preserves
+  // user pan/zoom because refresh re-lays-out without touching map.style.transform
+  // or scaleVal (MindElixir.js:662-663). nodeMapRef is updated synchronously so
+  // pointer handlers' findNodeFromTarget stays accurate for the new tree shape.
+  useEffect(() => {
+    const mei = instanceRef.current;
+    if (!mei) return;
+    nodeMapRef.current = Object.fromEntries(nodes.map((n) => [n.id, n]));
+    try {
+      mei.refresh(buildMindElixirData(nodes));
+    } catch (err) {
+      // Log but do not throw — a malformed nodes payload should not crash the
+      // graph screen. Worst case the user sees a stale tree until the next
+      // GRAPH_UPDATED arrives.
+      console.warn('[GraphScreen 49-06.4] mei.refresh failed', err);
+    }
+  }, [nodes, edges]);
 
   if (nodes.length === 0) {
     return (
