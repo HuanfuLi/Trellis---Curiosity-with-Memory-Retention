@@ -296,13 +296,18 @@ test('rename with embedText rejection PRESERVES old embeddingVector + logs warn 
   }
 });
 
-test('rename with successful re-embed REPLACES vector in a single patchQuestion call (atomic)', async () => {
+test('rename two-phase commit: sync title patch + async embedding patch (Phase 49-06 follow-up — fire-and-forget)', async () => {
+  // The Phase 49-06 UAT surfaced rename latency: the prior implementation
+  // awaited embedText inside the mutex, blocking the success return on a
+  // 200-2000ms network roundtrip. The fix splits work into a synchronous
+  // title patch (instant UI) and a fire-and-forget embed that lands in a
+  // SECOND patchQuestion call after the mutex releases. This test asserts
+  // both patches happen and the embedding eventually lands.
   await resetAll();
   await freshImports({ isConfigured: true, embedFail: false });
   const { _resetStore, _getStore, questionService } = await import('./_actions-mock-question.mjs');
   _resetStore([makeAnchor({ id: 'q-1', title: 'Old', embeddingVector: [0.1, 0.2, 0.3] })]);
 
-  // Spy on patchQuestion — count calls AND remember the patch shape per call.
   let patchCalls = [];
   const origPatch = questionService.patchQuestion;
   questionService.patchQuestion = (id, patch) => {
@@ -315,29 +320,72 @@ test('rename with successful re-embed REPLACES vector in a single patchQuestion 
     const result = await graphCommandService.rename('q-1', 'New');
     assert.equal(result.success, true);
 
-    assert.equal(
-      patchCalls.length,
-      1,
-      'rename with successful re-embed must call patchQuestion EXACTLY once (atomic; not clear-then-fill)',
+    // Phase 1 — sync title patch: title/content/summary only, embeddingVector
+    // omitted so spread-merge preserves the old vector.
+    assert.ok(
+      patchCalls.length >= 1,
+      'rename must issue at least one synchronous patch with the new title',
     );
     assert.equal(patchCalls[0].patch.title, 'New');
     assert.equal(patchCalls[0].patch.content, 'New');
     assert.equal(patchCalls[0].patch.summary, 'New');
+    assert.equal(
+      patchCalls[0].patch.embeddingVector,
+      undefined,
+      'first (sync) patch must OMIT embeddingVector so spread-merge keeps old vector during the async window',
+    );
+
+    // Wait for the fire-and-forget embed task to complete and land its
+    // second patch. 50ms is plenty for the in-process mock embedder.
+    await new Promise((r) => setTimeout(r, 50));
+
+    assert.equal(
+      patchCalls.length,
+      2,
+      'rename must issue a SECOND patch with the embeddingVector once embed completes',
+    );
     assert.ok(
-      Array.isArray(patchCalls[0].patch.embeddingVector),
-      'atomic patch must include embeddingVector in the SAME patch object',
+      Array.isArray(patchCalls[1].patch.embeddingVector),
+      'second (async) patch must contain the new embeddingVector',
     );
     assert.notDeepEqual(
-      patchCalls[0].patch.embeddingVector,
+      patchCalls[1].patch.embeddingVector,
       [0.1, 0.2, 0.3],
       'new vector must differ from old',
     );
 
     const stored = _getStore().find((q) => q.id === 'q-1');
     assert.ok(stored.embeddingVector, 'post-rename vector must be defined (never undefined)');
+    assert.notDeepEqual(
+      stored.embeddingVector,
+      [0.1, 0.2, 0.3],
+      'stored vector should be the new vector after async embed completes',
+    );
   } finally {
     questionService.patchQuestion = origPatch;
   }
+});
+
+test('rename race-guard: a subsequent rename before embed completes does NOT clobber the newer title with a stale vector', async () => {
+  // Fire-and-forget embed introduces a race: the embed promise from rename
+  // #1 might resolve AFTER rename #2's title patch lands. The guard
+  // (refreshed.title === trimmed) skips the patch if so.
+  await resetAll();
+  await freshImports({ isConfigured: true, embedFail: false });
+  const { _resetStore, _getStore } = await import('./_actions-mock-question.mjs');
+  _resetStore([makeAnchor({ id: 'q-1', title: 'V0', embeddingVector: [0, 0, 0] })]);
+
+  const { graphCommandService } = await import('../../src/services/graph-command.service.ts');
+  await graphCommandService.rename('q-1', 'V1');
+  await graphCommandService.rename('q-1', 'V2');
+  // Let both fire-and-forget embeds settle.
+  await new Promise((r) => setTimeout(r, 100));
+
+  const stored = _getStore().find((q) => q.id === 'q-1');
+  assert.equal(stored.title, 'V2', 'final title is V2');
+  // The race-guard ensures V1's embed (if it resolved after V2's title patch)
+  // did NOT overwrite the stored vector. V2's embed should be the one stored.
+  assert.ok(stored.embeddingVector, 'final vector must be defined');
 });
 
 test('invariant: across all three rename paths, post-state.embeddingVector is NEVER undefined when pre-state had one', async () => {

@@ -85,6 +85,10 @@ export const graphCommandService = {
     }
 
     let result: ServiceResult<void> = { success: true };
+    // Holder for the async embed task scheduled inside the mutex and fired
+    // AFTER the mutex releases. Typed as the union explicitly so TS doesn't
+    // narrow to `null` after the closure-mutation assignment.
+    const embedRef: { task: (() => Promise<void>) | null } = { task: null };
     await _mutex.run(async () => {
       // Read fresh inside the mutex — Pattern 1 / R10 risk 1.
       const store = questionService.getAll({ includeFlagged: true });
@@ -112,41 +116,42 @@ export const graphCommandService = {
         embeddingVector: target.embeddingVector,
       };
 
-      // ─── Embedding strategy — Blocker #4 graceful degradation ─────────
-      // Per Blocker #4 fix (revision 1): never overwrite a vector with undefined. Either the new vector replaces it atomically, or the old vector stays. Embedding-unconfigured and embed-failed paths both preserve the existing vector — retrieval identity degrades gracefully (slightly stale label) rather than silently breaking.
-      const embCfg = settingsService.getSync().embedding;
-      let newVec: number[] | undefined;
-      if (embCfg?.isConfigured === true) {
-        try {
-          newVec = await embedText(trimmed, embCfg);
-        } catch (err) {
-          console.warn('[Trellis] rename re-embed failed:', err);
-          newVec = undefined;
-        }
-      }
-      // newVec is defined only when (a) embedding was configured AND
-      // (b) the provider call succeeded. Otherwise it stays undefined
-      // and we deliberately OMIT embeddingVector from the patch so the
-      // old vector is preserved by the spread-merge inside
-      // questionService.patchQuestion.
+      // ─── Synchronous title patch (Phase 49-06 follow-up — fire-and-forget
+      // embed) ─────────────────────────────────────────────────────────────
+      //
+      // Original Blocker #4 design awaited embedText inside the mutex,
+      // blocking the rename's success return on a network roundtrip
+      // (~200-2000ms). UAT 2026-05-19: operator-perceptible latency.
+      // New design splits the work:
+      //   1. Synchronous patch: title + content + summary commit + journal
+      //      + emit immediately. Stored embeddingVector stays OLD (the
+      //      vector survives via patchQuestion's spread-merge since the
+      //      patch omits the field).
+      //   2. Fire-and-forget embed: AFTER the mutex releases, embedText
+      //      runs async. On success, a SECOND silent patchQuestion lands
+      //      the new vector. The race-guard `refreshed?.title === trimmed`
+      //      prevents a stale embed from clobbering a subsequent rename.
+      //
+      // Undo correctness is unchanged — journal.before.embeddingVector is
+      // the OLD vector captured pre-commit, and undo restores to it
+      // regardless of whether the async embed completed first.
       const patch: Partial<Question> = {
         title: trimmed,
         content: trimmed,
         summary: trimmed,
       };
-      if (newVec !== undefined) {
-        patch.embeddingVector = newVec;
-      }
       questionService.patchQuestion(id, patch);
 
       const after: Record<string, unknown> = {
         title: trimmed,
         content: trimmed,
         summary: trimmed,
-        // Mirror what's actually stored — new vec on success, old vec on
-        // either degraded path. Symmetric with `before` so undo can
-        // distinguish "intentional preserve" from "intentional replace."
-        embeddingVector: newVec !== undefined ? newVec : target.embeddingVector,
+        // Mirror commit-time stored vector — synchronous patch did NOT
+        // touch embeddingVector, so the stored vector is still the OLD
+        // one at journal-append time. If the async embed lands later, the
+        // journal entry stays accurate as a snapshot of post-rename state
+        // at command boundary.
+        embeddingVector: target.embeddingVector,
       };
 
       graphEditJournal.append({
@@ -156,11 +161,35 @@ export const graphCommandService = {
         after,
       });
 
-      // D-17 — single typed emit from the command boundary.
+      // D-17 — single typed emit from the command boundary. Async embed
+      // patch (below) does NOT emit again because patchQuestion is silent.
       eventBus.emit({ type: 'GRAPH_UPDATED', payload: { kind: 'rename', anchorId: id } });
+
+      // Stage the async embed AFTER the mutex releases. Per Blocker #4 the
+      // gate stays: isConfigured=false → never re-embed (stored stays OLD).
+      const embCfg = settingsService.getSync().embedding;
+      if (embCfg?.isConfigured === true) {
+        embedRef.task = async () => {
+          try {
+            const newVec = await embedText(trimmed, embCfg);
+            // Race-guard: between mutex release and embed completion, a
+            // subsequent rename could have changed the title. Skip the
+            // patch if so — otherwise we'd land an OLD-text vector on
+            // the NEW-text record.
+            const refreshed = questionService.getAll({ includeFlagged: true })
+              .find((q) => q.id === id);
+            if (refreshed?.title === trimmed) {
+              questionService.patchQuestion(id, { embeddingVector: newVec });
+            }
+          } catch (err) {
+            console.warn('[Trellis] rename re-embed failed:', err);
+          }
+        };
+      }
 
       result = { success: true };
     });
+    if (embedRef.task) void embedRef.task();
     return result;
   },
 
