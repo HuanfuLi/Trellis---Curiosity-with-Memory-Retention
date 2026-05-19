@@ -1,6 +1,7 @@
 .DS_Store
 .claude/worktrees/
 .planning/config.json
+.planning/agent-history.json
 node_modules/
 dist/
 .env*

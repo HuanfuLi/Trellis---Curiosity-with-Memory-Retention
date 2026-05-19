@@ -2,7 +2,7 @@
 # GSD codex_hooks ownership: section
 
 [features]
-codex_hooks = true
+hooks = true
 
 [agents.gsd-advisor-researcher]
 description = "Researches a single gray area decision and returns a structured comparison table with rationale. Spawned by discuss-phase advisor mode."
@@ -78,6 +78,6 @@ config_file = "/Users/Code/EchoLearn/.codex/agents/gsd-verifier.toml"
 
 
 # GSD Hooks
-[[hooks]]
+[hooks]
 event = "SessionStart"
 command = "node /Users/Code/EchoLearn/.codex/get-shit-done/hooks/gsd-update-check.js"
