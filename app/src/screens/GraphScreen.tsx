@@ -378,19 +378,21 @@ function MasterMap({
     // factory, not hook indirection) so the closure can see latest GraphScreen
     // state via callback refs.
     //
-    // Critical invariants (RESEARCH §R1 + 49-06 gap closure):
+    // Critical invariants (RESEARCH §R1 + 49-06 gap closure + 49-06.1 fix):
     //  - Do NOT stopPropagation() on raw pointerdown — MindElixir's pan still
     //    needs the pointer until long-press is recognized.
     //  - DO stopPropagation() in a CAPTURE-PHASE pointermove listener AFTER
     //    recognition (480ms tick). Engages inside the factory's
     //    onLongPressRecognized callback; torn down on pointerup/pointercancel.
-    //  - Also at recognition: call instanceRef.current?.dragMoveHelper?.clear()
-    //    to reset MindElixir's internal mousedown flag (MindElixir.js:908 +
-    //    MindElixir.js:1045). Tier-b fallback mutates helper.mousedown=false
-    //    if dragMoveHelper.clear() is unavailable.
-    //  - setPointerCapture is now called at recognition (on containerRef.current,
-    //    NOT the target node) — the Pointer Events spec releases capture on
-    //    pointerup/cancel automatically.
+    //    This is the SOLE pan-suppression defense — do NOT add back
+    //    dragMoveHelper.clear() / direct mousedown mutation / container
+    //    setPointerCapture transfer. Those pre-empt MindElixir's pointerup
+    //    cleanup of its pinch-zoom Map `s` (MindElixir.js:960): the pointerup
+    //    handler at MindElixir.js:1082 is `t.mousedown && (y(f.target, ...),
+    //    t.clear())`, so clearing mousedown at 480ms makes pointerup skip its
+    //    own pointer-capture release, stranding a pointerId in `s`. Result:
+    //    every long-press leaks one entry, and subsequent single-finger pans
+    //    register as pinch-zoom because `s.size >= 2`.
     //  - touchAction: 'none' on the container (existing) + data-no-swipe-nav
     //    must remain untouched.
     let activeMachine: ReturnType<typeof createLongPressOrDragMachine> | null = null;
@@ -456,56 +458,28 @@ function MasterMap({
           // Fire the GraphScreen-level recognition handler (mounts CorrectionCard).
           onLongPressRecognizedRef.current(activeNode, x, y);
 
-          // ─── Phase 49-06 — MindElixir pan suppression (engaged at recognition) ──
+          // ─── Phase 49-06.1 — MindElixir pan suppression (minimal interference) ──
           //
-          // MindElixir co-registers pointerdown/move/up listeners on the SAME
-          // container (MindElixir.js:1095-1101). With editable:false, its
-          // pointerdown handler ALWAYS sets t.mousedown=true and pans the map
-          // on every subsequent pointermove (MindElixir.js:1044-1075). Three
-          // layered defenses are required because pointer-event capture alone
-          // does NOT stop co-registered listeners on the same element from
-          // firing.
-
-          // Tier a — call dragMoveHelper.clear() to reset MindElixir's internal
-          // mousedown flag set in MindElixir.js:1045. Evidence: MindElixir.js:908
-          // invokes the same clear() internally.
-          try {
-            instanceRef.current?.dragMoveHelper?.clear();
-          } catch {
-            /* ignore — defensive against MindElixir internal-shape drift */
-          }
-
-          // Tier b — direct mousedown=false mutation as last-resort fallback.
-          // The tier-a call SHOULD have set mousedown=false already; this is
-          // the safety net if dragMoveHelper.clear()'s shape changes in a
-          // future MindElixir release.
-          try {
-            const helper = (instanceRef.current as unknown as { dragMoveHelper?: { mousedown?: boolean } })?.dragMoveHelper;
-            if (helper) helper.mousedown = false;
-          } catch {
-            /* ignore — defensive against MindElixir internal-shape drift */
-          }
-
-          // Capture-phase pointermove listener — stops MindElixir's bubbling
-          // listener on the same element from firing. Stored on activePanSuppressor
-          // so handlePointerUp / handlePointerCancel remove the SAME function ref.
+          // MindElixir's pointermove handler (MindElixir.js:1046-1075, registered
+          // on this container at MindElixir.js:1098) pans the map on every touch
+          // pointermove when editable:false. We attach a CAPTURE-PHASE listener
+          // that calls stopPropagation, so the bubble-phase MindElixir handler
+          // never fires for the duration of the gesture — no pan side-effect.
+          //
+          // Earlier iterations (tiers a/b + container setPointerCapture transfer)
+          // pre-emptively cleared MindElixir's internal mousedown flag at 480ms.
+          // That broke MindElixir's pointerup branch at line 1082, which gates
+          // pointer-capture release + state clear on mousedown. Result: each
+          // long-press stranded a pointerId in MindElixir's pinch-zoom Map `s`
+          // (MindElixir.js:960), and the next single-finger pan tripped the
+          // s.size >= 2 pinch branch at MindElixir.js:1052. The capture-phase
+          // pointermove stop is sufficient on its own.
           const capturePanSuppressor = (e: PointerEvent) => e.stopPropagation();
           activePanSuppressor = capturePanSuppressor;
           try {
             containerRef.current?.addEventListener('pointermove', capturePanSuppressor, { capture: true });
           } catch {
             /* ignore — non-DOM test environments */
-          }
-
-          // Pointer capture transfer (W-10). Calling setPointerCapture on the
-          // container silently transfers capture from MindElixir's prior capture
-          // taken at MindElixir.js:1045. Per the Pointer Events spec, the browser
-          // releases capture on pointerup/cancel automatically — no explicit
-          // releasePointerCapture is required.
-          try {
-            containerRef.current?.setPointerCapture?.(pointerdownEvent.pointerId);
-          } catch {
-            /* ignore — non-Pointer-capture browsers (e.g. tests) */
           }
         },
         onDragStart: (x, y) => {
